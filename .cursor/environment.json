@@ -1,0 +1,6 @@
+{
+  "name": "godot-template",
+  "build": {
+    "dockerfile": "Containerfile"
+  }
+}

@@ -1,0 +1,40 @@
+# Containerfile for Godot 4.5 Template Project
+# This container is used by Cursor Cloud Agents to run and test the project
+
+FROM ubuntu:22.04
+
+# Set environment variables
+ENV DEBIAN_FRONTEND=noninteractive
+ENV GODOT_VERSION=4.5
+ENV GODOT_BINARY=/usr/local/bin/godot
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y wget unzip jq
+
+# Download and install Godot 4.5 Linux headless binary
+RUN wget -q https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip -O /tmp/godot.zip && \
+    unzip -q /tmp/godot.zip -d /tmp && \
+    mv /tmp/Godot_v${GODOT_VERSION}-stable_linux.x86_64 ${GODOT_BINARY} && \
+    chmod +x ${GODOT_BINARY} && \
+    rm /tmp/godot.zip
+
+# Create a symlink for easier access
+RUN ln -s ${GODOT_BINARY} /usr/local/bin/godot-headless
+
+# Set up workspace directory
+WORKDIR /workspace
+
+# Set up display for headless operation
+ENV DISPLAY=:99
+
+# Create a startup script for Xvfb
+RUN echo '#!/bin/bash\n\
+Xvfb :99 -screen 0 1024x768x24 > /dev/null 2>&1 &\n\
+sleep 2\n\
+exec "$@"' > /usr/local/bin/start-xvfb.sh && \
+    chmod +x /usr/local/bin/start-xvfb.sh
+
+# Default command
+ENTRYPOINT ["godot"]
+CMD ["-e", "--path", "."]
+
