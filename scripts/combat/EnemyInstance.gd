@@ -1,0 +1,87 @@
+extends RefCounted
+class_name EnemyInstance
+## EnemyInstance - Runtime instance of an enemy on the battlefield
+
+var enemy_id: String = ""
+var ring: int = 3  # Current ring (FAR by default)
+var current_hp: int = 10
+var max_hp: int = 10
+
+# Status effects: Dictionary of effect_name -> {value: int, duration: int}
+var status_effects: Dictionary = {}
+
+# Unique instance ID for tracking
+var instance_id: int = 0
+static var _next_instance_id: int = 0
+
+
+func _init() -> void:
+	_next_instance_id += 1
+	instance_id = _next_instance_id
+
+
+func apply_status(effect_name: String, value: int, duration: int = -1) -> void:
+	"""Apply a status effect to this enemy."""
+	if status_effects.has(effect_name):
+		# Stack or refresh based on effect type
+		if effect_name == "hex":
+			# Hex stacks damage
+			status_effects[effect_name].value += value
+		else:
+			# Other effects refresh duration
+			status_effects[effect_name].duration = duration
+	else:
+		status_effects[effect_name] = {
+			"value": value,
+			"duration": duration
+		}
+
+
+func has_status(effect_name: String) -> bool:
+	"""Check if enemy has a specific status effect."""
+	return status_effects.has(effect_name)
+
+
+func get_status_value(effect_name: String) -> int:
+	"""Get the value of a status effect."""
+	if status_effects.has(effect_name):
+		return status_effects[effect_name].value
+	return 0
+
+
+func remove_status(effect_name: String) -> void:
+	"""Remove a status effect from this enemy."""
+	status_effects.erase(effect_name)
+
+
+func tick_status_effects() -> void:
+	"""Process status effect durations at end of turn."""
+	var expired: Array[String] = []
+	
+	for effect_name: String in status_effects.keys():
+		var effect: Dictionary = status_effects[effect_name]
+		if effect.duration > 0:
+			effect.duration -= 1
+			if effect.duration <= 0:
+				expired.append(effect_name)
+	
+	for effect_name: String in expired:
+		status_effects.erase(effect_name)
+
+
+func get_hp_percentage() -> float:
+	"""Get current HP as a percentage of max HP."""
+	if max_hp <= 0:
+		return 0.0
+	return float(current_hp) / float(max_hp)
+
+
+func is_alive() -> bool:
+	"""Check if enemy is still alive."""
+	return current_hp > 0
+
+
+func get_definition():  # -> EnemyDefinition
+	"""Get the EnemyDefinition for this instance."""
+	return EnemyDatabase.get_enemy(enemy_id)
+

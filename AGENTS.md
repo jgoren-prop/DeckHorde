@@ -125,6 +125,37 @@ This document provides essential information for AI agents working on this Godot
 2. Check Godot documentation using `mcp_godot_search_docs` or `mcp_godot_get_class_info`
 3. Review best practices with `mcp_godot_get_best_practices`
 
+## Documentation Requirements
+
+**CRITICAL: After every prompt/task, agents MUST update these files:**
+
+### DESIGN.md
+- Contains game design, technical architecture, and implementation status
+- **MUST BE HYPER-SPECIFIC** - Any new agent should be able to read this and know EXACTLY:
+  - What each card/enemy/artifact does (exact numbers, effects, costs)
+  - What each mechanic means (how Hex works, how Armor works, etc.)
+  - What's implemented vs what needs to be built
+  - The exact behavior expected from any system
+- Update when:
+  - Adding new features or systems
+  - Changing architecture or file structure
+  - Completing or starting new implementation phases
+  - Fixing significant bugs
+  - Adding or changing any game content (cards, enemies, etc.)
+- **Never use vague descriptions** like "deals damage" - always specify "deals 6 damage to all enemies in Close ring"
+
+### PROGRESS.md  
+- Contains current status tracker with checkboxes
+- Update when:
+  - Completing any task
+  - Finding new bugs or issues
+  - Changing what's working vs broken
+  - Testing reveals new status
+
+**Both files should reflect the TRUE current state of the project at all times.**
+
+---
+
 ## Important Notes
 
 1. **Mobile Optimization**: This project uses mobile rendering method - keep performance in mind

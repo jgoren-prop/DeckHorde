@@ -1,0 +1,119 @@
+[gd_scene load_steps=2 format=3 uid="uid://br7m2xk5qp4l1"]
+
+[ext_resource type="Script" path="res://scripts/ui/RunEnd.gd" id="1_runend"]
+
+[node name="RunEnd" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_runend")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.04, 0.03, 0.06, 1)
+
+[node name="VBoxContainer" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -200.0
+offset_top = -200.0
+offset_right = 200.0
+offset_bottom = 200.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 20
+
+[node name="ResultTitle" type="Label" parent="VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.8, 0.3, 1)
+theme_override_font_sizes/font_size = 42
+text = "RUN COMPLETE"
+horizontal_alignment = 1
+
+[node name="ResultSubtitle" type="Label" parent="VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.7, 0.7, 1)
+theme_override_font_sizes/font_size = 18
+text = "The Rift is sealed... for now."
+horizontal_alignment = 1
+
+[node name="Separator" type="HSeparator" parent="VBoxContainer"]
+layout_mode = 2
+
+[node name="StatsContainer" type="VBoxContainer" parent="VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="WavesReached" type="Label" parent="VBoxContainer/StatsContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "Waves Cleared: 12/12"
+horizontal_alignment = 1
+
+[node name="EnemiesKilled" type="Label" parent="VBoxContainer/StatsContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "Enemies Slain: 127"
+horizontal_alignment = 1
+
+[node name="DangerLevel" type="Label" parent="VBoxContainer/StatsContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "Danger Level: 1"
+horizontal_alignment = 1
+
+[node name="Separator2" type="HSeparator" parent="VBoxContainer"]
+layout_mode = 2
+
+[node name="EssenceContainer" type="HBoxContainer" parent="VBoxContainer"]
+layout_mode = 2
+alignment = 1
+
+[node name="EssenceIcon" type="Label" parent="VBoxContainer/EssenceContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 32
+text = "✨"
+
+[node name="EssenceLabel" type="Label" parent="VBoxContainer/EssenceContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.8, 0.5, 1, 1)
+theme_override_font_sizes/font_size = 32
+text = "+150 Essence"
+
+[node name="Spacer" type="Control" parent="VBoxContainer"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+
+[node name="ButtonContainer" type="HBoxContainer" parent="VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 20
+alignment = 1
+
+[node name="NewRunButton" type="Button" parent="VBoxContainer/ButtonContainer"]
+custom_minimum_size = Vector2(150, 50)
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "New Run"
+
+[node name="MainMenuButton" type="Button" parent="VBoxContainer/ButtonContainer"]
+custom_minimum_size = Vector2(150, 50)
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "Main Menu"
+
+[connection signal="pressed" from="VBoxContainer/ButtonContainer/NewRunButton" to="." method="_on_new_run_pressed"]
+[connection signal="pressed" from="VBoxContainer/ButtonContainer/MainMenuButton" to="." method="_on_main_menu_pressed"]
+
+

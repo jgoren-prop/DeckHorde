@@ -1,0 +1,204 @@
+[gd_scene load_steps=2 format=3 uid="uid://d3m1qw8rvp2x5"]
+
+[ext_resource type="Script" path="res://scripts/ui/PostWaveReward.gd" id="1_reward"]
+
+[node name="PostWaveReward" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_reward")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.05, 0.04, 0.08, 1)
+
+[node name="VBoxContainer" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -300.0
+offset_top = -250.0
+offset_right = 300.0
+offset_bottom = 250.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 20
+
+[node name="Title" type="Label" parent="VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.8, 0.3, 1)
+theme_override_font_sizes/font_size = 32
+text = "Wave Complete!"
+horizontal_alignment = 1
+
+[node name="WaveInfo" type="Label" parent="VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.7, 0.7, 1)
+theme_override_font_sizes/font_size = 16
+text = "Wave 1 cleared"
+horizontal_alignment = 1
+
+[node name="Separator" type="HSeparator" parent="VBoxContainer"]
+layout_mode = 2
+
+[node name="ChooseLabel" type="Label" parent="VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "Choose a reward:"
+horizontal_alignment = 1
+
+[node name="RewardOptions" type="HBoxContainer" parent="VBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 30
+alignment = 1
+
+[node name="CardReward" type="PanelContainer" parent="VBoxContainer/RewardOptions"]
+custom_minimum_size = Vector2(160, 200)
+layout_mode = 2
+
+[node name="VBox" type="VBoxContainer" parent="VBoxContainer/RewardOptions/CardReward"]
+layout_mode = 2
+theme_override_constants/separation = 10
+alignment = 1
+
+[node name="Icon" type="Label" parent="VBoxContainer/RewardOptions/CardReward/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 48
+text = "🃏"
+horizontal_alignment = 1
+
+[node name="Label" type="Label" parent="VBoxContainer/RewardOptions/CardReward/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "Add Card"
+horizontal_alignment = 1
+
+[node name="Description" type="Label" parent="VBoxContainer/RewardOptions/CardReward/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.6, 0.6, 0.6, 1)
+theme_override_font_sizes/font_size = 12
+text = "Choose 1 of 3"
+horizontal_alignment = 1
+
+[node name="Button" type="Button" parent="VBoxContainer/RewardOptions/CardReward/VBox"]
+layout_mode = 2
+text = "Select"
+
+[node name="ScrapReward" type="PanelContainer" parent="VBoxContainer/RewardOptions"]
+custom_minimum_size = Vector2(160, 200)
+layout_mode = 2
+
+[node name="VBox" type="VBoxContainer" parent="VBoxContainer/RewardOptions/ScrapReward"]
+layout_mode = 2
+theme_override_constants/separation = 10
+alignment = 1
+
+[node name="Icon" type="Label" parent="VBoxContainer/RewardOptions/ScrapReward/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 48
+text = "⚙️"
+horizontal_alignment = 1
+
+[node name="Label" type="Label" parent="VBoxContainer/RewardOptions/ScrapReward/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "Scrap"
+horizontal_alignment = 1
+
+[node name="Description" type="Label" parent="VBoxContainer/RewardOptions/ScrapReward/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.9, 0.5, 1)
+theme_override_font_sizes/font_size = 14
+text = "+50"
+horizontal_alignment = 1
+
+[node name="Button" type="Button" parent="VBoxContainer/RewardOptions/ScrapReward/VBox"]
+layout_mode = 2
+text = "Select"
+
+[node name="HealReward" type="PanelContainer" parent="VBoxContainer/RewardOptions"]
+custom_minimum_size = Vector2(160, 200)
+layout_mode = 2
+
+[node name="VBox" type="VBoxContainer" parent="VBoxContainer/RewardOptions/HealReward"]
+layout_mode = 2
+theme_override_constants/separation = 10
+alignment = 1
+
+[node name="Icon" type="Label" parent="VBoxContainer/RewardOptions/HealReward/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 48
+text = "❤️"
+horizontal_alignment = 1
+
+[node name="Label" type="Label" parent="VBoxContainer/RewardOptions/HealReward/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "Heal"
+horizontal_alignment = 1
+
+[node name="Description" type="Label" parent="VBoxContainer/RewardOptions/HealReward/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.5, 1, 0.5, 1)
+theme_override_font_sizes/font_size = 14
+text = "+20 HP"
+horizontal_alignment = 1
+
+[node name="Button" type="Button" parent="VBoxContainer/RewardOptions/HealReward/VBox"]
+layout_mode = 2
+text = "Select"
+
+[node name="CardSelection" type="PanelContainer" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -350.0
+offset_top = -200.0
+offset_right = 350.0
+offset_bottom = 200.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBox" type="VBoxContainer" parent="CardSelection"]
+layout_mode = 2
+theme_override_constants/separation = 15
+
+[node name="Title" type="Label" parent="CardSelection/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "Choose a Card"
+horizontal_alignment = 1
+
+[node name="CardOptions" type="HBoxContainer" parent="CardSelection/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 20
+alignment = 1
+
+[node name="SkipButton" type="Button" parent="CardSelection/VBox"]
+layout_mode = 2
+size_flags_horizontal = 4
+text = "Skip"
+
+[connection signal="pressed" from="VBoxContainer/RewardOptions/CardReward/VBox/Button" to="." method="_on_card_reward_pressed"]
+[connection signal="pressed" from="VBoxContainer/RewardOptions/ScrapReward/VBox/Button" to="." method="_on_scrap_reward_pressed"]
+[connection signal="pressed" from="VBoxContainer/RewardOptions/HealReward/VBox/Button" to="." method="_on_heal_reward_pressed"]
+[connection signal="pressed" from="CardSelection/VBox/SkipButton" to="." method="_on_skip_card_pressed"]
+
+

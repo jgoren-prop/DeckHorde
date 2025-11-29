@@ -1,0 +1,183 @@
+extends RefCounted
+class_name BattlefieldState
+## BattlefieldState - Manages the ring-based battlefield model
+## Tracks all enemies in their respective rings
+
+# Preload to avoid class_name resolution issues
+const EnemyInstanceScript = preload("res://scripts/combat/EnemyInstance.gd")
+
+enum Ring {
+	MELEE = 0,
+	CLOSE = 1,
+	MID = 2,
+	FAR = 3
+}
+
+signal enemy_added(enemy, ring: int)  # enemy: EnemyInstance
+signal enemy_removed(enemy)  # enemy: EnemyInstance
+signal enemy_moved(enemy, from_ring: int, to_ring: int)  # enemy: EnemyInstance
+
+# Enemies stored by ring
+var rings: Array[Array] = [[], [], [], []]  # MELEE, CLOSE, MID, FAR
+
+# Ring barriers (damage enemies crossing them)
+var ring_barriers: Dictionary = {}  # ring -> {damage: int, turns_remaining: int}
+
+
+func _init() -> void:
+	# Initialize empty rings
+	for i: int in range(4):
+		rings[i] = []
+
+
+func spawn_enemy(enemy_id: String, ring: int):  # -> EnemyInstance
+	"""Spawn a new enemy in the specified ring."""
+	var enemy_def = EnemyDatabase.get_enemy(enemy_id)  # EnemyDefinition
+	if not enemy_def:
+		push_error("[BattlefieldState] Unknown enemy: " + enemy_id)
+		return null
+	
+	var enemy = EnemyInstanceScript.new()  # EnemyInstance
+	enemy.enemy_id = enemy_id
+	enemy.ring = ring
+	enemy.current_hp = enemy_def.get_scaled_hp(RunManager.current_wave)
+	enemy.max_hp = enemy.current_hp
+	
+	rings[ring].append(enemy)
+	enemy_added.emit(enemy, ring)
+	
+	return enemy
+
+
+func remove_enemy(enemy) -> void:  # enemy: EnemyInstance
+	"""Remove an enemy from the battlefield."""
+	if enemy.ring >= 0 and enemy.ring < rings.size():
+		rings[enemy.ring].erase(enemy)
+	enemy_removed.emit(enemy)
+
+
+func move_enemy(enemy, new_ring: int) -> void:  # enemy: EnemyInstance
+	"""Move an enemy to a new ring."""
+	var old_ring: int = enemy.ring
+	
+	if old_ring == new_ring:
+		return
+	
+	# Remove from old ring
+	if old_ring >= 0 and old_ring < rings.size():
+		rings[old_ring].erase(enemy)
+	
+	# Check for barrier damage when moving inward
+	if new_ring < old_ring:
+		for check_ring: int in range(new_ring, old_ring):
+			if ring_barriers.has(check_ring):
+				var barrier: Dictionary = ring_barriers[check_ring]
+				enemy.current_hp -= barrier.damage
+				if enemy.current_hp <= 0:
+					enemy_removed.emit(enemy)
+					return
+	
+	# Add to new ring
+	enemy.ring = new_ring
+	if new_ring >= 0 and new_ring < rings.size():
+		rings[new_ring].append(enemy)
+	
+	enemy_moved.emit(enemy, old_ring, new_ring)
+
+
+func get_enemies_in_ring(ring: int) -> Array:  # Array[EnemyInstance]
+	"""Get all enemies in a specific ring."""
+	var result: Array = []
+	if ring >= 0 and ring < rings.size():
+		for enemy in rings[ring]:
+			result.append(enemy)
+	return result
+
+
+func get_all_enemies() -> Array:  # Array[EnemyInstance]
+	"""Get all enemies on the battlefield."""
+	var result: Array = []
+	for ring: Array in rings:
+		for enemy in ring:
+			result.append(enemy)
+	return result
+
+
+func get_total_enemy_count() -> int:
+	"""Get total number of enemies on battlefield."""
+	var count: int = 0
+	for ring: Array in rings:
+		count += ring.size()
+	return count
+
+
+func get_enemy_count_in_ring(ring: int) -> int:
+	"""Get number of enemies in a specific ring."""
+	if ring >= 0 and ring < rings.size():
+		return rings[ring].size()
+	return 0
+
+
+func get_enemies_by_type(enemy_id: String) -> Array:  # Array[EnemyInstance]
+	"""Get all enemies of a specific type."""
+	var result: Array = []
+	for ring: Array in rings:
+		for enemy in ring:
+			if enemy.enemy_id == enemy_id:
+				result.append(enemy)
+	return result
+
+
+func add_ring_barrier(ring: int, damage: int, duration: int) -> void:
+	"""Add a barrier to a ring that damages enemies passing through."""
+	ring_barriers[ring] = {
+		"damage": damage,
+		"turns_remaining": duration
+	}
+
+
+func tick_status_effects() -> void:
+	"""Process status effect durations."""
+	# Tick down ring barriers
+	var expired_barriers: Array[int] = []
+	for ring: int in ring_barriers.keys():
+		ring_barriers[ring].turns_remaining -= 1
+		if ring_barriers[ring].turns_remaining <= 0:
+			expired_barriers.append(ring)
+	
+	for ring: int in expired_barriers:
+		ring_barriers.erase(ring)
+	
+	# Tick down enemy status effects
+	for enemy in get_all_enemies():
+		enemy.tick_status_effects()
+
+
+func get_ring_name(ring: int) -> String:
+	"""Get human-readable name for a ring."""
+	match ring:
+		Ring.MELEE:
+			return "Melee"
+		Ring.CLOSE:
+			return "Close"
+		Ring.MID:
+			return "Mid"
+		Ring.FAR:
+			return "Far"
+		_:
+			return "Unknown"
+
+
+static func ring_from_name(name: String) -> int:
+	"""Get ring enum from name."""
+	match name.to_lower():
+		"melee":
+			return Ring.MELEE
+		"close":
+			return Ring.CLOSE
+		"mid":
+			return Ring.MID
+		"far":
+			return Ring.FAR
+		_:
+			return -1
