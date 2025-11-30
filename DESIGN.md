@@ -70,7 +70,7 @@ When many enemies spawn in the same ring, the system uses two strategies to prev
 
 **Hex**: Stacking debuff on enemies. When a hexed enemy takes damage, they take bonus damage equal to their hex stacks, then hex is consumed.
 
-**Persistent Weapons**: Stay in play and trigger automatically each turn (e.g., "deal 4 damage to random enemy at turn start").
+**Persistent Weapons**: Stay in play and trigger automatically at end of each turn before enemy phase (e.g., "deal 4 damage to random enemy at end of turn").
 
 **Ring Targeting**: Cards specify which rings they can hit. Some require player to choose a ring, others auto-target.
 
@@ -303,8 +303,7 @@ Cards now display explicit effect labels in their description area:
 **Cards with Both Effects:**
 Cards can have both `instant_description` AND `persistent_description` set to show:
 ```
-Instant: Deal 3 to a random enemy.
-Persistent: Deal 2 to a random enemy at turn start.
+Persistent: Deal 3 to a random enemy at turn end.
 ```
 
 **Placeholders in descriptions:**

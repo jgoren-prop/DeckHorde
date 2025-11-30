@@ -1101,50 +1101,51 @@ func _run_integration_tests() -> void:
 	CombatManager.initialize_combat(wave)
 	await get_tree().process_frame
 	
-	# Get enemy HP before
-	var enemies_before: Array = CombatManager.battlefield.get_all_enemies()
-	var total_hp_before: int = 0
-	for enemy in enemies_before:
-		total_hp_before += enemy.current_hp
+	# Get enemy HP before playing the card
+	var enemies_before_play: Array = CombatManager.battlefield.get_all_enemies()
+	var total_hp_before_play: int = 0
+	for enemy in enemies_before_play:
+		total_hp_before_play += enemy.current_hp
 	
-	# Play the pistol card
+	# Play the pistol card (should NOT deal damage immediately - only registers)
 	var play_success: bool = CombatManager.play_card(0, -1)
 	_assert(play_success == true, "play_card returns true")
 	
 	await get_tree().process_frame
 	
-	# Check that damage was dealt
-	var enemies_after: Array = CombatManager.battlefield.get_all_enemies()
-	var total_hp_after: int = 0
-	for enemy in enemies_after:
-		total_hp_after += enemy.current_hp
-	
-	# Either HP decreased or an enemy died
-	var damage_dealt: bool = (total_hp_after < total_hp_before) or (enemies_after.size() < enemies_before.size())
-	_assert(damage_dealt, "infernal_pistol deals damage to enemies")
-	
-	# Test: Weapon was registered for future turns
+	# Weapon should be registered but NOT triggered yet
 	_assert(CombatManager.active_weapons.size() > 0, "persistent weapon registered")
 	
-	# Test: End turn and start new turn to verify weapon triggers again
-	var enemies_before_turn2: Array = CombatManager.battlefield.get_all_enemies()
-	var total_hp_before_turn2: int = 0
-	for enemy in enemies_before_turn2:
-		total_hp_before_turn2 += enemy.current_hp
+	# Check that NO damage was dealt on play (damage happens at end of turn)
+	var enemies_after_play: Array = CombatManager.battlefield.get_all_enemies()
+	var total_hp_after_play: int = 0
+	for enemy in enemies_after_play:
+		total_hp_after_play += enemy.current_hp
 	
-	# End turn (this will process enemy phase and start new turn)
+	var no_damage_on_play: bool = (total_hp_after_play == total_hp_before_play) and (enemies_after_play.size() == enemies_before_play.size())
+	_assert(no_damage_on_play, "infernal_pistol does NOT deal damage on play (waits for end of turn)")
+	
+	# Test: End turn - weapon should trigger at end of turn (before enemy phase)
+	var enemies_before_end_turn: Array = CombatManager.battlefield.get_all_enemies()
+	var total_hp_before_end_turn: int = 0
+	for enemy in enemies_before_end_turn:
+		total_hp_before_end_turn += enemy.current_hp
+	
+	# End turn (triggers weapon, then processes enemy phase, then starts new turn)
+	# Note: end_player_turn is now async due to weapon triggering, give it time to complete
 	CombatManager.end_player_turn()
-	await get_tree().process_frame
+	# Wait for weapon trigger animation (0.15s) and processing
+	await get_tree().create_timer(0.5).timeout
 	await get_tree().process_frame
 	
-	# Check that persistent weapon triggered again
-	var enemies_after_turn2: Array = CombatManager.battlefield.get_all_enemies()
-	var total_hp_after_turn2: int = 0
-	for enemy in enemies_after_turn2:
-		total_hp_after_turn2 += enemy.current_hp
+	# Check that persistent weapon triggered at end of turn
+	var enemies_after_end_turn: Array = CombatManager.battlefield.get_all_enemies()
+	var total_hp_after_end_turn: int = 0
+	for enemy in enemies_after_end_turn:
+		total_hp_after_end_turn += enemy.current_hp
 	
-	var weapon_triggered_turn2: bool = (total_hp_after_turn2 < total_hp_before_turn2) or (enemies_after_turn2.size() < enemies_before_turn2.size())
-	_assert(weapon_triggered_turn2, "persistent weapon triggers on turn 2")
+	var weapon_triggered: bool = (total_hp_after_end_turn < total_hp_before_end_turn) or (enemies_after_end_turn.size() < enemies_before_end_turn.size())
+	_assert(weapon_triggered, "persistent weapon triggers at end of turn")
 	
 	await get_tree().process_frame
 

@@ -694,8 +694,8 @@ func _on_ring_phase_started(ring: int, ring_name: String) -> void:
 	if battlefield_arena and ring >= 0:
 		battlefield_arena.highlight_ring(ring, true)
 	
-	# Show simple text indicator
-	_show_simple_ring_indicator(ring_name)
+	# Show simple text indicator (disabled)
+	#_show_simple_ring_indicator(ring_name)
 	
 	# Update UI to reflect current state
 	_update_enemy_counter()

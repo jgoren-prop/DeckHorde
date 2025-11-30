@@ -113,3 +113,27 @@ func get_definition():  # -> EnemyDefinition
 	"""Get the EnemyDefinition for this instance."""
 	return EnemyDatabase.get_enemy(enemy_id)
 
+
+func get_turns_until_melee() -> int:
+	"""Calculate how many turns until this enemy reaches melee (ring 0).
+	Returns -1 if enemy won't reach melee (e.g., ranged enemies)."""
+	var enemy_def = get_definition()
+	if not enemy_def:
+		return -1
+	
+	# Already in melee
+	if ring == 0:
+		return 0
+	
+	# Ranged enemies that stop before melee
+	if enemy_def.target_ring > 0 and ring <= enemy_def.target_ring:
+		return -1  # Won't advance further
+	
+	# Calculate turns based on movement speed
+	var rings_to_travel: int = ring - enemy_def.target_ring
+	var speed: int = max(enemy_def.movement_speed, 1)
+	
+	# Round up: if 3 rings at speed 2, takes 2 turns (ceil(3/2) = 2)
+	var turns: int = int(ceil(float(rings_to_travel) / float(speed)))
+	return turns
+

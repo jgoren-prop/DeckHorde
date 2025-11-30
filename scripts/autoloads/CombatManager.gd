@@ -99,9 +99,6 @@ func start_player_turn() -> void:
 	if turn_start_effects.has("hex_tick_damage") and turn_start_effects.hex_tick_damage > 0:
 		_deal_hex_tick_damage(turn_start_effects.hex_tick_damage)
 	
-	# Trigger persistent weapons at turn start
-	_trigger_persistent_weapons()
-	
 	# Refill energy
 	current_energy = max_energy
 	energy_changed.emit(current_energy, max_energy)
@@ -138,15 +135,11 @@ func _trigger_persistent_weapons() -> void:
 		var damage: int = card_def.get_scaled_value("damage", tier)
 		weapon_triggered.emit(card_def.card_name, damage)
 		
-		# Find target before dealing damage (for visual indicator)
-		var target = _get_weapon_target(card_def)
-		if target:
-			enemy_targeted.emit(target)
-		
 		# Small delay for visual clarity between weapons (Slay the Spire style)
 		await get_tree().create_timer(0.15).timeout
 		
 		# Use the CardResolver to trigger the weapon effect
+		# Note: resolve_weapon_effect -> deal_damage_to_random_enemy handles enemy_targeted emit
 		CardResolver.resolve_weapon_effect(card_def, tier, self)
 		
 		# Decrement triggers remaining if not infinite (-1)
@@ -241,6 +234,9 @@ func end_player_turn() -> void:
 	print("[CombatManager] Ending player turn")
 	current_phase = CombatPhase.END_PLAYER_PHASE
 	phase_changed.emit(current_phase)
+	
+	# Trigger persistent weapons at end of player turn (before enemy phase)
+	await _trigger_persistent_weapons()
 	
 	# Trigger on_turn_end artifacts (Leech Tooth)
 	var context: Dictionary = {}
@@ -377,17 +373,48 @@ func _process_enemy_movement_from_ring(ring: int) -> void:
 	# Get fresh list of enemies (some may have died)
 	var enemies_in_ring: Array = battlefield.get_enemies_in_ring(ring)
 	
+	# Group enemies by their group_id for synchronized movement
+	var groups_to_move: Dictionary = {}  # group_id -> Array of {enemy, old_ring, new_ring}
+	var ungrouped_to_move: Array = []  # Array of {enemy, old_ring, new_ring}
+	
 	for enemy in enemies_in_ring:
 		var enemy_def = EnemyDatabase.get_enemy(enemy.enemy_id)
 		if enemy_def and enemy.ring > enemy_def.target_ring:
 			var new_ring: int = max(enemy_def.target_ring, enemy.ring - enemy_def.movement_speed)
 			if new_ring != enemy.ring:
-				var old_ring: int = enemy.ring
-				battlefield.move_enemy(enemy, new_ring)
-				enemy_moved.emit(enemy, old_ring, new_ring)
+				var move_data: Dictionary = {
+					"enemy": enemy,
+					"old_ring": enemy.ring,
+					"new_ring": new_ring
+				}
 				
-				# Small delay between movements for visual clarity
-				await get_tree().create_timer(0.1).timeout
+				if not enemy.group_id.is_empty():
+					# This enemy is part of a group - batch with others in same group
+					if not groups_to_move.has(enemy.group_id):
+						groups_to_move[enemy.group_id] = []
+					groups_to_move[enemy.group_id].append(move_data)
+				else:
+					# Ungrouped enemy - move individually
+					ungrouped_to_move.append(move_data)
+	
+	# Move grouped enemies together (all enemies in a group move at once)
+	for group_id: String in groups_to_move.keys():
+		var group_moves: Array = groups_to_move[group_id]
+		# Move all enemies in the group without delay between them
+		for move_data: Dictionary in group_moves:
+			battlefield.move_enemy(move_data.enemy, move_data.new_ring)
+		# Emit all movement signals at once (so visual updates as a single animation)
+		for move_data: Dictionary in group_moves:
+			enemy_moved.emit(move_data.enemy, move_data.old_ring, move_data.new_ring)
+		# Delay after the whole group moves
+		if not group_moves.is_empty():
+			await get_tree().create_timer(0.15).timeout
+	
+	# Move ungrouped enemies one at a time with delays
+	for move_data: Dictionary in ungrouped_to_move:
+		battlefield.move_enemy(move_data.enemy, move_data.new_ring)
+		enemy_moved.emit(move_data.enemy, move_data.old_ring, move_data.new_ring)
+		await get_tree().create_timer(0.1).timeout
 
 
 func _process_enemy_abilities_visual() -> void:

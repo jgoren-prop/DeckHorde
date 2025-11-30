@@ -49,10 +49,12 @@ In horde-based combat, players face cognitive overload when tracking many enemy 
 - [ ] Priority: Bombers about to explode > Enemies reaching melee > Active buffers
 - [ ] Configurable in settings (can be disabled)
 
-### Layer 6: Movement Ghosts (Future)
-- [ ] Show semi-transparent enemy positions for next turn
-- [ ] Add "turns until melee" badge on each enemy
-- [ ] Ghost opacity scales with certainty
+### Layer 6: Turn Countdown Badges ✅ IMPLEMENTED
+- [x] Add turn countdown badge to each enemy panel (top-right corner)
+- [x] Badge shows "→X" where X is turns until melee
+- [x] Color coding: Red (melee), Orange (1 turn), Yellow (2 turns), Green (3+ turns), Blue (ranged/won't reach)
+- [x] Update badges when enemies move
+- [x] Tooltips explain what each badge means
 
 ### Layer 7: Card Targeting Hints (Future)
 - [ ] On card hover, highlight effective targets
@@ -222,20 +224,23 @@ An expandable panel showing upcoming events:
 
 ---
 
-### Layer 5: Danger Highlighting (Future Enhancement)
+### Layer 5: Danger Highlighting ✅ IMPLEMENTED
 
 Automatic visual emphasis on high-priority threats:
 
 **Priority Order:**
-1. **CRITICAL**: Bombers that will explode next turn (in Melee or will reach it)
-2. **HIGH**: Enemies reaching melee next turn
-3. **MEDIUM**: Active buffers/spawners
-4. **LOW**: Fast enemies not yet close
+1. **CRITICAL** (Red glow, 0.4s pulse): Bombers about to explode (in melee or reaching next turn)
+2. **HIGH** (Orange glow, 0.6s pulse): Any enemy reaching melee next turn
+3. **MEDIUM** (Purple glow, 0.8s pulse): Active buffers/spawners at target ring
+4. **LOW** (Cyan glow, 1.0s pulse): Fast enemies (speed 2+) not yet close
 
 **Visual Effect:**
-- Pulsing glow around enemy panel
-- Glow color matches threat type (red for damage, yellow for bomber, purple for buffer)
-- Pulse rate: 1 second cycle
+- [x] Pulsing glow border around enemy panel
+- [x] Outer shadow glow effect for visibility
+- [x] Glow color matches threat type
+- [x] Pulse rate varies by urgency (faster = more dangerous)
+- [x] Updates on turn start and enemy movement
+- [x] Works with both individual and stacked enemy panels
 
 ---
 

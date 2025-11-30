@@ -121,13 +121,11 @@ static func _resolve_instant_damage(card_def, tier: int, target_ring: int, comba
 
 
 static func _resolve_weapon_persistent(card_def, tier: int, combat: Node) -> void:  # card_def: CardDefinition
-	"""Register a persistent weapon effect and trigger it immediately."""
-	# Register the weapon for future turns
+	"""Register a persistent weapon effect (triggers at end of turn only)."""
+	# Register the weapon for this and future turns
+	# Weapon will trigger at end of turn, NOT when played
 	combat.register_weapon(card_def, tier, -1)  # -1 = rest of wave
-	
-	# Also deal damage immediately when played
-	resolve_weapon_effect(card_def, tier, combat)
-	print("[CardEffectResolver] Persistent weapon registered and triggered: ", card_def.card_name)
+	print("[CardEffectResolver] Persistent weapon registered (fires at end of turn): ", card_def.card_name)
 
 
 static func _resolve_heal(card_def, tier: int) -> void:  # card_def: CardDefinition

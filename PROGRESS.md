@@ -90,6 +90,23 @@
 4. Meta progression save/load
 
 ## Recently Completed (This Session)
+- ✅ **Danger Highlighting** - Pulsing glow effects on high-priority threats:
+  - **CRITICAL (Red, fast pulse)**: Bombers about to explode
+  - **HIGH (Orange)**: Enemies reaching melee next turn
+  - **MEDIUM (Purple)**: Active buffers/spawners at target ring
+  - **LOW (Cyan)**: Fast enemies (speed 2+) not yet close
+  - Glowing border with outer shadow effect
+  - Pulse speed varies by urgency
+  - Updates on turn start and enemy movement
+
+- ✅ **Turn Countdown Badges** - Shows how many turns until each enemy reaches melee:
+  - Badge appears on every enemy panel (top-right corner for regular, below behavior badge for stacks)
+  - Color coding: Red "⚔️" (in melee), Orange "→1" (1 turn away), Yellow "→2", Green "→3+", Blue "—" (ranged)
+  - Tooltips explain what each badge means
+  - Updates dynamically as enemies move between rings
+  - Works with individual enemies, stacked enemies, and mini-panels
+
+## Previously Completed
 - ✅ **Combat Visual Feedback System** - Slay the Spire-style animations and telegraphing:
   - **CombatAnimationManager**: New autoload for sequencing combat animations
   - **Attack Indicators**: Target reticles (┌┐└┘) appear around enemies before being hit
@@ -169,7 +186,7 @@
 - ✅ Fixed armor consumption - armor now properly absorbs damage before being depleted
 - ✅ Fixed enemy positioning - enemies now appear inside ring zones instead of on ring borders
 - ✅ Implemented drag-and-drop card targeting - drag cards to rings instead of using popup selector
-- ✅ Fixed persistent weapons (Infernal Pistol) now trigger at turn start
+- ✅ Fixed persistent weapons (Infernal Pistol) now trigger at end of turn (before enemy phase)
 - ✅ Added hex visual indicator - enemies with hex now show "☠️ X" above them
 - ✅ Doubled card size from 120x170 to 220x320 with all fonts scaled up
 - ✅ Redesigned HP/Armor UI - now shown near battlefield center (Slay the Spire style)

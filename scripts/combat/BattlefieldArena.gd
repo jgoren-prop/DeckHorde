@@ -100,6 +100,18 @@ var _enemy_scale_tweens: Dictionary = {}  # instance_id -> Tween
 var _stack_scale_tweens: Dictionary = {}  # stack_key -> Tween
 var _enemy_debug_timers: Dictionary = {}  # instance_id -> Timer (for cleanup)
 
+# Danger highlighting system - pulsing glow on high-priority threats
+enum DangerLevel { NONE, LOW, MEDIUM, HIGH, CRITICAL }
+const DANGER_GLOW_COLORS: Dictionary = {
+	DangerLevel.NONE: Color(0.0, 0.0, 0.0, 0.0),        # No glow
+	DangerLevel.LOW: Color(0.3, 0.9, 0.9, 0.6),         # Cyan - fast enemies
+	DangerLevel.MEDIUM: Color(0.7, 0.3, 1.0, 0.7),      # Purple - active buffer/spawner
+	DangerLevel.HIGH: Color(1.0, 0.5, 0.1, 0.8),        # Orange - reaching melee next turn
+	DangerLevel.CRITICAL: Color(1.0, 0.2, 0.1, 0.9)     # Red - bomber about to explode
+}
+var _danger_glow_tweens: Dictionary = {}  # instance_id or stack_key -> Tween
+var _danger_glow_panels: Dictionary = {}  # instance_id or stack_key -> Panel (glow overlay)
+
 
 func _ready() -> void:
 	_connect_signals()
@@ -290,7 +302,7 @@ func _connect_signals() -> void:
 		CombatManager.enemy_moved.connect(_on_enemy_moved)
 		CombatManager.enemy_damaged.connect(_on_enemy_damaged)
 		CombatManager.player_damaged.connect(_on_player_damaged)
-		CombatManager.weapon_triggered.connect(_on_weapon_triggered)
+		# Note: weapon_triggered is handled by CombatScreen for icon flash
 		CombatManager.turn_started.connect(_on_turn_started_threat_update)
 		CombatManager.enemy_targeted.connect(_on_enemy_targeted)
 		CombatManager.enemy_hexed.connect(_on_enemy_hexed)
@@ -354,31 +366,56 @@ func _on_enemy_spawned(enemy) -> void:  # enemy: EnemyInstance
 func _on_enemy_killed(enemy) -> void:  # enemy: EnemyInstance
 	var ring: int = enemy.ring
 	
+	# Get the stack key BEFORE removing enemy from group (otherwise we lose the group_id)
+	var stack_key: String = _get_stack_key_for_enemy(enemy)
+	
 	# Remove enemy from its group (but keep the group intact)
 	_remove_enemy_from_group(enemy)
 	
-	# If enemy was in an expanded stack, remove its mini-panel immediately
-	var stack_key: String = _get_stack_key_for_enemy(enemy)
+	# If enemy was in a stack, update the stack instead of doing a full refresh
 	if not stack_key.is_empty() and stack_visuals.has(stack_key):
 		var stack_data: Dictionary = stack_visuals[stack_key]
+		
+		# Remove enemy from stack's enemies array
+		var updated_enemies: Array = []
+		for stacked_enemy in stack_data.enemies:
+			if stacked_enemy.instance_id != enemy.instance_id:
+				updated_enemies.append(stacked_enemy)
+		stack_data.enemies = updated_enemies
+		
+		# Remove mini-panel for this enemy if expanded
 		if stack_data.has("mini_panels"):
 			var updated_mini_panels: Array = []
 			for mini_panel in stack_data.mini_panels:
 				if is_instance_valid(mini_panel):
-					# Use instance_id from meta to avoid accessing potentially freed enemy instance
 					var mini_enemy_instance_id: int = mini_panel.get_meta("instance_id", -1)
 					if mini_enemy_instance_id == enemy.instance_id:
-						# This is the killed enemy's mini-panel - remove it
 						mini_panel.queue_free()
 					else:
 						updated_mini_panels.append(mini_panel)
 			stack_data.mini_panels = updated_mini_panels
+		
+		# Update the stack's visual (count and HP) without recreating it
+		_update_stack_hp_display(stack_key)
+		
+		# If no enemies left in the stack, remove the stack panel entirely
+		if updated_enemies.is_empty():
+			if stack_data.has("panel") and is_instance_valid(stack_data.panel):
+				stack_data.panel.queue_free()
+			# Clean up position tracking
+			_stack_base_positions.erase(stack_key)
+			if _stack_position_tweens.has(stack_key):
+				var old_tween: Tween = _stack_position_tweens[stack_key]
+				if old_tween and old_tween.is_valid():
+					old_tween.kill()
+				_stack_position_tweens.erase(stack_key)
+			stack_visuals.erase(stack_key)
 	
 	_remove_enemy_visual(enemy)
-	# Refresh the ring to update stacks - use batched version to prevent duplicate refreshes
-	call_deferred("_deferred_refresh_ring", ring)
+	# Only do a full refresh if enemy was NOT in a stack (handled above)
+	if stack_key.is_empty():
+		call_deferred("_deferred_refresh_ring", ring)
 	call_deferred("update_ring_threat_levels")
-	# Also do a cleanup pass
 	call_deferred("_cleanup_orphaned_mini_panels")
 
 
@@ -388,18 +425,38 @@ func _on_enemy_moved(enemy, from_ring: int, to_ring: int) -> void:  # enemy: Ene
 	print("[BattlefieldArena DEBUG] From ring: ", from_ring, " -> To ring: ", to_ring)
 	print("[BattlefieldArena DEBUG] Enemy current ring (from enemy.ring): ", enemy.ring)
 	
-	# Instead of refreshing all enemies in both rings (which causes spazzing),
-	# we use deferred calls to batch updates and only refresh once per frame
-	# Also check if stacking state needs to change before doing a full refresh
+	# Update group's ring if enemy is in a group
+	# Check if all enemies in the group are now in the same ring, and update group.ring accordingly
+	var enemy_has_group: bool = false
+	if not enemy.group_id.is_empty() and enemy_groups.has(enemy.group_id):
+		enemy_has_group = true
+		var group: Dictionary = enemy_groups[enemy.group_id]
+		var alive_enemies: Array = []
+		for group_enemy in group.enemies:
+			if group_enemy.is_alive():
+				alive_enemies.append(group_enemy)
+		
+		# If all alive enemies in the group are in the same ring, update group.ring
+		if not alive_enemies.is_empty():
+			var first_ring: int = alive_enemies[0].ring
+			var all_same_ring: bool = true
+			for group_enemy in alive_enemies:
+				if group_enemy.ring != first_ring:
+					all_same_ring = false
+					break
+			
+			if all_same_ring:
+				group.ring = first_ring
+				print("[BattlefieldArena DEBUG] Updated group ", enemy.group_id, " ring to ", first_ring)
 	
+	# If enemy is in a group, always refresh both rings to update group visuals
+	# Otherwise, check if stacking state needs to change before doing a full refresh
 	var from_needs_full_refresh: bool = _ring_stacking_changed(from_ring)
 	var to_needs_full_refresh: bool = _ring_stacking_changed(to_ring)
 	
-	print("[BattlefieldArena DEBUG] From ring needs refresh: ", from_needs_full_refresh, " | To ring needs refresh: ", to_needs_full_refresh)
-	
-	if from_needs_full_refresh or to_needs_full_refresh:
-		# Stacking state changed - need full refresh but defer it to batch multiple moves
-		print("[BattlefieldArena DEBUG] Stacking changed - deferring full refresh")
+	if enemy_has_group or from_needs_full_refresh or to_needs_full_refresh:
+		# Enemy is in a group or stacking state changed - need full refresh but defer it to batch multiple moves
+		print("[BattlefieldArena DEBUG] Enemy has group or stacking changed - deferring full refresh")
 		call_deferred("_deferred_refresh_ring", from_ring)
 		call_deferred("_deferred_refresh_ring", to_ring)
 	else:
@@ -494,6 +551,8 @@ func _show_weapon_trigger_effect(card_name: String) -> void:
 func _on_turn_started_threat_update(_turn: int) -> void:
 	"""Update ring threat levels at the start of each turn."""
 	update_ring_threat_levels()
+	# Update danger highlighting for all enemies (threat levels may have changed)
+	_update_all_danger_highlights()
 
 
 func _on_player_damaged(damage_amount: int, _source: String) -> void:
@@ -535,6 +594,11 @@ func _create_enemy_visual(enemy) -> void:  # enemy: EnemyInstance
 		var badge: Panel = _create_behavior_badge(enemy_def)
 		badge.position = Vector2(4, 4)
 		visual.add_child(badge)
+	
+	# Turn countdown badge (top-right corner) - large and prominent
+	var countdown_badge: Panel = _create_turn_countdown_badge(enemy)
+	countdown_badge.position = Vector2(width - 42, 2)
+	visual.add_child(countdown_badge)
 	
 	# Enemy icon
 	var icon_label: Label = Label.new()
@@ -623,6 +687,9 @@ func _create_enemy_visual(enemy) -> void:  # enemy: EnemyInstance
 	# Set initial position and update
 	_update_enemy_position(enemy)
 	_update_enemy_hp_display(enemy, visual)
+	
+	# Apply danger highlighting based on threat level
+	_apply_danger_highlighting(visual, enemy, "enemy_" + str(enemy.instance_id))
 
 
 func _remove_enemy_visual(enemy) -> void:  # enemy: EnemyInstance
@@ -653,6 +720,9 @@ func _remove_enemy_visual(enemy) -> void:  # enemy: EnemyInstance
 	
 	# Clean up base position tracking
 	_enemy_base_positions.erase(enemy.instance_id)
+	
+	# Clean up danger glow
+	_remove_danger_glow("enemy_" + str(enemy.instance_id))
 		
 	var visual: Panel = enemy_visuals[enemy.instance_id]
 	var death_pos: Vector2 = visual.global_position + visual.size / 2
@@ -791,6 +861,12 @@ func _update_enemy_position(enemy) -> void:  # enemy: EnemyInstance
 	
 	# Update HP display
 	_update_enemy_hp_display(enemy, visual)
+	
+	# Update turn countdown badge (enemy moved to new ring)
+	_update_turn_countdown_badge(visual, enemy)
+	
+	# Update danger highlighting (threat level may have changed)
+	_apply_danger_highlighting(visual, enemy, "enemy_" + str(enemy.instance_id))
 
 
 func _update_enemy_hp_display(enemy, visual: Panel) -> void:
@@ -1070,6 +1146,314 @@ func _create_behavior_badge(enemy_def, is_mini_badge: bool = false) -> Panel:
 	return badge
 
 
+func _create_turn_countdown_badge(enemy, is_mini_badge: bool = false) -> Panel:
+	"""Create a large, prominent badge showing turns until enemy reaches melee."""
+	var turns: int = enemy.get_turns_until_melee()
+	
+	# MUCH larger badge sizes for visibility
+	var badge_width: float = 38.0 if not is_mini_badge else 26.0
+	var badge_height: float = 22.0 if not is_mini_badge else 16.0
+	var font_size: int = 14 if not is_mini_badge else 11
+	
+	var badge: Panel = Panel.new()
+	badge.name = "TurnCountdown"
+	badge.custom_minimum_size = Vector2(badge_width, badge_height)
+	badge.size = Vector2(badge_width, badge_height)
+	badge.mouse_filter = Control.MOUSE_FILTER_PASS
+	badge.z_index = 10  # Higher z-index to be on top
+	
+	# Determine badge color and background based on turns
+	var badge_color: Color
+	var bg_color: Color
+	var badge_text: String
+	var tooltip_text: String
+	
+	if turns == 0:
+		# In melee - attacking! CRITICAL
+		badge_color = Color(1.0, 1.0, 1.0)  # White text for contrast
+		bg_color = Color(0.9, 0.2, 0.2, 0.95)  # Solid red background
+		badge_text = "⚔️ 0"
+		tooltip_text = "IN MELEE - Attacks this turn!"
+	elif turns == -1:
+		# Won't reach melee (ranged)
+		badge_color = Color(0.9, 0.95, 1.0)  # Light blue text
+		bg_color = Color(0.2, 0.35, 0.6, 0.9)  # Blue background
+		badge_text = "🏹"
+		tooltip_text = "RANGED - Won't advance to melee"
+	elif turns == 1:
+		# Arrives next turn - URGENT!
+		badge_color = Color(1.0, 1.0, 1.0)  # White text
+		bg_color = Color(0.9, 0.5, 0.1, 0.95)  # Orange background
+		badge_text = "⚠️ 1"
+		tooltip_text = "DANGER - Reaches melee NEXT turn!"
+	elif turns == 2:
+		# Coming soon - warning
+		badge_color = Color(0.1, 0.1, 0.1)  # Dark text
+		bg_color = Color(1.0, 0.85, 0.2, 0.9)  # Yellow background
+		badge_text = "→ 2"
+		tooltip_text = "WARNING - Reaches melee in 2 turns"
+	else:
+		# Further away - safe for now
+		badge_color = Color(1.0, 1.0, 1.0)  # White text
+		bg_color = Color(0.25, 0.55, 0.3, 0.85)  # Green background
+		badge_text = "→ " + str(turns)
+		tooltip_text = "Safe - Reaches melee in " + str(turns) + " turns"
+	
+	# Style the badge with solid colored background for maximum visibility
+	var badge_style: StyleBoxFlat = StyleBoxFlat.new()
+	badge_style.bg_color = bg_color
+	badge_style.set_corner_radius_all(6)
+	badge_style.set_border_width_all(2)
+	badge_style.border_color = Color(0.0, 0.0, 0.0, 0.8)  # Dark border for contrast
+	# Add shadow effect for depth
+	badge_style.shadow_color = Color(0.0, 0.0, 0.0, 0.5)
+	badge_style.shadow_size = 2
+	badge_style.shadow_offset = Vector2(1, 1)
+	badge.add_theme_stylebox_override("panel", badge_style)
+	
+	# Badge text - larger and bold
+	var badge_label: Label = Label.new()
+	badge_label.name = "TurnLabel"
+	badge_label.text = badge_text
+	badge_label.add_theme_font_size_override("font_size", font_size)
+	badge_label.add_theme_color_override("font_color", badge_color)
+	# Add text outline for better readability
+	badge_label.add_theme_constant_override("outline_size", 2)
+	badge_label.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 0.7))
+	badge_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	badge_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	badge_label.position = Vector2(0, 0)
+	badge_label.size = Vector2(badge_width, badge_height)
+	badge_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	badge.add_child(badge_label)
+	
+	# Store tooltip
+	badge.set_meta("tooltip_text", tooltip_text)
+	
+	return badge
+
+
+func _update_turn_countdown_badge(visual: Panel, enemy) -> void:
+	"""Update the turn countdown badge for an enemy panel."""
+	var countdown: Panel = visual.get_node_or_null("TurnCountdown")
+	if not countdown:
+		return
+	
+	var turns: int = enemy.get_turns_until_melee()
+	var turn_label: Label = countdown.get_node_or_null("TurnLabel")
+	if not turn_label:
+		return
+	
+	# Update text, colors, and background (matching create function)
+	var badge_color: Color
+	var bg_color: Color
+	var badge_text: String
+	var tooltip_text: String
+	
+	if turns == 0:
+		badge_color = Color(1.0, 1.0, 1.0)
+		bg_color = Color(0.9, 0.2, 0.2, 0.95)
+		badge_text = "⚔️ 0"
+		tooltip_text = "IN MELEE - Attacks this turn!"
+	elif turns == -1:
+		badge_color = Color(0.9, 0.95, 1.0)
+		bg_color = Color(0.2, 0.35, 0.6, 0.9)
+		badge_text = "🏹"
+		tooltip_text = "RANGED - Won't advance to melee"
+	elif turns == 1:
+		badge_color = Color(1.0, 1.0, 1.0)
+		bg_color = Color(0.9, 0.5, 0.1, 0.95)
+		badge_text = "⚠️ 1"
+		tooltip_text = "DANGER - Reaches melee NEXT turn!"
+	elif turns == 2:
+		badge_color = Color(0.1, 0.1, 0.1)
+		bg_color = Color(1.0, 0.85, 0.2, 0.9)
+		badge_text = "→ 2"
+		tooltip_text = "WARNING - Reaches melee in 2 turns"
+	else:
+		badge_color = Color(1.0, 1.0, 1.0)
+		bg_color = Color(0.25, 0.55, 0.3, 0.85)
+		badge_text = "→ " + str(turns)
+		tooltip_text = "Safe - Reaches melee in " + str(turns) + " turns"
+	
+	turn_label.text = badge_text
+	turn_label.add_theme_color_override("font_color", badge_color)
+	
+	# Update background and border color
+	var new_style: StyleBoxFlat = StyleBoxFlat.new()
+	new_style.bg_color = bg_color
+	new_style.set_corner_radius_all(6)
+	new_style.set_border_width_all(2)
+	new_style.border_color = Color(0.0, 0.0, 0.0, 0.8)
+	new_style.shadow_color = Color(0.0, 0.0, 0.0, 0.5)
+	new_style.shadow_size = 2
+	new_style.shadow_offset = Vector2(1, 1)
+	countdown.add_theme_stylebox_override("panel", new_style)
+	
+	countdown.set_meta("tooltip_text", tooltip_text)
+
+
+# ============== DANGER HIGHLIGHTING SYSTEM ==============
+
+func _get_enemy_danger_level(enemy) -> DangerLevel:
+	"""Calculate the danger level for an enemy based on threat priority."""
+	var enemy_def = EnemyDatabase.get_enemy(enemy.enemy_id)
+	if not enemy_def:
+		return DangerLevel.NONE
+	
+	var turns_until_melee: int = enemy.get_turns_until_melee()
+	
+	# CRITICAL: Bomber about to explode (in melee or reaching next turn)
+	if enemy_def.behavior_type == EnemyDefinition.BehaviorType.BOMBER:
+		if enemy.ring == 0 or turns_until_melee == 1:
+			return DangerLevel.CRITICAL
+	
+	# CRITICAL: Any enemy IN melee right now (attacking this turn!)
+	if enemy.ring == 0 and turns_until_melee == 0:
+		return DangerLevel.CRITICAL
+	
+	# HIGH: Any enemy reaching melee next turn (1 turn away)
+	if turns_until_melee == 1:
+		return DangerLevel.HIGH
+	
+	# MEDIUM: Active buffer or spawner at their target ring
+	if enemy_def.behavior_type == EnemyDefinition.BehaviorType.BUFFER:
+		if enemy.ring <= enemy_def.target_ring:
+			return DangerLevel.MEDIUM
+	if enemy_def.behavior_type == EnemyDefinition.BehaviorType.SPAWNER:
+		if enemy.ring <= enemy_def.target_ring:
+			return DangerLevel.MEDIUM
+	
+	# LOW: Fast enemies (speed 2+) not yet close
+	if enemy_def.movement_speed >= 2 and enemy.ring >= 2:
+		return DangerLevel.LOW
+	
+	return DangerLevel.NONE
+
+
+func _apply_danger_highlighting(visual: Panel, enemy, key: String) -> void:
+	"""Apply danger highlighting by modifying the enemy panel's border directly."""
+	var danger_level: DangerLevel = _get_enemy_danger_level(enemy)
+	
+	# Clean up existing pulse if danger level is NONE
+	if danger_level == DangerLevel.NONE:
+		_remove_danger_glow(key)
+		# Reset to default border
+		_reset_panel_style(visual, enemy.enemy_id)
+		return
+	
+	var glow_color: Color = DANGER_GLOW_COLORS[danger_level]
+	
+	# Apply danger style directly to the enemy panel
+	var style: StyleBoxFlat = StyleBoxFlat.new()
+	style.bg_color = ENEMY_COLORS.get(enemy.enemy_id, Color(0.8, 0.3, 0.3))
+	style.set_corner_radius_all(8)
+	style.set_border_width_all(4)  # Thicker danger border
+	style.border_color = glow_color
+	# Add shadow for glow effect
+	style.shadow_color = glow_color
+	style.shadow_size = 10
+	style.shadow_offset = Vector2(0, 0)
+	visual.add_theme_stylebox_override("panel", style)
+	
+	# Store that this panel has danger highlighting
+	_danger_glow_panels[key] = visual
+	
+	# Start or restart the pulsing animation on the panel itself
+	_start_danger_pulse(key, visual, glow_color, danger_level)
+
+
+func _reset_panel_style(visual: Panel, enemy_id: String) -> void:
+	"""Reset panel to default style (no danger)."""
+	var style: StyleBoxFlat = StyleBoxFlat.new()
+	style.bg_color = ENEMY_COLORS.get(enemy_id, Color(0.8, 0.3, 0.3))
+	style.set_corner_radius_all(8)
+	style.set_border_width_all(2)
+	style.border_color = Color(0.3, 0.3, 0.35, 1.0)
+	visual.add_theme_stylebox_override("panel", style)
+	# Reset modulate to normal
+	visual.modulate = Color.WHITE
+
+
+func _start_danger_pulse(key: String, panel: Panel, _glow_color: Color, danger_level: DangerLevel) -> void:
+	"""Start or restart a subtle pulsing animation on the panel's modulate."""
+	# Kill existing tween
+	if _danger_glow_tweens.has(key):
+		var old_tween: Tween = _danger_glow_tweens[key]
+		if old_tween and old_tween.is_valid():
+			old_tween.kill()
+		_danger_glow_tweens.erase(key)
+	
+	if not is_instance_valid(panel):
+		return
+	
+	# Pulse speed based on danger level (faster = more urgent)
+	var pulse_duration: float
+	match danger_level:
+		DangerLevel.CRITICAL:
+			pulse_duration = 0.5  # Fast pulse for critical
+		DangerLevel.HIGH:
+			pulse_duration = 0.7
+		DangerLevel.MEDIUM:
+			pulse_duration = 0.9
+		_:
+			pulse_duration = 1.1
+	
+	# Create looping pulse tween on the panel's modulate property
+	# SUBTLE pulse - just a slight brightness variation
+	var tween: Tween = panel.create_tween()
+	tween.set_loops()
+	# Very subtle brightness pulse (1.08 to 0.95 = only 0.13 swing)
+	tween.tween_property(panel, "modulate", Color(1.08, 1.08, 1.08, 1.0), pulse_duration * 0.5).set_ease(Tween.EASE_IN_OUT)
+	tween.tween_property(panel, "modulate", Color(0.95, 0.95, 0.95, 1.0), pulse_duration * 0.5).set_ease(Tween.EASE_IN_OUT)
+	
+	_danger_glow_tweens[key] = tween
+
+
+func _remove_danger_glow(key: String) -> void:
+	"""Remove danger highlighting from an enemy panel."""
+	# Kill tween
+	if _danger_glow_tweens.has(key):
+		var tween: Tween = _danger_glow_tweens[key]
+		if tween and tween.is_valid():
+			tween.kill()
+		_danger_glow_tweens.erase(key)
+	
+	# Remove from tracking (panel itself is NOT freed - it's the enemy panel)
+	_danger_glow_panels.erase(key)
+
+
+func _update_all_danger_highlights() -> void:
+	"""Update danger highlighting for all visible enemies."""
+	# Update individual enemy panels
+	for instance_id: int in enemy_visuals.keys():
+		var visual: Panel = enemy_visuals[instance_id]
+		if not is_instance_valid(visual):
+			continue
+		var enemy = visual.get_meta("enemy_instance", null)
+		if enemy:
+			_apply_danger_highlighting(visual, enemy, "enemy_" + str(instance_id))
+	
+	# Update stack panels
+	for stack_key: String in stack_visuals.keys():
+		var stack_data: Dictionary = stack_visuals[stack_key]
+		var panel: Panel = stack_data.panel
+		if not is_instance_valid(panel):
+			continue
+		var enemies: Array = stack_data.enemies
+		if enemies.size() > 0:
+			# Use highest danger level among stacked enemies
+			var highest_danger: DangerLevel = DangerLevel.NONE
+			var representative_enemy = null
+			for enemy in enemies:
+				var danger: DangerLevel = _get_enemy_danger_level(enemy)
+				if danger > highest_danger:
+					highest_danger = danger
+					representative_enemy = enemy
+			if representative_enemy:
+				_apply_danger_highlighting(panel, representative_enemy, "stack_" + stack_key)
+
+
 func _generate_group_id() -> String:
 	"""Generate a unique group ID."""
 	_next_group_id += 1
@@ -1130,20 +1514,20 @@ func _get_enemy_groups_in_ring(ring: int) -> Dictionary:
 	
 	for group_id: String in enemy_groups.keys():
 		var group: Dictionary = enemy_groups[group_id]
-		if group.ring == ring:
-			# Only include groups with at least one alive enemy
-			var alive_enemies: Array = []
-			for enemy in group.enemies:
-				if enemy.is_alive():
-					alive_enemies.append(enemy)
-			
-			# Keep group even if all enemies are dead (will be cleaned up later)
-			if not alive_enemies.is_empty():
-				groups[group_id] = {
-					"ring": group.ring,
-					"enemy_id": group.enemy_id,
-					"enemies": alive_enemies
-				}
+		# Check enemies' current rings instead of stored group.ring
+		# This ensures groups are found even after enemies move
+		var alive_enemies_in_ring: Array = []
+		for enemy in group.enemies:
+			if enemy.is_alive() and enemy.ring == ring:
+				alive_enemies_in_ring.append(enemy)
+		
+		# Include group if it has at least one alive enemy in this ring
+		if not alive_enemies_in_ring.is_empty():
+			groups[group_id] = {
+				"ring": ring,  # Use current ring, not stored group.ring
+				"enemy_id": group.enemy_id,
+				"enemies": alive_enemies_in_ring
+			}
 	
 	return groups
 
@@ -1258,11 +1642,22 @@ func _refresh_ring_visuals(ring: int) -> void:
 	# Track which enemies are in groups
 	var enemies_in_groups: Dictionary = {}  # instance_id -> true
 	
+	# PRESERVE old positions before clearing stacks - these will be used as starting positions
+	# for new panels to avoid flying from (0,0)
+	var preserved_positions: Dictionary = {}  # stack_key -> Vector2
+	
 	# Clear existing stacks for this ring (including mini-panels!)
 	var keys_to_remove: Array = []
 	for key: String in stack_visuals.keys():
 		if key.begins_with(str(ring) + "_"):
 			var stack_data: Dictionary = stack_visuals[key]
+			
+			# Preserve the position of the stack panel before destroying it
+			if _stack_base_positions.has(key):
+				preserved_positions[key] = _stack_base_positions[key]
+			elif stack_data.has("panel") and is_instance_valid(stack_data.panel):
+				preserved_positions[key] = stack_data.panel.position
+			
 			# Kill any active position tween for this stack
 			if _stack_position_tweens.has(key):
 				var old_tween: Tween = _stack_position_tweens[key]
@@ -1275,7 +1670,7 @@ func _refresh_ring_visuals(ring: int) -> void:
 				if old_tween and old_tween.is_valid():
 					old_tween.kill()
 				_stack_scale_tweens.erase(key)
-			# Clean up base position tracking
+			# DON'T erase base position tracking yet - we preserved it above
 			_stack_base_positions.erase(key)
 			# Clean up mini-panels first
 			if stack_data.has("mini_panels"):
@@ -1300,6 +1695,11 @@ func _refresh_ring_visuals(ring: int) -> void:
 			# Create/update stack visual for this group (even if size 1)
 			# Use a unique key that includes group_id to handle multiple groups of same type
 			var stack_key: String = str(ring) + "_" + enemy_id + "_" + group_id
+			
+			# Restore preserved position so new panel starts from old position
+			if preserved_positions.has(stack_key):
+				_stack_base_positions[stack_key] = preserved_positions[stack_key]
+			
 			_create_stack_visual_for_group(ring, enemy_id, group_enemies, stack_key)
 			
 			# Hide individual visuals for stacked enemies
@@ -1368,6 +1768,12 @@ func _create_stack_visual(ring: int, enemy_id: String, enemies: Array, stack_key
 		var badge: Panel = _create_behavior_badge(enemy_def)
 		badge.position = Vector2(4, 4)
 		panel.add_child(badge)
+	
+	# Turn countdown badge (below behavior badge on left side) - large and prominent
+	# Use first enemy in stack since they're all at same position
+	var countdown_badge: Panel = _create_turn_countdown_badge(enemies[0])
+	countdown_badge.position = Vector2(2, 26)
+	panel.add_child(countdown_badge)
 	
 	# Enemy icon
 	var icon_label: Label = Label.new()
@@ -1482,6 +1888,18 @@ func _create_stack_visual(ring: int, enemy_id: String, enemies: Array, stack_key
 	
 	# Position the stack
 	_update_stack_position(stack_key)
+	
+	# Apply danger highlighting based on highest threat in stack
+	if enemies.size() > 0:
+		# Find enemy with highest danger level
+		var highest_danger: DangerLevel = DangerLevel.NONE
+		var most_dangerous_enemy = enemies[0]
+		for enemy in enemies:
+			var danger: DangerLevel = _get_enemy_danger_level(enemy)
+			if danger > highest_danger:
+				highest_danger = danger
+				most_dangerous_enemy = enemy
+		_apply_danger_highlighting(panel, most_dangerous_enemy, "stack_" + stack_key)
 
 
 func _update_stack_position(stack_key: String) -> void:
@@ -1500,14 +1918,28 @@ func _update_stack_position(stack_key: String) -> void:
 	var target_pos: Vector2 = _get_enemy_position(representative)
 	target_pos -= panel.size / 2
 	
+	# Get the starting position - use stored base position, or current panel position
+	# This prevents flying from (0,0) when panel is newly created
+	var start_pos: Vector2 = _stack_base_positions.get(stack_key, panel.position)
+	
+	# If panel is at (0,0) but we have a stored position, use the stored position
+	# This handles the case where panel was just created and hasn't been positioned yet
+	if panel.position.length() < 1.0 and start_pos.length() > 1.0:
+		panel.position = start_pos
+	elif start_pos.length() < 1.0 and panel.position.length() > 1.0:
+		start_pos = panel.position
+	
 	# Check if already at target position (within tolerance) - skip animation
-	var current_base: Vector2 = _stack_base_positions.get(stack_key, panel.position)
-	if current_base.distance_to(target_pos) < 2.0:
+	if start_pos.distance_to(target_pos) < 2.0:
 		# Already at target, just ensure position is exact
+		panel.position = target_pos
 		_stack_base_positions[stack_key] = target_pos
 		return
 	
-	# Store the base position for this stack (used by shake animations)
+	# Set panel to start position before animating (in case it's at 0,0)
+	panel.position = start_pos
+	
+	# Store the TARGET base position for this stack (used by shake animations)
 	_stack_base_positions[stack_key] = target_pos
 	
 	# Kill any existing position tween to prevent conflicts
@@ -1557,6 +1989,21 @@ func _update_stack_hp_display(stack_key: String) -> void:
 	var hp_text: Label = panel.get_node_or_null("HPText")
 	if hp_text:
 		hp_text.text = str(total_hp) + "/" + str(total_max_hp) + " total"
+	
+	# Update turn countdown badge (use first enemy in stack since they're all at same position)
+	if enemies.size() > 0:
+		_update_turn_countdown_badge(panel, enemies[0])
+	
+	# Update danger highlighting (use highest threat among stacked enemies)
+	if enemies.size() > 0:
+		var highest_danger: DangerLevel = DangerLevel.NONE
+		var most_dangerous_enemy = enemies[0]
+		for enemy in enemies:
+			var danger: DangerLevel = _get_enemy_danger_level(enemy)
+			if danger > highest_danger:
+				highest_danger = danger
+				most_dangerous_enemy = enemy
+		_apply_danger_highlighting(panel, most_dangerous_enemy, "stack_" + stack_key)
 
 
 # ============== STACK EXPAND-ON-HOVER SYSTEM ==============
@@ -1572,14 +2019,29 @@ func _on_stack_hover_enter(panel: Panel, stack_key: String) -> void:
 		return
 	
 	var stack_data: Dictionary = stack_visuals[stack_key]
-	
-	# Highlight the stack panel
 	var enemy_id: String = panel.get_meta("enemy_id", "")
+	
+	# Check if stack has danger highlighting
+	var danger_key: String = "stack_" + stack_key
+	var has_danger: bool = _danger_glow_panels.has(danger_key)
+	
+	# Get the danger color if applicable
+	var border_color: Color = Color(1.0, 1.0, 0.5, 1.0)  # Default gold hover
+	if has_danger and stack_data.enemies.size() > 0:
+		var danger_level: DangerLevel = _get_enemy_danger_level(stack_data.enemies[0])
+		if danger_level != DangerLevel.NONE:
+			border_color = DANGER_GLOW_COLORS[danger_level]
+	
+	# Highlight the stack panel - preserve danger color if present
 	var style: StyleBoxFlat = StyleBoxFlat.new()
 	style.bg_color = ENEMY_COLORS.get(enemy_id, Color(0.8, 0.3, 0.3)).lightened(0.15)
 	style.set_corner_radius_all(8)
-	style.set_border_width_all(3)
-	style.border_color = Color(1.0, 1.0, 0.5, 1.0)  # Bright gold on hover
+	style.set_border_width_all(4 if has_danger else 3)
+	style.border_color = border_color
+	if has_danger:
+		style.shadow_color = border_color
+		style.shadow_size = 10
+		style.shadow_offset = Vector2(0, 0)
 	panel.add_theme_stylebox_override("panel", style)
 	
 	# Kill any existing scale tween to prevent conflicts
@@ -1605,14 +2067,29 @@ func _on_stack_hover_exit(panel: Panel, stack_key: String) -> void:
 	if not stack_visuals.has(stack_key):
 		return
 	
-	# Reset panel style
+	var stack_data: Dictionary = stack_visuals[stack_key]
 	var enemy_id: String = panel.get_meta("enemy_id", "")
-	var style: StyleBoxFlat = StyleBoxFlat.new()
-	style.bg_color = ENEMY_COLORS.get(enemy_id, Color(0.8, 0.3, 0.3))
-	style.set_corner_radius_all(8)
-	style.set_border_width_all(3)
-	style.border_color = Color(1.0, 0.85, 0.4, 0.9)
-	panel.add_theme_stylebox_override("panel", style)
+	
+	# Check if stack has danger highlighting - if so, reapply it
+	var danger_key: String = "stack_" + stack_key
+	if _danger_glow_panels.has(danger_key) and stack_data.enemies.size() > 0:
+		# Reapply danger highlighting
+		var highest_danger: DangerLevel = DangerLevel.NONE
+		var most_dangerous_enemy = stack_data.enemies[0]
+		for enemy in stack_data.enemies:
+			var danger: DangerLevel = _get_enemy_danger_level(enemy)
+			if danger > highest_danger:
+				highest_danger = danger
+				most_dangerous_enemy = enemy
+		_apply_danger_highlighting(panel, most_dangerous_enemy, danger_key)
+	else:
+		# Reset to default gold stack border
+		var style: StyleBoxFlat = StyleBoxFlat.new()
+		style.bg_color = ENEMY_COLORS.get(enemy_id, Color(0.8, 0.3, 0.3))
+		style.set_corner_radius_all(8)
+		style.set_border_width_all(3)
+		style.border_color = Color(1.0, 0.85, 0.4, 0.9)
+		panel.add_theme_stylebox_override("panel", style)
 	
 	# Kill any existing scale tween to prevent conflicts
 	if _stack_scale_tweens.has(stack_key):
@@ -1722,10 +2199,17 @@ func _force_collapse_stack(stack_key: String) -> void:
 	stack_data.expanded = false
 	
 	# Immediately remove all mini-panels (no animation)
+	# Filter out invalid panels first to avoid accessing freed instances
 	if stack_data.has("mini_panels"):
+		var valid_panels: Array = []
 		for mini_panel in stack_data.mini_panels:
 			if is_instance_valid(mini_panel):
-				mini_panel.queue_free()
+				valid_panels.append(mini_panel)
+		
+		# Free all valid panels
+		for mini_panel in valid_panels:
+			mini_panel.queue_free()
+		
 		stack_data.mini_panels = []
 
 
@@ -1758,6 +2242,11 @@ func _create_mini_panel(enemy, panel_size: Vector2) -> Panel:
 		var badge: Panel = _create_behavior_badge(enemy_def, true)
 		badge.position = Vector2(2, 2)
 		panel.add_child(badge)
+	
+	# Turn countdown badge (smaller but still visible, top-right corner)
+	var countdown_badge: Panel = _create_turn_countdown_badge(enemy, true)
+	countdown_badge.position = Vector2(width - 28, 2)
+	panel.add_child(countdown_badge)
 	
 	# Enemy icon (smaller)
 	var icon_label: Label = Label.new()
@@ -1949,6 +2438,9 @@ func _show_damage_on_stacked_enemy(enemy, amount: int, stack_key: String, is_hex
 			return
 		
 		var stack_data_after_await: Dictionary = stack_visuals[stack_key]
+		if not stack_data_after_await.has("mini_panels"):
+			return
+		
 		var mini_panels: Array = stack_data_after_await.get("mini_panels", [])
 		
 		# Filter out invalid panels before iterating to avoid freed instance errors
@@ -1957,6 +2449,7 @@ func _show_damage_on_stacked_enemy(enemy, amount: int, stack_key: String, is_hex
 			if is_instance_valid(panel):
 				valid_mini_panels.append(panel)
 		
+		var found_target: bool = false
 		for mini_panel: Panel in valid_mini_panels:
 			# Get instance_id from meta to avoid accessing potentially freed enemy instance
 			var mini_enemy_instance_id: int = mini_panel.get_meta("instance_id", -1)
@@ -1974,9 +2467,11 @@ func _show_damage_on_stacked_enemy(enemy, amount: int, stack_key: String, is_hex
 					)
 					# Skip updating HP if enemy was killed during the delay
 					# We can't safely access enemy properties after async delay
+					found_target = true
 					break
-			
-			# Auto-collapse after showing damage
+		
+		# Auto-collapse after showing damage (only if we found the target)
+		if found_target:
 			await get_tree().create_timer(0.4).timeout
 			# Re-check that stack still exists before collapsing
 			if stack_visuals.has(stack_key):
@@ -2123,15 +2618,24 @@ func _on_enemy_hover_enter(visual: Panel, enemy) -> void:
 
 
 func _on_enemy_hover_exit(visual: Panel) -> void:
-	# Reset highlight
 	var enemy_id: String = visual.get_meta("enemy_id", "")
 	var instance_id: int = visual.get_meta("instance_id", -1)
-	var style: StyleBoxFlat = StyleBoxFlat.new()
-	style.bg_color = ENEMY_COLORS.get(enemy_id, Color(0.8, 0.3, 0.3))
-	style.set_corner_radius_all(8)
-	style.set_border_width_all(2)
-	style.border_color = Color(0.3, 0.3, 0.35, 1.0)
-	visual.add_theme_stylebox_override("panel", style)
+	
+	# Check if this enemy has danger highlighting - if so, reapply it
+	var danger_key: String = "enemy_" + str(instance_id)
+	if _danger_glow_panels.has(danger_key):
+		# Reapply danger style instead of default
+		var enemy = visual.get_meta("enemy_instance", null)
+		if enemy:
+			_apply_danger_highlighting(visual, enemy, danger_key)
+	else:
+		# Reset to default style
+		var style: StyleBoxFlat = StyleBoxFlat.new()
+		style.bg_color = ENEMY_COLORS.get(enemy_id, Color(0.8, 0.3, 0.3))
+		style.set_corner_radius_all(8)
+		style.set_border_width_all(2)
+		style.border_color = Color(0.3, 0.3, 0.35, 1.0)
+		visual.add_theme_stylebox_override("panel", style)
 	
 	# Kill any existing scale tween to prevent conflicts
 	if instance_id >= 0 and _enemy_scale_tweens.has(instance_id):
@@ -2418,15 +2922,28 @@ func _create_enemy_instance_mini_card(enemy) -> PanelContainer:
 	var card: PanelContainer = PanelContainer.new()
 	card.custom_minimum_size = Vector2(55, 70)
 	
-	# Card background style
+	# Check if this enemy has danger highlighting
+	var danger_level: DangerLevel = _get_enemy_danger_level(enemy)
+	var has_danger: bool = danger_level != DangerLevel.NONE
+	
+	# Card background style - apply danger color if applicable
 	var style: StyleBoxFlat = StyleBoxFlat.new()
 	style.bg_color = Color(0.1, 0.07, 0.12, 0.95)
-	style.border_color = ENEMY_COLORS.get(enemy.enemy_id, Color(0.5, 0.4, 0.6))
-	style.set_border_width_all(2)
+	
+	if has_danger:
+		var danger_color: Color = DANGER_GLOW_COLORS[danger_level]
+		style.border_color = danger_color
+		style.set_border_width_all(3)
+		style.shadow_color = danger_color
+		style.shadow_size = 6
+	else:
+		style.border_color = ENEMY_COLORS.get(enemy.enemy_id, Color(0.5, 0.4, 0.6))
+		style.set_border_width_all(2)
+		style.shadow_color = Color(0, 0, 0, 0.4)
+		style.shadow_size = 2
+	
 	style.set_corner_radius_all(5)
 	style.set_content_margin_all(3)
-	style.shadow_color = Color(0, 0, 0, 0.4)
-	style.shadow_size = 2
 	card.add_theme_stylebox_override("panel", style)
 	
 	# Main container
@@ -2467,6 +2984,16 @@ func _create_enemy_instance_mini_card(enemy) -> PanelContainer:
 	hp_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hp_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(hp_label)
+	
+	# Damage display
+	var dmg: int = enemy_def.get_scaled_damage(RunManager.current_wave)
+	var dmg_label: Label = Label.new()
+	dmg_label.text = "⚔️" + str(dmg)
+	dmg_label.add_theme_font_size_override("font_size", 9)
+	dmg_label.add_theme_color_override("font_color", Color(1.0, 0.4, 0.4))
+	dmg_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	dmg_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vbox.add_child(dmg_label)
 	
 	# Status effects (hex indicator - compact)
 	if enemy.has_status("hex"):
@@ -2607,19 +3134,23 @@ func clear_all_hover_states() -> void:
 	_cleanup_orphaned_mini_panels()
 	
 	# Reset visual scales on any enemy panels that might be in hover state
-	for visual: Panel in enemy_visuals.values():
+	for instance_id: int in enemy_visuals.keys():
+		var visual: Panel = enemy_visuals[instance_id]
 		if is_instance_valid(visual):
 			visual.scale = Vector2.ONE
 			visual.z_index = 0
-			visual.modulate = Color.WHITE
-			# Reset panel style to default
-			var enemy_id: String = visual.get_meta("enemy_id", "")
-			var style: StyleBoxFlat = StyleBoxFlat.new()
-			style.bg_color = ENEMY_COLORS.get(enemy_id, Color(0.8, 0.3, 0.3))
-			style.set_corner_radius_all(8)
-			style.set_border_width_all(2)
-			style.border_color = Color(0.3, 0.3, 0.35, 1.0)
-			visual.add_theme_stylebox_override("panel", style)
+			# Don't reset modulate if danger pulse is active
+			var danger_key: String = "enemy_" + str(instance_id)
+			if not _danger_glow_panels.has(danger_key):
+				visual.modulate = Color.WHITE
+				# Reset panel style to default only if no danger highlighting
+				var enemy_id: String = visual.get_meta("enemy_id", "")
+				var style: StyleBoxFlat = StyleBoxFlat.new()
+				style.bg_color = ENEMY_COLORS.get(enemy_id, Color(0.8, 0.3, 0.3))
+				style.set_corner_radius_all(8)
+				style.set_border_width_all(2)
+				style.border_color = Color(0.3, 0.3, 0.35, 1.0)
+				visual.add_theme_stylebox_override("panel", style)
 	
 	# Reset stack visual scales
 	for stack_key: String in stack_visuals.keys():
@@ -2627,15 +3158,18 @@ func clear_all_hover_states() -> void:
 		if is_instance_valid(stack_data.panel):
 			stack_data.panel.scale = Vector2.ONE
 			stack_data.panel.z_index = 0
-			stack_data.panel.modulate = Color.WHITE
-			# Reset panel style to default
-			var enemy_id: String = stack_data.panel.get_meta("enemy_id", "")
-			var style: StyleBoxFlat = StyleBoxFlat.new()
-			style.bg_color = ENEMY_COLORS.get(enemy_id, Color(0.8, 0.3, 0.3))
-			style.set_corner_radius_all(8)
-			style.set_border_width_all(3)
-			style.border_color = Color(1.0, 0.85, 0.4, 0.9)
-			stack_data.panel.add_theme_stylebox_override("panel", style)
+			# Don't reset modulate if danger pulse is active
+			var danger_key: String = "stack_" + stack_key
+			if not _danger_glow_panels.has(danger_key):
+				stack_data.panel.modulate = Color.WHITE
+				# Reset panel style to default only if no danger highlighting
+				var enemy_id: String = stack_data.panel.get_meta("enemy_id", "")
+				var style: StyleBoxFlat = StyleBoxFlat.new()
+				style.bg_color = ENEMY_COLORS.get(enemy_id, Color(0.8, 0.3, 0.3))
+				style.set_corner_radius_all(8)
+				style.set_border_width_all(3)
+				style.border_color = Color(1.0, 0.85, 0.4, 0.9)
+				stack_data.panel.add_theme_stylebox_override("panel", style)
 
 
 func _cleanup_orphaned_mini_panels() -> void:
@@ -3349,7 +3883,7 @@ func _fire_fast_projectile_to_enemy(enemy, projectile_color: Color = Color(1.0, 
 
 
 func _expand_stack_and_show_hex(enemy, stack_key: String, hex_amount: int) -> void:
-	"""Expand a stack and show hex effect on the specific enemy's mini-card."""
+	"""Expand a stack and show hex effect on the specific enemy's mini-card with purple shake."""
 	if not stack_visuals.has(stack_key):
 		return
 	
@@ -3379,63 +3913,73 @@ func _expand_stack_and_show_hex(enemy, stack_key: String, hex_amount: int) -> vo
 			target_mini_panel = mini_panel
 			break
 	
-	if target_mini_panel:
-		# Fire purple hex projectile at the mini-card
-		var mini_center: Vector2 = target_mini_panel.position + target_mini_panel.size / 2
-		_fire_fast_projectile_to_position(mini_center, Color(0.8, 0.3, 1.0))
+	if target_mini_panel and is_instance_valid(target_mini_panel):
+		# Purple shake effect on the mini-card (no projectile)
+		var base_pos: Vector2 = target_mini_panel.position
+		var shake_tween: Tween = target_mini_panel.create_tween()
 		
-		# Wait for projectile to hit
-		await get_tree().create_timer(0.15).timeout
+		# Tint purple and shake horizontally
+		shake_tween.tween_property(target_mini_panel, "modulate", Color(0.8, 0.3, 1.0, 1.0), 0.05)
+		shake_tween.parallel().tween_property(target_mini_panel, "position:x", base_pos.x + 4, 0.05)
+		shake_tween.tween_property(target_mini_panel, "position:x", base_pos.x - 4, 0.05)
+		shake_tween.tween_property(target_mini_panel, "position:x", base_pos.x + 3, 0.05)
+		shake_tween.tween_property(target_mini_panel, "position:x", base_pos.x - 3, 0.05)
+		shake_tween.tween_property(target_mini_panel, "position:x", base_pos.x + 2, 0.05)
+		shake_tween.tween_property(target_mini_panel, "position:x", base_pos.x, 0.05)
+		shake_tween.parallel().tween_property(target_mini_panel, "modulate", Color.WHITE, 0.15)
 		
-		# Purple flash on the mini-card
-		if is_instance_valid(target_mini_panel):
-			var flash_tween: Tween = target_mini_panel.create_tween()
-			flash_tween.tween_property(target_mini_panel, "modulate", Color(0.8, 0.3, 1.0, 1.0), 0.08)
-			flash_tween.tween_property(target_mini_panel, "modulate", Color.WHITE, 0.12)
-			
-			# Show hex amount floating above
-			_show_hex_number_at_position(
-				target_mini_panel.position + Vector2(target_mini_panel.size.x / 2 - 15, -10),
-				hex_amount
-			)
-			
-			# Update hex display on the mini-card
-			_update_mini_panel_hex(target_mini_panel, enemy)
+		# Show hex amount floating above
+		_show_hex_number_at_position(
+			target_mini_panel.position + Vector2(target_mini_panel.size.x / 2 - 15, -10),
+			hex_amount
+		)
+		
+		# Update hex display on the mini-card
+		_update_mini_panel_hex(target_mini_panel, enemy)
 		
 		# Auto-collapse after brief delay
-		await get_tree().create_timer(0.35).timeout
+		await get_tree().create_timer(0.5).timeout
 		_force_collapse_stack(stack_key)
 	else:
-		# Fallback - show on main panel
+		# Fallback - shake main panel purple
 		var main_panel: Panel = stack_data.panel
 		if is_instance_valid(main_panel):
-			var panel_center: Vector2 = main_panel.position + main_panel.size / 2
-			_fire_fast_projectile_to_position(panel_center, Color(0.8, 0.3, 1.0))
+			var base_pos: Vector2 = main_panel.position
+			var shake_tween: Tween = main_panel.create_tween()
+			shake_tween.tween_property(main_panel, "modulate", Color(0.8, 0.3, 1.0, 1.0), 0.05)
+			shake_tween.parallel().tween_property(main_panel, "position:x", base_pos.x + 4, 0.05)
+			shake_tween.tween_property(main_panel, "position:x", base_pos.x - 4, 0.05)
+			shake_tween.tween_property(main_panel, "position:x", base_pos.x + 2, 0.05)
+			shake_tween.tween_property(main_panel, "position:x", base_pos.x, 0.05)
+			shake_tween.parallel().tween_property(main_panel, "modulate", Color.WHITE, 0.15)
 		
-		await get_tree().create_timer(0.25).timeout
+		await get_tree().create_timer(0.4).timeout
 		_force_collapse_stack(stack_key)
 
 
 func _show_hex_effect_on_enemy(enemy, hex_amount: int) -> void:
-	"""Show hex effect on an individual (non-stacked) enemy."""
+	"""Show hex effect on an individual (non-stacked) enemy with purple shake."""
 	if not enemy_visuals.has(enemy.instance_id):
 		return
 	
 	var visual: Panel = enemy_visuals[enemy.instance_id]
 	
-	# Fire purple hex projectile
-	_fire_fast_projectile_to_enemy(enemy, Color(0.8, 0.3, 1.0))
-	
-	# Wait for projectile
-	await get_tree().create_timer(0.15).timeout
-	
 	if not is_instance_valid(visual):
 		return
 	
-	# Purple flash
-	var flash_tween: Tween = visual.create_tween()
-	flash_tween.tween_property(visual, "modulate", Color(0.8, 0.3, 1.0, 1.0), 0.08)
-	flash_tween.tween_property(visual, "modulate", Color.WHITE, 0.12)
+	# Purple shake effect (no projectile)
+	var base_pos: Vector2 = visual.position
+	var shake_tween: Tween = visual.create_tween()
+	
+	# Tint purple and shake horizontally
+	shake_tween.tween_property(visual, "modulate", Color(0.8, 0.3, 1.0, 1.0), 0.05)
+	shake_tween.parallel().tween_property(visual, "position:x", base_pos.x + 5, 0.05)
+	shake_tween.tween_property(visual, "position:x", base_pos.x - 5, 0.05)
+	shake_tween.tween_property(visual, "position:x", base_pos.x + 4, 0.05)
+	shake_tween.tween_property(visual, "position:x", base_pos.x - 4, 0.05)
+	shake_tween.tween_property(visual, "position:x", base_pos.x + 2, 0.05)
+	shake_tween.tween_property(visual, "position:x", base_pos.x, 0.05)
+	shake_tween.parallel().tween_property(visual, "modulate", Color.WHITE, 0.15)
 	
 	# Show hex amount floating above
 	_show_hex_number_at_position(
