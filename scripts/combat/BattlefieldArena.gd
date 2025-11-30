@@ -70,6 +70,7 @@ const THREAT_BORDER_WIDTH: Dictionary = {
 
 var enemy_visuals: Dictionary = {}  # instance_id -> Control (individual enemies)
 var stack_visuals: Dictionary = {}  # "ring_enemytype" -> {panel: Control, enemies: Array, expanded: bool}
+var destroyed_visuals: Dictionary = {}  # instance_id -> Control (destroyed enemies that remain visible)
 var center: Vector2 = Vector2.ZERO
 var max_radius: float = 200.0
 
@@ -96,6 +97,8 @@ var _enemy_position_tweens: Dictionary = {}  # instance_id -> Tween
 var _stack_position_tweens: Dictionary = {}  # stack_key -> Tween
 var _enemy_base_positions: Dictionary = {}  # instance_id -> Vector2 (target/base position)
 var _stack_base_positions: Dictionary = {}  # stack_key -> Vector2 (target/base position)
+var _group_positions: Dictionary = {}  # group_id -> Vector2 (tracks position across ring changes)
+var _group_angular_positions: Dictionary = {}  # group_id -> float (preserves angular/horizontal position across ring changes)
 var _enemy_scale_tweens: Dictionary = {}  # instance_id -> Tween
 var _stack_scale_tweens: Dictionary = {}  # stack_key -> Tween
 var _enemy_debug_timers: Dictionary = {}  # instance_id -> Timer (for cleanup)
@@ -111,6 +114,33 @@ const DANGER_GLOW_COLORS: Dictionary = {
 }
 var _danger_glow_tweens: Dictionary = {}  # instance_id or stack_key -> Tween
 var _danger_glow_panels: Dictionary = {}  # instance_id or stack_key -> Panel (glow overlay)
+
+# Card targeting hint system - shows which enemies would be hit on card hover
+var _targeting_hint_overlays: Dictionary = {}  # instance_id or stack_key -> Control (damage preview overlay)
+var _targeting_hint_active: bool = false
+const TARGETING_HINT_COLOR: Color = Color(1.0, 0.95, 0.4, 0.3)  # Yellow highlight for targets
+const KILL_INDICATOR_COLOR: Color = Color(1.0, 0.2, 0.2, 0.8)  # Red for lethal damage
+
+# Event callout banner system - flash banners for important events
+var _event_banner: PanelContainer = null
+var _event_banner_queue: Array[Dictionary] = []  # Queue of pending banners
+var _event_banner_tween: Tween = null
+const EVENT_BANNER_COLORS: Dictionary = {
+	"spawn": Color(0.3, 0.9, 0.9, 0.95),    # Cyan for spawner
+	"buff": Color(0.7, 0.4, 1.0, 0.95),     # Purple for buffer
+	"bomber": Color(1.0, 0.85, 0.2, 0.95),  # Yellow for bomber
+	"explode": Color(1.0, 0.3, 0.1, 0.95),  # Red-orange for explosion
+	"boss": Color(1.0, 0.8, 0.2, 0.95)      # Gold for boss
+}
+
+# Stack hold system - keeps stacks expanded while multiple operations target them
+var _stack_hold_counts: Dictionary = {}  # stack_key -> int (number of active operations)
+var _stack_collapse_timers: Dictionary = {}  # stack_key -> SceneTreeTimer (delayed collapse)
+const STACK_COLLAPSE_DELAY: float = 1.0  # Seconds to wait after last operation before collapsing
+
+# Weapons phase tracking - keeps ALL targeted stacks open during weapon firing
+var _in_weapons_phase: bool = false
+var _weapons_phase_stacks: Array[String] = []  # Stacks targeted during weapons phase
 
 
 func _ready() -> void:
@@ -308,6 +338,10 @@ func _connect_signals() -> void:
 		CombatManager.enemy_hexed.connect(_on_enemy_hexed)
 		CombatManager.barrier_placed.connect(_on_barrier_placed)
 		CombatManager._enemies_spawned_together.connect(_on_enemies_spawned_together)
+		CombatManager.enemy_ability_triggered.connect(_on_enemy_ability_triggered)
+		# Weapons phase signals - keep stacks open during weapon firing
+		CombatManager.weapons_phase_started.connect(_on_weapons_phase_started)
+		CombatManager.weapons_phase_ended.connect(_on_weapons_phase_ended)
 
 
 func _on_enemy_targeted(enemy) -> void:
@@ -316,12 +350,38 @@ func _on_enemy_targeted(enemy) -> void:
 	var stack_key: String = _get_stack_key_for_enemy(enemy)
 	
 	if not stack_key.is_empty() and stack_visuals.has(stack_key):
+		# If in weapons phase, track this stack so it stays open
+		if _in_weapons_phase and stack_key not in _weapons_phase_stacks:
+			_weapons_phase_stacks.append(stack_key)
+			# Add an extra hold for the weapons phase
+			_hold_stack_open(stack_key)
+		
 		# Expand the stack and fire at the specific mini-card (no damage yet)
 		_expand_stack_and_fire(enemy, stack_key, 0, false)
 	else:
 		# Individual enemy - show indicator and fire directly (fast)
 		show_attack_indicator(enemy, 0.15)
 		_fire_fast_projectile_to_enemy(enemy, Color(1.0, 0.9, 0.3))
+
+
+func _on_weapons_phase_started() -> void:
+	"""Called when persistent weapons start firing - prepare to keep stacks open."""
+	_in_weapons_phase = true
+	_weapons_phase_stacks.clear()
+
+
+func _on_weapons_phase_ended() -> void:
+	"""Called when all persistent weapons have finished - release holds on stacks."""
+	_in_weapons_phase = false
+	
+	# Keep stacks open a bit longer so the player can see the final state
+	await get_tree().create_timer(0.8).timeout
+	
+	# Release the weapons phase hold on all affected stacks
+	for stack_key: String in _weapons_phase_stacks:
+		_release_stack_hold(stack_key)
+	
+	_weapons_phase_stacks.clear()
 
 
 func _on_enemy_hexed(enemy, hex_amount: int) -> void:
@@ -383,35 +443,25 @@ func _on_enemy_killed(enemy) -> void:  # enemy: EnemyInstance
 				updated_enemies.append(stacked_enemy)
 		stack_data.enemies = updated_enemies
 		
-		# Remove mini-panel for this enemy if expanded
+		# Transform mini-panel to destroyed state if expanded (instead of removing)
 		if stack_data.has("mini_panels"):
-			var updated_mini_panels: Array = []
 			for mini_panel in stack_data.mini_panels:
 				if is_instance_valid(mini_panel):
 					var mini_enemy_instance_id: int = mini_panel.get_meta("instance_id", -1)
 					if mini_enemy_instance_id == enemy.instance_id:
-						mini_panel.queue_free()
-					else:
-						updated_mini_panels.append(mini_panel)
-			stack_data.mini_panels = updated_mini_panels
+						_play_death_animation_mini_panel(mini_panel, enemy)
 		
-		# Update the stack's visual (count and HP) without recreating it
-		_update_stack_hp_display(stack_key)
-		
-		# If no enemies left in the stack, remove the stack panel entirely
+		# Check if all enemies in the stack are now destroyed
 		if updated_enemies.is_empty():
-			if stack_data.has("panel") and is_instance_valid(stack_data.panel):
-				stack_data.panel.queue_free()
-			# Clean up position tracking
-			_stack_base_positions.erase(stack_key)
-			if _stack_position_tweens.has(stack_key):
-				var old_tween: Tween = _stack_position_tweens[stack_key]
-				if old_tween and old_tween.is_valid():
-					old_tween.kill()
-				_stack_position_tweens.erase(stack_key)
-			stack_visuals.erase(stack_key)
+			# All units destroyed - play destruction animation on the group card
+			_play_group_card_destruction_animation(stack_key)
+		else:
+			# Still have alive enemies - just update the stack's visual
+			_update_stack_hp_display(stack_key)
 	
-	_remove_enemy_visual(enemy)
+	# Play death animation and transform to destroyed state (instead of removing)
+	_play_death_animation(enemy)
+	
 	# Only do a full refresh if enemy was NOT in a stack (handled above)
 	if stack_key.is_empty():
 		call_deferred("_deferred_refresh_ring", ring)
@@ -480,14 +530,14 @@ func _on_enemy_moved(enemy, from_ring: int, to_ring: int) -> void:  # enemy: Ene
 	print("[BattlefieldArena DEBUG] ========== ENEMY MOVED HANDLER COMPLETE ==========")
 
 
-func _on_enemy_damaged(enemy, amount: int) -> void:  # enemy: EnemyInstance
+func _on_enemy_damaged(enemy, amount: int, hex_triggered: bool = false) -> void:  # enemy: EnemyInstance
 	"""Called when a specific enemy takes damage."""
 	# Check if enemy is in a stack
 	var stack_key: String = _get_stack_key_for_enemy(enemy)
 	var is_in_stack: bool = not stack_key.is_empty() and stack_visuals.has(stack_key)
 	
-	# Check for hex trigger (purple flash) - hex was consumed if it's now 0
-	var is_hex_trigger: bool = enemy.get_status_value("hex") == 0 and amount > 0
+	# Use the hex_triggered parameter passed from CombatManager (purple flash for hex)
+	var is_hex_trigger: bool = hex_triggered
 	var flash_color: Color = Color(0.8, 0.3, 1.0, 1.0) if is_hex_trigger else Color(1.5, 0.5, 0.5, 1.0)
 	
 	if is_in_stack:
@@ -595,10 +645,6 @@ func _create_enemy_visual(enemy) -> void:  # enemy: EnemyInstance
 		badge.position = Vector2(4, 4)
 		visual.add_child(badge)
 	
-	# Turn countdown badge (top-right corner) - large and prominent
-	var countdown_badge: Panel = _create_turn_countdown_badge(enemy)
-	countdown_badge.position = Vector2(width - 42, 2)
-	visual.add_child(countdown_badge)
 	
 	# Enemy icon
 	var icon_label: Label = Label.new()
@@ -692,7 +738,8 @@ func _create_enemy_visual(enemy) -> void:  # enemy: EnemyInstance
 	_apply_danger_highlighting(visual, enemy, "enemy_" + str(enemy.instance_id))
 
 
-func _remove_enemy_visual(enemy) -> void:  # enemy: EnemyInstance
+func _play_death_animation(enemy) -> void:  # enemy: EnemyInstance
+	"""Play a polished death animation and transform the visual into a destroyed state."""
 	if not enemy_visuals.has(enemy.instance_id):
 		return
 	
@@ -718,46 +765,293 @@ func _remove_enemy_visual(enemy) -> void:  # enemy: EnemyInstance
 			debug_timer.queue_free()
 		_enemy_debug_timers.erase(enemy.instance_id)
 	
-	# Clean up base position tracking
-	_enemy_base_positions.erase(enemy.instance_id)
-	
 	# Clean up danger glow
 	_remove_danger_glow("enemy_" + str(enemy.instance_id))
 		
 	var visual: Panel = enemy_visuals[enemy.instance_id]
 	var death_pos: Vector2 = visual.global_position + visual.size / 2
+	var enemy_color: Color = ENEMY_COLORS.get(enemy.enemy_id, Color.RED)
 	
-	# Spawn death particles
-	_spawn_death_particles(death_pos, ENEMY_COLORS.get(enemy.enemy_id, Color.RED))
+	# Spawn death particles (more dramatic)
+	_spawn_death_particles(death_pos, enemy_color)
+	_spawn_death_particles(death_pos, Color.WHITE)  # Extra white flash particles
 	
-	# Death animation
-	var tween: Tween = create_tween()
-	tween.tween_property(visual, "modulate", Color.WHITE, 0.05)
-	tween.tween_property(visual, "modulate", Color.RED, 0.1)
-	tween.tween_property(visual, "scale", Vector2.ZERO, 0.2).set_ease(Tween.EASE_IN)
-	tween.tween_callback(visual.queue_free)
+	# Mark as destroyed and disable interactions
+	visual.set_meta("is_destroyed", true)
+	visual.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	
+	# Move from enemy_visuals to destroyed_visuals
 	enemy_visuals.erase(enemy.instance_id)
+	destroyed_visuals[enemy.instance_id] = visual
+	
+	# Death animation sequence: flash white -> red -> shake -> transform to destroyed state
+	var tween: Tween = create_tween()
+	
+	# Phase 1: Quick white flash
+	tween.tween_property(visual, "modulate", Color(2.0, 2.0, 2.0, 1.0), 0.05)
+	
+	# Phase 2: Red flash with slight scale up (impact feel)
+	tween.tween_property(visual, "modulate", Color(1.5, 0.3, 0.3, 1.0), 0.08)
+	tween.parallel().tween_property(visual, "scale", Vector2(1.15, 1.15), 0.08)
+	
+	# Phase 3: Shake effect (using small position offsets)
+	var original_pos: Vector2 = visual.position
+	for i: int in range(4):
+		var offset: Vector2 = Vector2(randf_range(-4, 4), randf_range(-4, 4))
+		tween.tween_property(visual, "position", original_pos + offset, 0.03)
+	tween.tween_property(visual, "position", original_pos, 0.03)
+	
+	# Phase 4: Shrink slightly and transform to destroyed look
+	tween.tween_property(visual, "scale", Vector2(0.85, 0.85), 0.15).set_ease(Tween.EASE_OUT)
+	tween.parallel().tween_property(visual, "modulate", Color(0.35, 0.35, 0.35, 0.7), 0.15)
+	
+	# Phase 5: Apply destroyed visual state
+	tween.tween_callback(_transform_to_destroyed_state.bind(visual, enemy))
 
 
-func _spawn_death_particles(pos: Vector2, color: Color) -> void:
-	for i: int in range(12):
+func _play_death_animation_mini_panel(mini_panel: Panel, enemy) -> void:
+	"""Play death animation on a mini-panel in an expanded stack."""
+	if not is_instance_valid(mini_panel):
+		return
+	
+	var death_pos: Vector2 = mini_panel.global_position + mini_panel.size / 2
+	var enemy_color: Color = ENEMY_COLORS.get(enemy.enemy_id, Color.RED)
+	
+	# Spawn smaller death particles
+	_spawn_death_particles_small(death_pos, enemy_color)
+	
+	# Mark as destroyed
+	mini_panel.set_meta("is_destroyed", true)
+	mini_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	
+	# Death animation for mini-panel
+	var tween: Tween = create_tween()
+	
+	# Flash white -> red
+	tween.tween_property(mini_panel, "modulate", Color(2.0, 2.0, 2.0, 1.0), 0.04)
+	tween.tween_property(mini_panel, "modulate", Color(1.5, 0.3, 0.3, 1.0), 0.06)
+	tween.parallel().tween_property(mini_panel, "scale", Vector2(1.1, 1.1), 0.06)
+	
+	# Shake
+	var original_pos: Vector2 = mini_panel.position
+	for i: int in range(3):
+		var offset: Vector2 = Vector2(randf_range(-2, 2), randf_range(-2, 2))
+		tween.tween_property(mini_panel, "position", original_pos + offset, 0.025)
+	tween.tween_property(mini_panel, "position", original_pos, 0.025)
+	
+	# Transform to destroyed state
+	tween.tween_property(mini_panel, "scale", Vector2(0.8, 0.8), 0.12).set_ease(Tween.EASE_OUT)
+	tween.parallel().tween_property(mini_panel, "modulate", Color(0.35, 0.35, 0.35, 0.7), 0.12)
+	tween.tween_callback(_transform_mini_panel_to_destroyed.bind(mini_panel, enemy))
+
+
+func _transform_to_destroyed_state(visual: Panel, enemy) -> void:
+	"""Transform an enemy visual into its destroyed appearance."""
+	if not is_instance_valid(visual):
+		return
+	
+	# Update the style to look destroyed (darker, desaturated, cracked border)
+	var style: StyleBoxFlat = StyleBoxFlat.new()
+	style.bg_color = Color(0.15, 0.12, 0.12, 0.5)  # Very dark, slightly transparent
+	style.set_corner_radius_all(8)
+	style.set_border_width_all(3)
+	style.border_color = Color(0.3, 0.2, 0.2, 0.6)  # Dark red-tinted border
+	visual.add_theme_stylebox_override("panel", style)
+	
+	# Find and update the icon to a skull
+	for child in visual.get_children():
+		if child is Label:
+			var label: Label = child
+			# Check if this is the icon label (has emoji)
+			if label.text.length() <= 4:  # Likely the emoji icon
+				label.text = "💀"
+				label.add_theme_color_override("font_color", Color(0.5, 0.4, 0.4, 0.8))
+			# Gray out other labels
+			elif label.name == "DamageLabel" or "damage" in label.name.to_lower():
+				label.text = ""  # Clear damage display
+			else:
+				label.add_theme_color_override("font_color", Color(0.4, 0.4, 0.4, 0.6))
+		elif child is ColorRect:
+			# Gray out HP bars
+			child.color = Color(0.2, 0.2, 0.2, 0.4)
+	
+	# Add a destroyed overlay with skull
+	var overlay: Label = Label.new()
+	overlay.name = "DestroyedOverlay"
+	overlay.text = "☠️"
+	overlay.add_theme_font_size_override("font_size", 20)
+	overlay.add_theme_color_override("font_color", Color(0.7, 0.5, 0.5, 0.9))
+	overlay.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	overlay.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	overlay.position = Vector2(0, visual.size.y * 0.35)
+	overlay.size = visual.size
+	overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	visual.add_child(overlay)
+
+
+func _transform_mini_panel_to_destroyed(mini_panel: Panel, enemy) -> void:
+	"""Transform a mini-panel into its destroyed appearance."""
+	if not is_instance_valid(mini_panel):
+		return
+	
+	# Update style to destroyed look
+	var style: StyleBoxFlat = StyleBoxFlat.new()
+	style.bg_color = Color(0.15, 0.12, 0.12, 0.5)
+	style.set_corner_radius_all(6)
+	style.set_border_width_all(2)
+	style.border_color = Color(0.3, 0.2, 0.2, 0.6)
+	mini_panel.add_theme_stylebox_override("panel", style)
+	
+	# Update children
+	for child in mini_panel.get_children():
+		if child is Label:
+			var label: Label = child
+			if label.text.length() <= 4:  # Icon
+				label.text = "💀"
+				label.add_theme_color_override("font_color", Color(0.5, 0.4, 0.4, 0.8))
+			else:
+				label.add_theme_color_override("font_color", Color(0.4, 0.4, 0.4, 0.6))
+		elif child is ColorRect:
+			child.color = Color(0.2, 0.2, 0.2, 0.4)
+
+
+func _play_group_card_destruction_animation(stack_key: String) -> void:
+	"""Play a destruction animation on the group card when all units are destroyed."""
+	if not stack_visuals.has(stack_key):
+		return
+	
+	var stack_data: Dictionary = stack_visuals[stack_key]
+	var panel: Panel = stack_data.panel
+	
+	if not is_instance_valid(panel):
+		# Panel is invalid, just clean up
+		_cleanup_destroyed_group_card(stack_key)
+		return
+	
+	# Get enemy color for particles
+	var enemy_id: String = panel.get_meta("enemy_id", "")
+	var enemy_color: Color = ENEMY_COLORS.get(enemy_id, Color.RED)
+	var death_pos: Vector2 = panel.global_position + panel.size / 2
+	
+	# Spawn death particles (dramatic for group card)
+	_spawn_death_particles(death_pos, enemy_color)
+	_spawn_death_particles(death_pos, Color.WHITE)
+	
+	# Mark as destroyed
+	panel.set_meta("is_destroyed", true)
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	
+	# Remove danger glow
+	_remove_danger_glow("stack_" + stack_key)
+	
+	# Dramatic destruction animation
+	var tween: Tween = create_tween()
+	
+	# Phase 1: Quick white flash
+	tween.tween_property(panel, "modulate", Color(2.0, 2.0, 2.0, 1.0), 0.06)
+	
+	# Phase 2: Red flash with scale up
+	tween.tween_property(panel, "modulate", Color(1.5, 0.3, 0.3, 1.0), 0.1)
+	tween.parallel().tween_property(panel, "scale", Vector2(1.2, 1.2), 0.1)
+	
+	# Phase 3: Shake effect
+	var original_pos: Vector2 = panel.position
+	for i: int in range(5):
+		var offset: Vector2 = Vector2(randf_range(-6, 6), randf_range(-6, 6))
+		tween.tween_property(panel, "position", original_pos + offset, 0.03)
+	tween.tween_property(panel, "position", original_pos, 0.03)
+	
+	# Phase 4: Shrink and fade out (full destruction, not just grayed out)
+	tween.tween_property(panel, "scale", Vector2(0.0, 0.0), 0.25).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_BACK)
+	tween.parallel().tween_property(panel, "modulate", Color(0.5, 0.2, 0.2, 0.0), 0.25)
+	
+	# Phase 5: Clean up after animation
+	tween.tween_callback(_cleanup_destroyed_group_card.bind(stack_key))
+
+
+func _cleanup_destroyed_group_card(stack_key: String) -> void:
+	"""Clean up a destroyed group card and remove it from stack_visuals."""
+	if not stack_visuals.has(stack_key):
+		return
+	
+	var stack_data: Dictionary = stack_visuals[stack_key]
+	
+	# Free the main panel
+	if stack_data.has("panel") and is_instance_valid(stack_data.panel):
+		stack_data.panel.queue_free()
+	
+	# Free any mini-panels
+	if stack_data.has("mini_panels"):
+		for mini_panel in stack_data.mini_panels:
+			if is_instance_valid(mini_panel):
+				mini_panel.queue_free()
+	
+	# Remove from stack_visuals
+	stack_visuals.erase(stack_key)
+	
+	print("[BattlefieldArena] Group card destroyed and cleaned up: ", stack_key)
+
+
+func _spawn_death_particles_small(pos: Vector2, color: Color) -> void:
+	"""Spawn smaller death particles for mini-panels."""
+	for i: int in range(6):
 		var particle: ColorRect = ColorRect.new()
-		particle.size = Vector2(8, 8)
+		particle.size = Vector2(5, 5)
 		particle.color = color
 		particle.position = pos - particle.size / 2
 		effects_container.add_child(particle)
 		
 		var dir: Vector2 = Vector2(randf_range(-1, 1), randf_range(-1, 1)).normalized()
-		var speed: float = randf_range(80, 180)
+		var speed: float = randf_range(40, 100)
 		var target_pos: Vector2 = particle.position + dir * speed
 		
 		var tween: Tween = create_tween()
 		tween.set_parallel(true)
-		tween.tween_property(particle, "position", target_pos, 0.5).set_ease(Tween.EASE_OUT)
-		tween.tween_property(particle, "modulate:a", 0.0, 0.5)
-		tween.tween_property(particle, "size", Vector2.ZERO, 0.5)
+		tween.tween_property(particle, "position", target_pos, 0.4).set_ease(Tween.EASE_OUT)
+		tween.tween_property(particle, "modulate:a", 0.0, 0.4)
+		tween.tween_property(particle, "size", Vector2.ZERO, 0.4)
 		tween.chain().tween_callback(particle.queue_free)
+
+
+func _spawn_death_particles(pos: Vector2, color: Color) -> void:
+	"""Spawn dramatic death particles with varied sizes and speeds."""
+	# Burst of particles in all directions
+	for i: int in range(16):
+		var particle: ColorRect = ColorRect.new()
+		var base_size: float = randf_range(4, 12)
+		particle.size = Vector2(base_size, base_size)
+		particle.color = color
+		particle.position = pos - particle.size / 2
+		effects_container.add_child(particle)
+		
+		var dir: Vector2 = Vector2(randf_range(-1, 1), randf_range(-1, 1)).normalized()
+		var speed: float = randf_range(100, 220)
+		var target_pos: Vector2 = particle.position + dir * speed
+		var duration: float = randf_range(0.4, 0.7)
+		
+		var tween: Tween = create_tween()
+		tween.set_parallel(true)
+		tween.tween_property(particle, "position", target_pos, duration).set_ease(Tween.EASE_OUT)
+		tween.tween_property(particle, "modulate:a", 0.0, duration)
+		tween.tween_property(particle, "size", Vector2.ZERO, duration)
+		# Add rotation effect
+		tween.tween_property(particle, "rotation", randf_range(-PI, PI), duration)
+		tween.chain().tween_callback(particle.queue_free)
+	
+	# Add a flash ring effect
+	var flash_ring: ColorRect = ColorRect.new()
+	flash_ring.size = Vector2(20, 20)
+	flash_ring.color = Color(color.r, color.g, color.b, 0.8)
+	flash_ring.position = pos - flash_ring.size / 2
+	flash_ring.pivot_offset = flash_ring.size / 2
+	effects_container.add_child(flash_ring)
+	
+	var ring_tween: Tween = create_tween()
+	ring_tween.set_parallel(true)
+	ring_tween.tween_property(flash_ring, "size", Vector2(80, 80), 0.25).set_ease(Tween.EASE_OUT)
+	ring_tween.tween_property(flash_ring, "position", pos - Vector2(40, 40), 0.25).set_ease(Tween.EASE_OUT)
+	ring_tween.tween_property(flash_ring, "modulate:a", 0.0, 0.25)
+	ring_tween.chain().tween_callback(flash_ring.queue_free)
 
 
 func _update_enemy_position(enemy) -> void:  # enemy: EnemyInstance
@@ -862,8 +1156,6 @@ func _update_enemy_position(enemy) -> void:  # enemy: EnemyInstance
 	# Update HP display
 	_update_enemy_hp_display(enemy, visual)
 	
-	# Update turn countdown badge (enemy moved to new ring)
-	_update_turn_countdown_badge(visual, enemy)
 	
 	# Update danger highlighting (threat level may have changed)
 	_apply_danger_highlighting(visual, enemy, "enemy_" + str(enemy.instance_id))
@@ -953,17 +1245,30 @@ func _get_enemy_position(enemy) -> Vector2:  # enemy: EnemyInstance
 	
 	var ring_radius: float = inner_radius + ring_depth * row_ratio
 	
-	# Calculate angle position
+	# Angle bounds for the arc
 	var angle_start: float = PI + PI * 0.12  # Start slightly past left
 	var angle_end: float = 2 * PI - PI * 0.12  # End slightly before right
 	var angle_spread: float = angle_end - angle_start
 	
-	var items_in_row: int = display_info.items_in_row
-	var index_in_row: int = display_info.index_in_row
-	
 	var angle: float = angle_start + angle_spread / 2.0  # Default to center
-	if items_in_row > 1:
-		angle = angle_start + (angle_spread / float(items_in_row - 1)) * float(index_in_row)
+	var group_id: String = enemy.group_id if enemy.group_id else ""
+	
+	# Check if this group has a preserved angular position (for consistent movement between rings)
+	if not group_id.is_empty() and _group_angular_positions.has(group_id):
+		# Use the preserved angular position for this group
+		angle = _group_angular_positions[group_id]
+	else:
+		# Calculate angle from display index (first-time placement or ungrouped enemy)
+		var items_in_row: int = display_info.items_in_row
+		var index_in_row: int = display_info.index_in_row
+		
+		if items_in_row > 1:
+			angle = angle_start + (angle_spread / float(items_in_row - 1)) * float(index_in_row)
+		
+		# Store the angular position for grouped enemies so it persists across ring changes
+		if not group_id.is_empty():
+			_group_angular_positions[group_id] = angle
+			print("[BattlefieldArena DEBUG] Stored angular position for group ", group_id, ": ", angle)
 	
 	return center + Vector2(cos(angle), sin(angle)) * ring_radius
 
@@ -971,6 +1276,7 @@ func _get_enemy_position(enemy) -> Vector2:  # enemy: EnemyInstance
 func _get_enemy_display_info(enemy) -> Dictionary:
 	"""
 	Calculate display information for an enemy, including multi-row and stacking logic.
+	Uses persistent groups (enemy_groups) to determine display positions.
 	Returns: {
 		row: int (0=inner, 1=outer),
 		index_in_row: int,
@@ -993,52 +1299,61 @@ func _get_enemy_display_info(enemy) -> Dictionary:
 		return result
 	
 	var enemies_in_ring: Array = CombatManager.battlefield.get_enemies_in_ring(enemy.ring)
-	var total_count: int = enemies_in_ring.size()
 	
-	# Group enemies by type for potential stacking
-	var groups: Dictionary = _get_enemy_groups_in_ring(enemy.ring)
+	# Get persistent groups in this ring - this is what determines actual visual display
+	var persistent_groups: Dictionary = _get_enemy_groups_in_ring(enemy.ring)
 	
-	# Determine if we need stacking (ring is crowded + same-type groups exist)
-	var need_stacking: bool = total_count > MAX_TOTAL_BEFORE_STACKING
+	# Build display list using persistent groups
+	# Each persistent group is one display item (stack), ungrouped enemies are individual items
+	var display_items: Array = []  # Array of {enemy: enemy, is_stack: bool, stack_count: int, group_id: String}
+	var enemies_in_groups: Dictionary = {}  # instance_id -> true (tracks which enemies are in groups)
 	
-	# Build display list: either individual enemies or stack representatives
-	var display_items: Array = []  # Array of {enemy: enemy, is_stack: bool, stack_count: int}
+	# First, add all persistent groups as stack display items
+	# Sort group IDs by their preserved angular position to maintain left-to-right consistency
+	var sorted_group_ids: Array = persistent_groups.keys()
+	sorted_group_ids.sort_custom(func(a: String, b: String) -> bool:
+		# Groups with preserved angular positions sort by angle (smaller angle = more left)
+		var has_a: bool = _group_angular_positions.has(a)
+		var has_b: bool = _group_angular_positions.has(b)
+		if has_a and has_b:
+			return _group_angular_positions[a] < _group_angular_positions[b]
+		elif has_a:
+			return true  # Groups with positions come before those without
+		elif has_b:
+			return false
+		else:
+			return a < b  # Fallback to alphabetic for new groups
+	)
 	
-	if need_stacking:
-		var processed_types: Dictionary = {}
-		for e in enemies_in_ring:
-			var etype: String = e.enemy_id
-			if processed_types.has(etype):
-				continue
-			
-			var group: Array = groups.get(etype, [])
-			if group.size() >= STACK_THRESHOLD:
-				# This type forms a stack - only add first enemy as representative
-				display_items.append({
-					"enemy": group[0],
-					"is_stack": true,
-					"stack_count": group.size(),
-					"stack_enemies": group
-				})
-				processed_types[etype] = true
-			else:
-				# Show each enemy individually
-				for individual in group:
-					display_items.append({
-						"enemy": individual,
-						"is_stack": false,
-						"stack_count": 1,
-						"stack_enemies": [individual]
-					})
-				processed_types[etype] = true
-	else:
-		# No stacking needed - all enemies shown individually
-		for e in enemies_in_ring:
+	for group_id: String in sorted_group_ids:
+		var group: Dictionary = persistent_groups[group_id]
+		var group_enemies: Array = group.enemies
+		
+		if group_enemies.is_empty():
+			continue
+		
+		# Mark all enemies in this group as processed
+		for ge in group_enemies:
+			enemies_in_groups[ge.instance_id] = true
+		
+		# Add as a stack display item (first enemy is representative)
+		display_items.append({
+			"enemy": group_enemies[0],
+			"is_stack": true,
+			"stack_count": group_enemies.size(),
+			"stack_enemies": group_enemies,
+			"group_id": group_id
+		})
+	
+	# Then, add any enemies NOT in persistent groups as individual display items
+	for e in enemies_in_ring:
+		if not enemies_in_groups.has(e.instance_id):
 			display_items.append({
 				"enemy": e,
 				"is_stack": false,
 				"stack_count": 1,
-				"stack_enemies": [e]
+				"stack_enemies": [e],
+				"group_id": ""
 			})
 	
 	result.total_display_items = display_items.size()
@@ -1144,153 +1459,6 @@ func _create_behavior_badge(enemy_def, is_mini_badge: bool = false) -> Panel:
 	badge.set_meta("tooltip_text", enemy_def.get_behavior_tooltip())
 	
 	return badge
-
-
-func _create_turn_countdown_badge(enemy, is_mini_badge: bool = false) -> Panel:
-	"""Create a large, prominent badge showing turns until enemy reaches melee."""
-	var turns: int = enemy.get_turns_until_melee()
-	
-	# MUCH larger badge sizes for visibility
-	var badge_width: float = 38.0 if not is_mini_badge else 26.0
-	var badge_height: float = 22.0 if not is_mini_badge else 16.0
-	var font_size: int = 14 if not is_mini_badge else 11
-	
-	var badge: Panel = Panel.new()
-	badge.name = "TurnCountdown"
-	badge.custom_minimum_size = Vector2(badge_width, badge_height)
-	badge.size = Vector2(badge_width, badge_height)
-	badge.mouse_filter = Control.MOUSE_FILTER_PASS
-	badge.z_index = 10  # Higher z-index to be on top
-	
-	# Determine badge color and background based on turns
-	var badge_color: Color
-	var bg_color: Color
-	var badge_text: String
-	var tooltip_text: String
-	
-	if turns == 0:
-		# In melee - attacking! CRITICAL
-		badge_color = Color(1.0, 1.0, 1.0)  # White text for contrast
-		bg_color = Color(0.9, 0.2, 0.2, 0.95)  # Solid red background
-		badge_text = "⚔️ 0"
-		tooltip_text = "IN MELEE - Attacks this turn!"
-	elif turns == -1:
-		# Won't reach melee (ranged)
-		badge_color = Color(0.9, 0.95, 1.0)  # Light blue text
-		bg_color = Color(0.2, 0.35, 0.6, 0.9)  # Blue background
-		badge_text = "🏹"
-		tooltip_text = "RANGED - Won't advance to melee"
-	elif turns == 1:
-		# Arrives next turn - URGENT!
-		badge_color = Color(1.0, 1.0, 1.0)  # White text
-		bg_color = Color(0.9, 0.5, 0.1, 0.95)  # Orange background
-		badge_text = "⚠️ 1"
-		tooltip_text = "DANGER - Reaches melee NEXT turn!"
-	elif turns == 2:
-		# Coming soon - warning
-		badge_color = Color(0.1, 0.1, 0.1)  # Dark text
-		bg_color = Color(1.0, 0.85, 0.2, 0.9)  # Yellow background
-		badge_text = "→ 2"
-		tooltip_text = "WARNING - Reaches melee in 2 turns"
-	else:
-		# Further away - safe for now
-		badge_color = Color(1.0, 1.0, 1.0)  # White text
-		bg_color = Color(0.25, 0.55, 0.3, 0.85)  # Green background
-		badge_text = "→ " + str(turns)
-		tooltip_text = "Safe - Reaches melee in " + str(turns) + " turns"
-	
-	# Style the badge with solid colored background for maximum visibility
-	var badge_style: StyleBoxFlat = StyleBoxFlat.new()
-	badge_style.bg_color = bg_color
-	badge_style.set_corner_radius_all(6)
-	badge_style.set_border_width_all(2)
-	badge_style.border_color = Color(0.0, 0.0, 0.0, 0.8)  # Dark border for contrast
-	# Add shadow effect for depth
-	badge_style.shadow_color = Color(0.0, 0.0, 0.0, 0.5)
-	badge_style.shadow_size = 2
-	badge_style.shadow_offset = Vector2(1, 1)
-	badge.add_theme_stylebox_override("panel", badge_style)
-	
-	# Badge text - larger and bold
-	var badge_label: Label = Label.new()
-	badge_label.name = "TurnLabel"
-	badge_label.text = badge_text
-	badge_label.add_theme_font_size_override("font_size", font_size)
-	badge_label.add_theme_color_override("font_color", badge_color)
-	# Add text outline for better readability
-	badge_label.add_theme_constant_override("outline_size", 2)
-	badge_label.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 0.7))
-	badge_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	badge_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	badge_label.position = Vector2(0, 0)
-	badge_label.size = Vector2(badge_width, badge_height)
-	badge_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	badge.add_child(badge_label)
-	
-	# Store tooltip
-	badge.set_meta("tooltip_text", tooltip_text)
-	
-	return badge
-
-
-func _update_turn_countdown_badge(visual: Panel, enemy) -> void:
-	"""Update the turn countdown badge for an enemy panel."""
-	var countdown: Panel = visual.get_node_or_null("TurnCountdown")
-	if not countdown:
-		return
-	
-	var turns: int = enemy.get_turns_until_melee()
-	var turn_label: Label = countdown.get_node_or_null("TurnLabel")
-	if not turn_label:
-		return
-	
-	# Update text, colors, and background (matching create function)
-	var badge_color: Color
-	var bg_color: Color
-	var badge_text: String
-	var tooltip_text: String
-	
-	if turns == 0:
-		badge_color = Color(1.0, 1.0, 1.0)
-		bg_color = Color(0.9, 0.2, 0.2, 0.95)
-		badge_text = "⚔️ 0"
-		tooltip_text = "IN MELEE - Attacks this turn!"
-	elif turns == -1:
-		badge_color = Color(0.9, 0.95, 1.0)
-		bg_color = Color(0.2, 0.35, 0.6, 0.9)
-		badge_text = "🏹"
-		tooltip_text = "RANGED - Won't advance to melee"
-	elif turns == 1:
-		badge_color = Color(1.0, 1.0, 1.0)
-		bg_color = Color(0.9, 0.5, 0.1, 0.95)
-		badge_text = "⚠️ 1"
-		tooltip_text = "DANGER - Reaches melee NEXT turn!"
-	elif turns == 2:
-		badge_color = Color(0.1, 0.1, 0.1)
-		bg_color = Color(1.0, 0.85, 0.2, 0.9)
-		badge_text = "→ 2"
-		tooltip_text = "WARNING - Reaches melee in 2 turns"
-	else:
-		badge_color = Color(1.0, 1.0, 1.0)
-		bg_color = Color(0.25, 0.55, 0.3, 0.85)
-		badge_text = "→ " + str(turns)
-		tooltip_text = "Safe - Reaches melee in " + str(turns) + " turns"
-	
-	turn_label.text = badge_text
-	turn_label.add_theme_color_override("font_color", badge_color)
-	
-	# Update background and border color
-	var new_style: StyleBoxFlat = StyleBoxFlat.new()
-	new_style.bg_color = bg_color
-	new_style.set_corner_radius_all(6)
-	new_style.set_border_width_all(2)
-	new_style.border_color = Color(0.0, 0.0, 0.0, 0.8)
-	new_style.shadow_color = Color(0.0, 0.0, 0.0, 0.5)
-	new_style.shadow_size = 2
-	new_style.shadow_offset = Vector2(1, 1)
-	countdown.add_theme_stylebox_override("panel", new_style)
-	
-	countdown.set_meta("tooltip_text", tooltip_text)
 
 
 # ============== DANGER HIGHLIGHTING SYSTEM ==============
@@ -1653,10 +1821,29 @@ func _refresh_ring_visuals(ring: int) -> void:
 			var stack_data: Dictionary = stack_visuals[key]
 			
 			# Preserve the position of the stack panel before destroying it
+			var preserved_pos: Vector2 = Vector2.ZERO
 			if _stack_base_positions.has(key):
-				preserved_positions[key] = _stack_base_positions[key]
+				preserved_pos = _stack_base_positions[key]
+				preserved_positions[key] = preserved_pos
 			elif stack_data.has("panel") and is_instance_valid(stack_data.panel):
-				preserved_positions[key] = stack_data.panel.position
+				preserved_pos = stack_data.panel.position
+				preserved_positions[key] = preserved_pos
+			
+			# CRITICAL FIX: Also save position by group_id so it persists across ring changes
+			# Stack key format is: {ring}_{enemy_id}_{group_id}
+			# Extract group_id from the key
+			var key_parts: PackedStringArray = key.split("_")
+			if key_parts.size() >= 3:
+				# Reconstruct group_id (everything after ring and enemy_id)
+				# Format: ring_enemyid_group_N -> group_id is "group_N"
+				var group_id_parts: Array[String] = []
+				for i: int in range(2, key_parts.size()):
+					group_id_parts.append(key_parts[i])
+				var group_id: String = "_".join(group_id_parts)
+				
+				if not group_id.is_empty() and preserved_pos.length() > 1.0:
+					_group_positions[group_id] = preserved_pos
+					print("[BattlefieldArena DEBUG] Preserved group position: ", group_id, " -> ", preserved_pos)
 			
 			# Kill any active position tween for this stack
 			if _stack_position_tweens.has(key):
@@ -1697,8 +1884,13 @@ func _refresh_ring_visuals(ring: int) -> void:
 			var stack_key: String = str(ring) + "_" + enemy_id + "_" + group_id
 			
 			# Restore preserved position so new panel starts from old position
+			# First try: position from same stack_key (same ring)
 			if preserved_positions.has(stack_key):
 				_stack_base_positions[stack_key] = preserved_positions[stack_key]
+			# Second try: position from group_id (handles cross-ring movement)
+			elif _group_positions.has(group_id):
+				_stack_base_positions[stack_key] = _group_positions[group_id]
+				print("[BattlefieldArena DEBUG] Restored group position from _group_positions: ", group_id, " -> ", _group_positions[group_id])
 			
 			_create_stack_visual_for_group(ring, enemy_id, group_enemies, stack_key)
 			
@@ -1769,11 +1961,6 @@ func _create_stack_visual(ring: int, enemy_id: String, enemies: Array, stack_key
 		badge.position = Vector2(4, 4)
 		panel.add_child(badge)
 	
-	# Turn countdown badge (below behavior badge on left side) - large and prominent
-	# Use first enemy in stack since they're all at same position
-	var countdown_badge: Panel = _create_turn_countdown_badge(enemies[0])
-	countdown_badge.position = Vector2(2, 26)
-	panel.add_child(countdown_badge)
 	
 	# Enemy icon
 	var icon_label: Label = Label.new()
@@ -1872,6 +2059,10 @@ func _create_stack_visual(ring: int, enemy_id: String, enemies: Array, stack_key
 	name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.add_child(name_label)
 	
+	# Create intent indicator (positioned to the left of the card)
+	var intent_container: Control = _create_group_intent_indicator(enemy_def, enemies, width)
+	panel.add_child(intent_container)
+	
 	# Connect hover signals for expand behavior
 	panel.mouse_entered.connect(_on_stack_hover_enter.bind(panel, stack_key))
 	panel.mouse_exited.connect(_on_stack_hover_exit.bind(panel, stack_key))
@@ -1902,6 +2093,147 @@ func _create_stack_visual(ring: int, enemy_id: String, enemies: Array, stack_key
 		_apply_danger_highlighting(panel, most_dangerous_enemy, "stack_" + stack_key)
 
 
+func _create_group_intent_indicator(enemy_def, enemies: Array, _panel_width: float) -> Control:
+	"""Create an intent indicator showing movement and/or attack intents for a group."""
+	var container: Control = Control.new()
+	container.name = "IntentIndicator"
+	container.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	
+	if not enemy_def or enemies.is_empty():
+		return container
+	
+	# Get a representative enemy to check ring and state
+	var representative = enemies[0]
+	var current_ring: int = representative.ring
+	var enemy_count: int = enemies.size()
+	
+	# Calculate movement intent
+	var will_move: bool = current_ring > enemy_def.target_ring
+	var move_distance: int = 0
+	if will_move:
+		move_distance = min(enemy_def.movement_speed, current_ring - enemy_def.target_ring)
+	
+	# Calculate attack intent
+	var will_attack: bool = false
+	var total_attack_damage: int = 0
+	var damage_per_enemy: int = enemy_def.get_scaled_damage(RunManager.current_wave)
+	
+	if current_ring == 0:
+		# In melee - will attack
+		will_attack = true
+		total_attack_damage = damage_per_enemy * enemy_count
+	elif enemy_def.attack_type == "ranged" and current_ring == enemy_def.target_ring:
+		# Ranged enemy at target ring - will attack
+		will_attack = true
+		total_attack_damage = damage_per_enemy * enemy_count
+	
+	# Create the visual elements
+	var y_offset: float = 0.0
+	var intent_x: float = -38.0  # Position to the left of the card
+	
+	# Movement intent (number on top, arrow pointing inward below)
+	if will_move and move_distance > 0:
+		var move_panel: PanelContainer = PanelContainer.new()
+		move_panel.name = "MoveIntent"
+		
+		var move_style: StyleBoxFlat = StyleBoxFlat.new()
+		move_style.bg_color = Color(0.15, 0.12, 0.08, 0.95)
+		move_style.border_color = Color(1.0, 0.8, 0.3, 0.9)
+		move_style.set_border_width_all(1)
+		move_style.set_corner_radius_all(6)
+		move_style.content_margin_left = 6.0
+		move_style.content_margin_right = 6.0
+		move_style.content_margin_top = 2.0
+		move_style.content_margin_bottom = 2.0
+		move_panel.add_theme_stylebox_override("panel", move_style)
+		move_panel.position = Vector2(intent_x, y_offset + 8)
+		move_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		
+		var move_vbox: VBoxContainer = VBoxContainer.new()
+		move_vbox.add_theme_constant_override("separation", -2)
+		move_vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		move_panel.add_child(move_vbox)
+		
+		# Number on top
+		var dist_label: Label = Label.new()
+		dist_label.text = str(move_distance)
+		dist_label.add_theme_font_size_override("font_size", 14)
+		dist_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.6))
+		dist_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		dist_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		move_vbox.add_child(dist_label)
+		
+		# Arrow below pointing inward (down, toward melee/player) - fat triangle with stem
+		var arrow_label: Label = Label.new()
+		arrow_label.text = "|\n▼"
+		arrow_label.add_theme_font_size_override("font_size", 18)
+		arrow_label.add_theme_color_override("font_color", Color(1.0, 0.8, 0.3))
+		arrow_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		arrow_label.add_theme_constant_override("line_spacing", -8)
+		arrow_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		move_vbox.add_child(arrow_label)
+		
+		container.add_child(move_panel)
+		y_offset += 42.0
+	
+	# Attack intent (damage number on top, sword icon below)
+	if will_attack and total_attack_damage > 0:
+		var attack_panel: PanelContainer = PanelContainer.new()
+		attack_panel.name = "AttackIntent"
+		
+		var attack_style: StyleBoxFlat = StyleBoxFlat.new()
+		attack_style.bg_color = Color(0.2, 0.08, 0.08, 0.95)
+		attack_style.border_color = Color(1.0, 0.4, 0.4, 0.9)
+		attack_style.set_border_width_all(1)
+		attack_style.set_corner_radius_all(6)
+		attack_style.content_margin_left = 6.0
+		attack_style.content_margin_right = 6.0
+		attack_style.content_margin_top = 2.0
+		attack_style.content_margin_bottom = 2.0
+		attack_panel.add_theme_stylebox_override("panel", attack_style)
+		attack_panel.position = Vector2(intent_x, y_offset + 8)
+		attack_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		
+		var attack_vbox: VBoxContainer = VBoxContainer.new()
+		attack_vbox.add_theme_constant_override("separation", -2)
+		attack_vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		attack_panel.add_child(attack_vbox)
+		
+		# Damage number on top
+		var dmg_label: Label = Label.new()
+		dmg_label.text = str(total_attack_damage)
+		dmg_label.add_theme_font_size_override("font_size", 14)
+		dmg_label.add_theme_color_override("font_color", Color(1.0, 0.6, 0.6))
+		dmg_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		dmg_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		attack_vbox.add_child(dmg_label)
+		
+		# Sword icon below
+		var sword_label: Label = Label.new()
+		sword_label.text = "⚔"
+		sword_label.add_theme_font_size_override("font_size", 16)
+		sword_label.add_theme_color_override("font_color", Color(1.0, 0.4, 0.4))
+		sword_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		sword_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		attack_vbox.add_child(sword_label)
+		
+		container.add_child(attack_panel)
+	
+	return container
+
+
+func _update_group_intent_indicator(panel: Panel, enemy_def, enemies: Array) -> void:
+	"""Update the intent indicator on an existing stack panel."""
+	# Remove old intent indicator
+	var old_intent: Control = panel.get_node_or_null("IntentIndicator")
+	if old_intent:
+		old_intent.queue_free()
+	
+	# Create and add new one
+	var new_intent: Control = _create_group_intent_indicator(enemy_def, enemies, panel.size.x)
+	panel.add_child(new_intent)
+
+
 func _update_stack_position(stack_key: String) -> void:
 	"""Update position of a stack panel."""
 	if not stack_visuals.has(stack_key):
@@ -1921,6 +2253,23 @@ func _update_stack_position(stack_key: String) -> void:
 	# Get the starting position - use stored base position, or current panel position
 	# This prevents flying from (0,0) when panel is newly created
 	var start_pos: Vector2 = _stack_base_positions.get(stack_key, panel.position)
+	var had_previous_position: bool = start_pos.length() > 1.0 or panel.position.length() > 1.0
+	
+	# CRITICAL FIX: If start_pos is still (0,0), try to get position from _group_positions
+	# This handles cross-ring movement where the stack_key changed but group_id is the same
+	if start_pos.length() < 1.0 and panel.position.length() < 1.0:
+		# Extract group_id from stack_key (format: ring_enemyid_group_N)
+		var key_parts: PackedStringArray = stack_key.split("_")
+		if key_parts.size() >= 3:
+			var group_id_parts: Array[String] = []
+			for i: int in range(2, key_parts.size()):
+				group_id_parts.append(key_parts[i])
+			var group_id: String = "_".join(group_id_parts)
+			
+			if _group_positions.has(group_id):
+				start_pos = _group_positions[group_id]
+				had_previous_position = true
+				print("[BattlefieldArena DEBUG] _update_stack_position: Using group position for ", group_id, " -> ", start_pos)
 	
 	# If panel is at (0,0) but we have a stored position, use the stored position
 	# This handles the case where panel was just created and hasn't been positioned yet
@@ -1936,7 +2285,16 @@ func _update_stack_position(stack_key: String) -> void:
 		_stack_base_positions[stack_key] = target_pos
 		return
 	
-	# Set panel to start position before animating (in case it's at 0,0)
+	# CRITICAL FIX: If no previous position exists (first creation), just place at target - don't animate from (0,0)
+	if not had_previous_position:
+		print("[BattlefieldArena DEBUG] _update_stack_position: First placement of ", stack_key, " at ", target_pos, " (no animation)")
+		panel.position = target_pos
+		_stack_base_positions[stack_key] = target_pos
+		return
+	
+	print("[BattlefieldArena DEBUG] _update_stack_position: Animating ", stack_key, " from ", start_pos, " to ", target_pos)
+	
+	# Set panel to start position before animating
 	panel.position = start_pos
 	
 	# Store the TARGET base position for this stack (used by shake animations)
@@ -1990,10 +2348,6 @@ func _update_stack_hp_display(stack_key: String) -> void:
 	if hp_text:
 		hp_text.text = str(total_hp) + "/" + str(total_max_hp) + " total"
 	
-	# Update turn countdown badge (use first enemy in stack since they're all at same position)
-	if enemies.size() > 0:
-		_update_turn_countdown_badge(panel, enemies[0])
-	
 	# Update danger highlighting (use highest threat among stacked enemies)
 	if enemies.size() > 0:
 		var highest_danger: DangerLevel = DangerLevel.NONE
@@ -2004,6 +2358,13 @@ func _update_stack_hp_display(stack_key: String) -> void:
 				highest_danger = danger
 				most_dangerous_enemy = enemy
 		_apply_danger_highlighting(panel, most_dangerous_enemy, "stack_" + stack_key)
+	
+	# Update intent indicator
+	if enemies.size() > 0:
+		var enemy_id: String = panel.get_meta("enemy_id", "")
+		var enemy_def = EnemyDatabase.get_enemy(enemy_id)
+		if enemy_def:
+			_update_group_intent_indicator(panel, enemy_def, enemies)
 
 
 # ============== STACK EXPAND-ON-HOVER SYSTEM ==============
@@ -2167,29 +2528,48 @@ func _collapse_stack(stack_key: String) -> void:
 	if not stack_data.expanded:
 		# Even if not marked as expanded, clean up any stray mini-panels
 		if stack_data.has("mini_panels"):
-			for mini_panel in stack_data.mini_panels:
-				if is_instance_valid(mini_panel):
-					mini_panel.queue_free()
+			for panel in stack_data.mini_panels:
+				if is_instance_valid(panel):
+					panel.queue_free()
 			stack_data.mini_panels = []
 		return
 	
 	stack_data.expanded = false
 	
-	# Animate out and remove mini-panels
-	for i: int in range(stack_data.mini_panels.size()):
-		var mini_panel: Panel = stack_data.mini_panels[i]
-		if is_instance_valid(mini_panel):
-			var tween: Tween = create_tween()
-			tween.set_parallel(true)
-			tween.tween_property(mini_panel, "modulate:a", 0.0, 0.08)
-			tween.tween_property(mini_panel, "scale", Vector2(0.5, 0.5), 0.08)
-			tween.chain().tween_callback(mini_panel.queue_free)
+	# Get only valid panels first to avoid freed instance errors
+	if not stack_data.has("mini_panels"):
+		return
+	
+	var valid_panels: Array = []
+	for panel in stack_data.mini_panels:
+		if is_instance_valid(panel):
+			valid_panels.append(panel)
+	
+	# Animate out and remove mini-panels with a visible fade
+	var panel_count: int = valid_panels.size()
+	for i: int in range(panel_count):
+		var mini_panel: Panel = valid_panels[i]
+		# Stagger the animations - rightmost panels fade first
+		var reverse_index: int = panel_count - 1 - i
+		var tween: Tween = create_tween()
+		tween.set_parallel(true)
+		tween.tween_property(mini_panel, "modulate:a", 0.0, 0.2).set_delay(reverse_index * 0.04)
+		tween.tween_property(mini_panel, "scale", Vector2(0.6, 0.6), 0.2).set_delay(reverse_index * 0.04).set_ease(Tween.EASE_IN)
+		tween.chain().tween_callback(mini_panel.queue_free)
 	
 	stack_data.mini_panels = []
 
 
 func _force_collapse_stack(stack_key: String) -> void:
 	"""Force collapse a stack immediately, cleaning up all mini-panels."""
+	# Don't collapse during weapons phase
+	if _in_weapons_phase:
+		return
+	
+	# Don't collapse if there are still active holds on this stack
+	if _stack_hold_counts.get(stack_key, 0) > 0:
+		return
+	
 	if not stack_visuals.has(stack_key):
 		# Stack doesn't exist anymore, just cleanup orphans
 		_cleanup_orphaned_mini_panels()
@@ -2211,6 +2591,84 @@ func _force_collapse_stack(stack_key: String) -> void:
 			mini_panel.queue_free()
 		
 		stack_data.mini_panels = []
+
+
+func _hold_stack_open(stack_key: String) -> void:
+	"""Increment the hold count for a stack, keeping it expanded during operations."""
+	if not _stack_hold_counts.has(stack_key):
+		_stack_hold_counts[stack_key] = 0
+	_stack_hold_counts[stack_key] += 1
+	
+	# Cancel any pending collapse timer for this stack
+	if _stack_collapse_timers.has(stack_key):
+		_stack_collapse_timers.erase(stack_key)
+	
+	# Expand the stack if not already expanded OR if expanded but has no valid mini-panels
+	if stack_visuals.has(stack_key):
+		var stack_data: Dictionary = stack_visuals[stack_key]
+		var needs_expand: bool = not stack_data.expanded
+		
+		# Also check if marked expanded but mini_panels are empty or all invalid
+		if stack_data.expanded:
+			var mini_panels: Array = stack_data.get("mini_panels", [])
+			var has_valid_panels: bool = false
+			for panel in mini_panels:
+				if is_instance_valid(panel):
+					has_valid_panels = true
+					break
+			if not has_valid_panels:
+				# Reset expanded state so _expand_stack will recreate mini-panels
+				stack_data.expanded = false
+				needs_expand = true
+		
+		if needs_expand:
+			_expand_stack(stack_key)
+
+
+func _release_stack_hold(stack_key: String) -> void:
+	"""Decrement the hold count and schedule collapse if no more holds."""
+	if not _stack_hold_counts.has(stack_key):
+		return
+	
+	_stack_hold_counts[stack_key] -= 1
+	
+	if _stack_hold_counts[stack_key] <= 0:
+		_stack_hold_counts.erase(stack_key)
+		
+		# Schedule delayed collapse (cancel any existing timer first)
+		if _stack_collapse_timers.has(stack_key):
+			_stack_collapse_timers.erase(stack_key)
+		
+		var timer: SceneTreeTimer = get_tree().create_timer(STACK_COLLAPSE_DELAY)
+		_stack_collapse_timers[stack_key] = timer
+		timer.timeout.connect(_on_stack_collapse_timer_timeout.bind(stack_key))
+
+
+func _on_stack_collapse_timer_timeout(stack_key: String) -> void:
+	"""Called when a stack collapse timer expires."""
+	# Remove the timer reference
+	if _stack_collapse_timers.has(stack_key):
+		_stack_collapse_timers.erase(stack_key)
+	
+	# Don't collapse during weapons phase
+	if _in_weapons_phase:
+		return
+	
+	# Double-check no new holds were added during the delay
+	if _stack_hold_counts.get(stack_key, 0) > 0:
+		return
+	
+	# Check if stack still exists and is still expanded (might have been cleaned up already)
+	if not stack_visuals.has(stack_key):
+		return
+	
+	var stack_data: Dictionary = stack_visuals[stack_key]
+	if not stack_data.expanded:
+		# Already collapsed by clear_all_hover_states or similar
+		return
+	
+	# Collapse the stack
+	_collapse_stack(stack_key)
 
 
 func _create_mini_panel(enemy, panel_size: Vector2) -> Panel:
@@ -2243,10 +2701,6 @@ func _create_mini_panel(enemy, panel_size: Vector2) -> Panel:
 		badge.position = Vector2(2, 2)
 		panel.add_child(badge)
 	
-	# Turn countdown badge (smaller but still visible, top-right corner)
-	var countdown_badge: Panel = _create_turn_countdown_badge(enemy, true)
-	countdown_badge.position = Vector2(width - 28, 2)
-	panel.add_child(countdown_badge)
 	
 	# Enemy icon (smaller)
 	var icon_label: Label = Label.new()
@@ -2387,100 +2841,60 @@ func _show_damage_on_stacked_enemy(enemy, amount: int, stack_key: String, is_hex
 	var stack_data: Dictionary = stack_visuals[stack_key]
 	var main_panel: Panel = stack_data.panel
 	
+	# Hold the stack open while we're showing damage
+	# This prevents the stack from collapsing while multiple cards are hitting it
+	_hold_stack_open(stack_key)
+	
 	# Update the stack's aggregate HP display
 	_update_stack_hp_display(stack_key)
 	
-	# Check if stack is expanded (from targeting) - if so, show damage on mini-card
-	if stack_data.expanded:
-		var mini_panels: Array = stack_data.get("mini_panels", [])
-		var target_mini_panel: Panel = null
-		
-		for mini_panel: Panel in mini_panels:
-			if not is_instance_valid(mini_panel):
-				continue
-			# Get instance_id from meta to avoid accessing potentially freed enemy instance
-			var mini_enemy_instance_id: int = mini_panel.get_meta("instance_id", -1)
-			if mini_enemy_instance_id == target_instance_id:
-				target_mini_panel = mini_panel
-				break
-		
-		if target_mini_panel:
-			# Flash the mini-card
-			var flash_color: Color = Color(0.8, 0.3, 1.0, 1.0) if is_hex else Color(1.5, 0.5, 0.5, 1.0)
-			var flash_tween: Tween = target_mini_panel.create_tween()
-			flash_tween.tween_property(target_mini_panel, "modulate", flash_color, 0.05)
-			flash_tween.tween_property(target_mini_panel, "modulate", Color.WHITE, 0.15)
-			
-			# Show damage number above the mini-card
-			_show_damage_number_at_position(
-				target_mini_panel.position + Vector2(target_mini_panel.size.x / 2 - 15, -10),
-				amount,
-				is_hex
-			)
-			
-			# Update HP on the mini-card - only if enemy is still valid
-			if is_instance_valid(enemy):
-				_update_mini_panel_hp(target_mini_panel, enemy)
-			return
-	
-	# Fallback: if not expanded or mini-card not found, expand and show damage
+	# Wait for stack to be expanded (hold_stack_open ensures this)
 	if not stack_data.expanded:
-		# target_instance_id already stored at function start
-		
-		# Quick expand to show which enemy was hit
-		_expand_stack(stack_key)
-		
-		# Wait briefly then show damage on mini-card
 		await get_tree().create_timer(0.1).timeout
+	
+	# Re-check that stack still exists after potential await
+	if not stack_visuals.has(stack_key):
+		_release_stack_hold(stack_key)
+		return
+	
+	# Refresh stack_data reference after await
+	stack_data = stack_visuals[stack_key]
+	
+	# Find the target mini-panel
+	var mini_panels: Array = stack_data.get("mini_panels", [])
+	var target_mini_panel: Panel = null
+	
+	for mini_panel in mini_panels:
+		if not is_instance_valid(mini_panel):
+			continue
+		# Get instance_id from meta to avoid accessing potentially freed enemy instance
+		var mini_enemy_instance_id: int = mini_panel.get_meta("instance_id", -1)
+		if mini_enemy_instance_id == target_instance_id:
+			target_mini_panel = mini_panel
+			break
+	
+	if target_mini_panel:
+		# Flash the mini-card
+		var flash_color: Color = Color(0.8, 0.3, 1.0, 1.0) if is_hex else Color(1.5, 0.5, 0.5, 1.0)
+		var flash_tween: Tween = target_mini_panel.create_tween()
+		flash_tween.tween_property(target_mini_panel, "modulate", flash_color, 0.05)
+		flash_tween.tween_property(target_mini_panel, "modulate", Color.WHITE, 0.15)
 		
-		# Re-check that stack still exists after await (it might have been refreshed/destroyed)
-		if not stack_visuals.has(stack_key):
-			return
+		# Show damage number above the mini-card
+		_show_damage_number_at_position(
+			target_mini_panel.position + Vector2(target_mini_panel.size.x / 2 - 15, -10),
+			amount,
+			is_hex
+		)
 		
-		var stack_data_after_await: Dictionary = stack_visuals[stack_key]
-		if not stack_data_after_await.has("mini_panels"):
-			return
-		
-		var mini_panels: Array = stack_data_after_await.get("mini_panels", [])
-		
-		# Filter out invalid panels before iterating to avoid freed instance errors
-		var valid_mini_panels: Array = []
-		for panel in mini_panels:
-			if is_instance_valid(panel):
-				valid_mini_panels.append(panel)
-		
-		var found_target: bool = false
-		for mini_panel: Panel in valid_mini_panels:
-			# Get instance_id from meta to avoid accessing potentially freed enemy instance
-			var mini_enemy_instance_id: int = mini_panel.get_meta("instance_id", -1)
-			if mini_enemy_instance_id == target_instance_id:
-					# Flash and show damage
-					var flash_color: Color = Color(0.8, 0.3, 1.0, 1.0) if is_hex else Color(1.5, 0.5, 0.5, 1.0)
-					var flash_tween: Tween = mini_panel.create_tween()
-					flash_tween.tween_property(mini_panel, "modulate", flash_color, 0.05)
-					flash_tween.tween_property(mini_panel, "modulate", Color.WHITE, 0.15)
-					
-					_show_damage_number_at_position(
-						mini_panel.position + Vector2(mini_panel.size.x / 2 - 15, -10),
-						amount,
-						is_hex
-					)
-					# Skip updating HP if enemy was killed during the delay
-					# We can't safely access enemy properties after async delay
-					found_target = true
-					break
-		
-		# Auto-collapse after showing damage (only if we found the target)
-		if found_target:
-			await get_tree().create_timer(0.4).timeout
-			# Re-check that stack still exists before collapsing
-			if stack_visuals.has(stack_key):
-				_force_collapse_stack(stack_key)
+		# Update HP on the mini-card - only if enemy is still valid
+		if is_instance_valid(enemy):
+			_update_mini_panel_hp(target_mini_panel, enemy)
 	else:
-		# Stack is expanded but we couldn't find the mini-card - show on main panel as fallback
+		# Fallback: show damage on main panel if mini-card not found
 		if is_instance_valid(main_panel):
 			var flash_tween: Tween = create_tween()
-			flash_tween.tween_property(main_panel, "modulate", Color(1.5, 0.5, 0.5, 1.0), 0.05)
+			flash_tween.tween_property(main_panel, "modulate", Color(1.5, 0.5, 0.5, 1.0) if not is_hex else Color(0.8, 0.3, 1.0, 1.0), 0.05)
 			flash_tween.tween_property(main_panel, "modulate", Color.WHITE, 0.15)
 			
 			_show_damage_number_at_position(
@@ -2488,6 +2902,9 @@ func _show_damage_on_stacked_enemy(enemy, amount: int, stack_key: String, is_hex
 				amount,
 				is_hex
 			)
+	
+	# Release the hold - the hold system will handle collapsing after delay
+	_release_stack_hold(stack_key)
 
 
 func _expand_stack_briefly(stack_key: String, damaged_enemy) -> void:
@@ -3107,6 +3524,9 @@ func clear_all_hover_states() -> void:
 	# Hide enemy info card and mini cards
 	_hide_enemy_info_card()
 	
+	# Clear card targeting hints
+	clear_card_targeting_hints()
+	
 	# Clear any pending attack indicators
 	_clear_attack_indicator()
 	
@@ -3116,18 +3536,30 @@ func clear_all_hover_states() -> void:
 			reticle.queue_free()
 	_active_weapon_reticles.clear()
 	
-	# Force collapse ALL expanded stacks and clean up ALL mini panels
+	# Animate out and collapse ALL expanded stacks
 	for stack_key: String in stack_visuals.keys():
 		var stack_data: Dictionary = stack_visuals[stack_key]
-		# Force cleanup of mini-panels regardless of expanded state
+		# Animate mini-panels out before freeing
 		if stack_data.has("mini_panels"):
-			for mini_panel in stack_data.mini_panels:
+			var panel_count: int = stack_data.mini_panels.size()
+			for i: int in range(panel_count):
+				var mini_panel = stack_data.mini_panels[i]
 				if is_instance_valid(mini_panel):
-					mini_panel.queue_free()
+					# Stagger the animations - rightmost panels fade first
+					var reverse_index: int = panel_count - 1 - i
+					var tween: Tween = create_tween()
+					tween.set_parallel(true)
+					tween.tween_property(mini_panel, "modulate:a", 0.0, 0.2).set_delay(reverse_index * 0.04)
+					tween.tween_property(mini_panel, "scale", Vector2(0.6, 0.6), 0.2).set_delay(reverse_index * 0.04).set_ease(Tween.EASE_IN)
+					tween.chain().tween_callback(mini_panel.queue_free)
 			stack_data.mini_panels = []
 		stack_data.expanded = false
 	
-	# Cancel any pending collapse timers
+	# Clear all stack hold counts and collapse timers (from the hold system)
+	_stack_hold_counts.clear()
+	_stack_collapse_timers.clear()
+	
+	# Cancel any pending collapse timers (legacy hover system)
 	_stack_collapse_timer = null
 	
 	# Scan enemy_container for any orphaned mini-panels and clean them up
@@ -3177,20 +3609,192 @@ func _cleanup_orphaned_mini_panels() -> void:
 	if not enemy_container:
 		return
 	
-	# Collect all known panels (enemy visuals + stack panels)
+	# Collect all known panels (enemy visuals + destroyed visuals + stack panels + mini-panels)
 	var known_panels: Array = []
 	for visual in enemy_visuals.values():
+		known_panels.append(visual)
+	for visual in destroyed_visuals.values():
 		known_panels.append(visual)
 	for stack_key: String in stack_visuals.keys():
 		var stack_data: Dictionary = stack_visuals[stack_key]
 		if stack_data.has("panel"):
 			known_panels.append(stack_data.panel)
+		# Also include mini-panels (which may include destroyed ones)
+		if stack_data.has("mini_panels"):
+			for mini_panel in stack_data.mini_panels:
+				known_panels.append(mini_panel)
 	
 	# Any panel in enemy_container that isn't in known_panels is orphaned
 	for child in enemy_container.get_children():
 		if child is Panel and child not in known_panels:
 			# This is likely an orphaned mini-panel
 			child.queue_free()
+
+
+# ============== CARD TARGETING HINTS SYSTEM ==============
+
+func show_card_targeting_hints(card_def, tier: int) -> void:
+	"""Show targeting hints when hovering over a card in hand."""
+	if not card_def:
+		return
+	
+	# Clear any existing hints first
+	clear_card_targeting_hints()
+	_targeting_hint_active = true
+	
+	# Get enemies that would be targeted
+	var targeted_enemies: Array = _get_targeted_enemies(card_def)
+	if targeted_enemies.is_empty():
+		return
+	
+	# Calculate damage this card would deal
+	var damage: int = card_def.get_scaled_value("damage", tier)
+	var hex_damage: int = card_def.get_scaled_value("hex_damage", tier)
+	
+	# Apply any damage bonuses (artifacts, warden bonuses)
+	var artifact_effects: Dictionary = ArtifactManager.trigger_artifacts("on_card_preview", {"card_tags": card_def.tags})
+	damage += artifact_effects.get("bonus_damage", 0)
+	
+	# Show hints for each targeted enemy
+	for enemy in targeted_enemies:
+		_show_targeting_hint_for_enemy(enemy, damage, hex_damage)
+
+
+func clear_card_targeting_hints() -> void:
+	"""Clear all targeting hint overlays."""
+	_targeting_hint_active = false
+	
+	for key: String in _targeting_hint_overlays.keys():
+		var overlay: Control = _targeting_hint_overlays[key]
+		if is_instance_valid(overlay):
+			overlay.queue_free()
+	_targeting_hint_overlays.clear()
+
+
+func _get_targeted_enemies(card_def) -> Array:
+	"""Get list of enemies that would be targeted by this card."""
+	var enemies: Array = []
+	
+	if not CombatManager.battlefield:
+		return enemies
+	
+	match card_def.target_type:
+		"all_enemies":
+			# All enemies on the battlefield
+			for ring: int in range(4):
+				enemies.append_array(CombatManager.battlefield.get_enemies_in_ring(ring))
+		
+		"all_rings":
+			# All enemies in the card's target rings
+			for ring: int in card_def.target_rings:
+				enemies.append_array(CombatManager.battlefield.get_enemies_in_ring(ring))
+		
+		"ring":
+			# Enemies in valid target rings (show all possibilities)
+			for ring: int in card_def.target_rings:
+				enemies.append_array(CombatManager.battlefield.get_enemies_in_ring(ring))
+		
+		"random_enemy":
+			# All enemies in valid rings could potentially be targeted
+			for ring: int in card_def.target_rings:
+				enemies.append_array(CombatManager.battlefield.get_enemies_in_ring(ring))
+		
+		_:
+			# Self-targeting or other - no enemy preview needed
+			pass
+	
+	return enemies
+
+
+func _show_targeting_hint_for_enemy(enemy, damage: int, hex_damage: int) -> void:
+	"""Show targeting hint overlay on an enemy panel."""
+	var instance_id: int = enemy.get_instance_id()
+	var key: String = "enemy_" + str(instance_id)
+	
+	# Find the visual for this enemy (could be individual or in a stack)
+	var visual: Control = enemy_visuals.get(instance_id)
+	var in_stack: bool = false
+	var stack_key: String = ""
+	
+	if not visual:
+		# Check if enemy is in a stack
+		for sk: String in stack_visuals.keys():
+			var stack_data: Dictionary = stack_visuals[sk]
+			for stacked_enemy in stack_data.enemies:
+				if stacked_enemy.get_instance_id() == instance_id:
+					visual = stack_data.panel
+					in_stack = true
+					stack_key = sk
+					key = "stack_" + sk
+					break
+			if in_stack:
+				break
+	
+	if not visual or not is_instance_valid(visual):
+		return
+	
+	# Don't duplicate overlay for same stack
+	if _targeting_hint_overlays.has(key):
+		return
+	
+	# Calculate if this would kill the enemy
+	var effective_damage: int = damage
+	var enemy_hex: int = enemy.get_status_value("hex")
+	if hex_damage > 0 and enemy_hex > 0:
+		effective_damage += enemy_hex  # Hex triggers add stored hex as bonus damage
+	
+	var would_kill: bool = effective_damage >= enemy.current_hp
+	
+	# Create targeting hint overlay
+	var overlay: Control = Control.new()
+	overlay.name = "TargetingHint_" + key
+	overlay.size = visual.size
+	overlay.position = visual.position
+	overlay.z_index = visual.z_index + 5
+	overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	
+	# Yellow highlight background
+	var highlight: ColorRect = ColorRect.new()
+	highlight.name = "Highlight"
+	highlight.size = visual.size
+	highlight.color = TARGETING_HINT_COLOR
+	highlight.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	overlay.add_child(highlight)
+	
+	# Damage preview label
+	if damage > 0:
+		var damage_label: Label = Label.new()
+		damage_label.name = "DamagePreview"
+		damage_label.text = "-" + str(damage)
+		damage_label.add_theme_font_size_override("font_size", 18)
+		damage_label.add_theme_color_override("font_color", Color(1.0, 0.3, 0.3))
+		damage_label.add_theme_constant_override("outline_size", 3)
+		damage_label.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 0.9))
+		damage_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		damage_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		damage_label.size = visual.size
+		damage_label.position = Vector2(0, -5)
+		damage_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		overlay.add_child(damage_label)
+	
+	# Kill indicator (skull) if lethal
+	if would_kill:
+		var skull_label: Label = Label.new()
+		skull_label.name = "KillIndicator"
+		skull_label.text = "💀"
+		skull_label.add_theme_font_size_override("font_size", 24)
+		skull_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		skull_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		skull_label.size = visual.size
+		skull_label.position = Vector2(0, 10)
+		skull_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		overlay.add_child(skull_label)
+		
+		# Red tint for lethal targets
+		highlight.color = Color(1.0, 0.2, 0.2, 0.35)
+	
+	enemy_container.add_child(overlay)
+	_targeting_hint_overlays[key] = overlay
 
 
 # ============== RING DETECTION FOR DRAG-DROP ==============
@@ -3391,6 +3995,61 @@ func clear_all_barriers() -> void:
 	"""Clear all barriers (e.g., at end of combat)."""
 	ring_barriers.clear()
 	queue_redraw()
+
+
+func clear_destroyed_visuals() -> void:
+	"""Clear all destroyed enemy visuals (call when starting a new wave)."""
+	for instance_id: int in destroyed_visuals.keys():
+		var visual: Control = destroyed_visuals[instance_id]
+		if is_instance_valid(visual):
+			visual.queue_free()
+	destroyed_visuals.clear()
+
+
+func clear_all_enemy_visuals() -> void:
+	"""Clear all enemy visuals including destroyed ones (call when ending combat)."""
+	# Clear alive enemy visuals
+	for instance_id: int in enemy_visuals.keys():
+		var visual: Control = enemy_visuals[instance_id]
+		if is_instance_valid(visual):
+			visual.queue_free()
+	enemy_visuals.clear()
+	
+	# Clear destroyed enemy visuals
+	clear_destroyed_visuals()
+	
+	# Clear stack visuals
+	for stack_key: String in stack_visuals.keys():
+		var stack_data: Dictionary = stack_visuals[stack_key]
+		if stack_data.has("panel") and is_instance_valid(stack_data.panel):
+			stack_data.panel.queue_free()
+		if stack_data.has("mini_panels"):
+			for mini_panel in stack_data.mini_panels:
+				if is_instance_valid(mini_panel):
+					mini_panel.queue_free()
+	stack_visuals.clear()
+	
+	# Clear groups
+	enemy_groups.clear()
+	
+	# Clear position tracking
+	_enemy_base_positions.clear()
+	_stack_base_positions.clear()
+	_group_positions.clear()
+	_group_angular_positions.clear()
+	
+	# Kill any lingering tweens
+	for instance_id: int in _enemy_position_tweens.keys():
+		var tween: Tween = _enemy_position_tweens[instance_id]
+		if tween and tween.is_valid():
+			tween.kill()
+	_enemy_position_tweens.clear()
+	
+	for stack_key: String in _stack_position_tweens.keys():
+		var tween: Tween = _stack_position_tweens[stack_key]
+		if tween and tween.is_valid():
+			tween.kill()
+	_stack_position_tweens.clear()
 
 
 func get_barrier_damage(ring: int) -> int:
@@ -3676,32 +4335,37 @@ func _expand_stack_and_fire(enemy, stack_key: String, damage_amount: int = 0, is
 	if not stack_visuals.has(stack_key):
 		return
 	
+	# Store enemy instance_id IMMEDIATELY before any awaits (enemy might be freed later)
+	var target_instance_id: int = enemy.instance_id if enemy != null else -1
+	if target_instance_id == -1:
+		return
+	
+	# Hold the stack open during this operation
+	_hold_stack_open(stack_key)
+	
 	var stack_data: Dictionary = stack_visuals[stack_key]
 	var main_panel: Panel = stack_data.panel
-	var _enemy_id: String = main_panel.get_meta("enemy_id", "")
 	
-	# Expand the stack FIRST if not already expanded (fast)
-	if not stack_data.expanded:
-		_expand_stack(stack_key)
-	
-	# Brief wait for mini-cards to appear (fast)
-	await get_tree().create_timer(0.1).timeout
+	# Wait for mini-cards to be fully created and visible
+	# Use process_frame to ensure mini-panels from _expand_stack() are ready
+	await get_tree().process_frame
+	await get_tree().create_timer(0.05).timeout
 	
 	if not stack_visuals.has(stack_key):
 		_cleanup_orphaned_mini_panels()
+		_release_stack_hold(stack_key)
 		return
 	
-	# Find the specific mini-card for this enemy
+	# Find the specific mini-card for this enemy using stored instance_id
 	var mini_panels: Array = stack_visuals[stack_key].get("mini_panels", [])
 	var target_mini_panel: Panel = null
 	
-	# Filter out invalid instances first to avoid "freed instance" errors in typed for loop
+	# Filter out invalid instances first to avoid "freed instance" errors
 	var valid_panels: Array = mini_panels.filter(func(p: Variant) -> bool: return is_instance_valid(p))
 	
 	for mini_panel in valid_panels:
-		# Use instance_id from meta to avoid accessing potentially freed enemy instance
 		var mini_enemy_instance_id: int = mini_panel.get_meta("instance_id", -1)
-		if mini_enemy_instance_id == enemy.instance_id:
+		if mini_enemy_instance_id == target_instance_id:
 			target_mini_panel = mini_panel
 			break
 	
@@ -3725,20 +4389,17 @@ func _expand_stack_and_fire(enemy, stack_key: String, damage_amount: int = 0, is
 			if damage_amount > 0:
 				_show_damage_number_at_position(target_mini_panel.position + Vector2(target_mini_panel.size.x / 2 - 15, -10), damage_amount, is_hex)
 			
-			# Update HP display on the mini-card
-			_update_mini_panel_hp(target_mini_panel, enemy)
-		
-		# Auto-collapse after brief delay
-		await get_tree().create_timer(0.35).timeout
-		_force_collapse_stack(stack_key)
+			# Update HP display on the mini-card (use stored instance_id to find enemy)
+			if enemy != null:
+				_update_mini_panel_hp(target_mini_panel, enemy)
 	else:
 		# Fallback: fire at the stack panel
 		if is_instance_valid(main_panel):
 			var panel_center: Vector2 = main_panel.position + main_panel.size / 2
 			_fire_fast_projectile_to_position(panel_center, Color(1.0, 0.9, 0.3))
-		
-		await get_tree().create_timer(0.25).timeout
-		_force_collapse_stack(stack_key)
+	
+	# Release the hold - the hold system will collapse after delay
+	_release_stack_hold(stack_key)
 
 
 func _fire_projectile_to_position(to_pos: Vector2, projectile_color: Color = Color(1.0, 0.9, 0.3)) -> void:
@@ -3887,17 +4548,17 @@ func _expand_stack_and_show_hex(enemy, stack_key: String, hex_amount: int) -> vo
 	if not stack_visuals.has(stack_key):
 		return
 	
-	var stack_data: Dictionary = stack_visuals[stack_key]
+	# Hold the stack open during this operation
+	_hold_stack_open(stack_key)
 	
-	# Expand the stack if not already expanded
-	if not stack_data.expanded:
-		_expand_stack(stack_key)
+	var stack_data: Dictionary = stack_visuals[stack_key]
 	
 	# Brief wait for mini-cards to appear
 	await get_tree().create_timer(0.1).timeout
 	
 	if not stack_visuals.has(stack_key):
 		_cleanup_orphaned_mini_panels()
+		_release_stack_hold(stack_key)
 		return
 	
 	# Find the specific mini-card
@@ -3936,10 +4597,6 @@ func _expand_stack_and_show_hex(enemy, stack_key: String, hex_amount: int) -> vo
 		
 		# Update hex display on the mini-card
 		_update_mini_panel_hex(target_mini_panel, enemy)
-		
-		# Auto-collapse after brief delay
-		await get_tree().create_timer(0.5).timeout
-		_force_collapse_stack(stack_key)
 	else:
 		# Fallback - shake main panel purple
 		var main_panel: Panel = stack_data.panel
@@ -3952,9 +4609,9 @@ func _expand_stack_and_show_hex(enemy, stack_key: String, hex_amount: int) -> vo
 			shake_tween.tween_property(main_panel, "position:x", base_pos.x + 2, 0.05)
 			shake_tween.tween_property(main_panel, "position:x", base_pos.x, 0.05)
 			shake_tween.parallel().tween_property(main_panel, "modulate", Color.WHITE, 0.15)
-		
-		await get_tree().create_timer(0.4).timeout
-		_force_collapse_stack(stack_key)
+	
+	# Release the hold - the hold system will collapse after delay
+	_release_stack_hold(stack_key)
 
 
 func _show_hex_effect_on_enemy(enemy, hex_amount: int) -> void:
@@ -4165,3 +4822,173 @@ func _on_enemy_move_tween_finished(instance_id: int, target_pos: Vector2, debug_
 	
 	if _enemy_position_tweens.has(instance_id):
 		_enemy_position_tweens.erase(instance_id)
+
+
+# ============== EVENT CALLOUT BANNER SYSTEM ==============
+
+func _on_enemy_ability_triggered(enemy, ability: String, value: int) -> void:
+	"""Handle enemy special ability triggered - show event banner."""
+	var enemy_def = EnemyDatabase.get_enemy(enemy.enemy_id)
+	if not enemy_def:
+		return
+	
+	var banner_type: String = ""
+	var banner_text: String = ""
+	var banner_icon: String = ""
+	var duration: float = 2.0
+	
+	match ability:
+		"spawn_minions":
+			banner_type = "spawn"
+			banner_icon = "⚙️"
+			var spawn_name: String = "enemies"
+			if enemy_def.spawn_enemy_id:
+				var spawn_def = EnemyDatabase.get_enemy(enemy_def.spawn_enemy_id)
+				if spawn_def:
+					spawn_name = spawn_def.enemy_name
+			banner_text = enemy_def.enemy_name + " spawned " + str(value) + " " + spawn_name + "!"
+			duration = 1.5
+		
+		"explode_on_death":
+			banner_type = "explode"
+			banner_icon = "💥"
+			banner_text = enemy_def.enemy_name + " EXPLODED! " + str(value) + " damage!"
+			duration = 2.0
+		
+		"buff_allies":
+			banner_type = "buff"
+			banner_icon = "📢"
+			banner_text = enemy_def.enemy_name + " - Enemies gain +" + str(value) + " damage!"
+			duration = 2.0
+		
+		"bomber_melee_warning":
+			banner_type = "bomber"
+			banner_icon = "💣"
+			banner_text = enemy_def.enemy_name + " in MELEE - will explode for " + str(value) + " damage!"
+			duration = 2.5
+		
+		_:
+			return  # Unknown ability, don't show banner
+	
+	_show_event_banner(banner_icon, banner_text, banner_type, duration)
+
+
+func show_bomber_warning(enemy) -> void:
+	"""Show warning banner when a bomber reaches melee (about to explode)."""
+	var enemy_def = EnemyDatabase.get_enemy(enemy.enemy_id)
+	if not enemy_def:
+		return
+	
+	var explosion_damage: int = enemy_def.buff_amount if enemy_def.buff_amount > 0 else 5
+	var banner_text: String = enemy_def.enemy_name + " in MELEE - will explode for " + str(explosion_damage) + " damage!"
+	_show_event_banner("💣", banner_text, "bomber", 2.5)
+
+
+func show_torchbearer_buff_banner(buff_amount: int) -> void:
+	"""Show banner when torchbearer buff is active during enemy phase."""
+	var banner_text: String = "TORCHBEARER BUFF - Enemies deal +" + str(buff_amount) + " damage!"
+	_show_event_banner("📢", banner_text, "buff", 2.0)
+
+
+func _show_event_banner(icon: String, text: String, banner_type: String, duration: float) -> void:
+	"""Show an event callout banner at top-center of screen."""
+	# Add to queue if a banner is currently showing
+	if _event_banner and is_instance_valid(_event_banner):
+		_event_banner_queue.append({
+			"icon": icon,
+			"text": text,
+			"type": banner_type,
+			"duration": duration
+		})
+		return
+	
+	_create_event_banner(icon, text, banner_type, duration)
+
+
+func _create_event_banner(icon: String, text: String, banner_type: String, duration: float) -> void:
+	"""Create and animate the event banner."""
+	# Create banner container
+	_event_banner = PanelContainer.new()
+	_event_banner.name = "EventBanner"
+	_event_banner.z_index = 100
+	
+	# Style the banner
+	var style: StyleBoxFlat = StyleBoxFlat.new()
+	var banner_color: Color = EVENT_BANNER_COLORS.get(banner_type, Color(0.3, 0.3, 0.4, 0.95))
+	style.bg_color = Color(0.05, 0.05, 0.08, 0.95)
+	style.border_color = banner_color
+	style.set_border_width_all(3)
+	style.set_corner_radius_all(12)
+	style.set_content_margin_all(12)
+	style.shadow_color = banner_color
+	style.shadow_color.a = 0.5
+	style.shadow_size = 8
+	_event_banner.add_theme_stylebox_override("panel", style)
+	
+	# Create content
+	var hbox: HBoxContainer = HBoxContainer.new()
+	hbox.add_theme_constant_override("separation", 12)
+	
+	# Icon
+	var icon_label: Label = Label.new()
+	icon_label.text = icon
+	icon_label.add_theme_font_size_override("font_size", 28)
+	hbox.add_child(icon_label)
+	
+	# Text
+	var text_label: Label = Label.new()
+	text_label.text = text
+	text_label.add_theme_font_size_override("font_size", 18)
+	text_label.add_theme_color_override("font_color", banner_color)
+	text_label.add_theme_constant_override("outline_size", 2)
+	text_label.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 0.8))
+	hbox.add_child(text_label)
+	
+	_event_banner.add_child(hbox)
+	
+	# Add to scene tree
+	add_child(_event_banner)
+	
+	# Wait a frame to get proper size
+	await get_tree().process_frame
+	
+	# Position at top-center
+	var screen_center_x: float = size.x / 2
+	_event_banner.position = Vector2(screen_center_x - _event_banner.size.x / 2, -_event_banner.size.y - 10)
+	
+	# Kill any existing tween
+	if _event_banner_tween and _event_banner_tween.is_valid():
+		_event_banner_tween.kill()
+	
+	# Animate in
+	_event_banner_tween = create_tween()
+	_event_banner_tween.set_ease(Tween.EASE_OUT)
+	_event_banner_tween.set_trans(Tween.TRANS_BACK)
+	
+	# Slide in from top
+	_event_banner_tween.tween_property(_event_banner, "position:y", 20.0, 0.3)
+	
+	# Hold
+	_event_banner_tween.tween_interval(duration)
+	
+	# Slide out
+	_event_banner_tween.set_ease(Tween.EASE_IN)
+	_event_banner_tween.set_trans(Tween.TRANS_QUAD)
+	_event_banner_tween.tween_property(_event_banner, "position:y", -_event_banner.size.y - 10, 0.2)
+	
+	# Clean up and show next in queue
+	_event_banner_tween.tween_callback(_on_event_banner_finished)
+
+
+func _on_event_banner_finished() -> void:
+	"""Clean up banner and show next in queue."""
+	if _event_banner and is_instance_valid(_event_banner):
+		_event_banner.queue_free()
+	_event_banner = null
+	
+	# Show next banner in queue
+	if not _event_banner_queue.is_empty():
+		var next_banner: Dictionary = _event_banner_queue.pop_front()
+		# Small delay between banners
+		await get_tree().create_timer(0.15).timeout
+		_create_event_banner(next_banner.icon, next_banner.text, next_banner.type, next_banner.duration)

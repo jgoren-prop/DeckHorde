@@ -357,7 +357,7 @@ Persistent: Deal 3 to a random enemy at turn end.
 | Iron Bastion | 2 | 🛡6 | Self | ⚡ Instant | armor |
 | Barrier Sigil | 1 | ⚔4 ⏱2 | Ring (choose) / C D F | ⚡ Instant | barrier |
 | Draining Shield | 1 | 🛡3 ♥? | Self | ⚡ Instant | armor, lifesteal |
-| Repulsion | 1 | ↗1 | Ring (auto) / M | ⚡ Instant | crowd_control |
+| Repulsion | 1 | ↗1 | Ring (choose) / ALL | ⚡ Instant | crowd_control |
 | Shield Bash | 1 | ⚔=🛡 | 1 Random / M | ⚡ Instant | armor, attack |
 
 **Legend:**

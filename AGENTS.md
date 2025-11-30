@@ -62,11 +62,66 @@ This document provides essential information for AI agents working on this Godot
 
 ## Testing & Runtime Checks
 
-- After non-trivial code changes, agents attempt to:
-  - Running the game in the Godot editor.
-  - Checking for runtime errors in the debugger/output.
-  - If errors exist, close the game, fix any reported errors and rerunning until clean.
-  - If no errors exist, close the game
+### Use MCP Godot Tools (Preferred Method)
+
+Always use the MCP Godot tools for running and testing the game. **Do NOT use terminal commands** for running Godot because:
+- PowerShell syntax differs from bash (`&&` not valid, need `;`)
+- Godot executable path varies per machine and is unknown
+- Output capture is inconsistent via terminal
+
+### Correct Testing Workflow
+
+**CRITICAL: Understand blocking vs non-blocking tools:**
+
+| Tool | Blocking? | Use Case |
+|------|-----------|----------|
+| `mcp_godot_run_with_debug` | **NO** (async) | Interactive testing - game runs in background |
+| `mcp_godot_run_scene` | **YES** (sync) | Quick validation - WAITS for game to close |
+
+#### For Interactive Testing (RECOMMENDED):
+
+1. **Start the game (non-blocking):**
+   ```
+   mcp_godot_run_with_debug(projectPath, scene="scenes/Combat.tscn", captureOutput=true)
+   ```
+   - Game runs in background, returns immediately
+   - Can specify a scene with `scene` parameter
+
+2. **Check ongoing output while game is running:**
+   ```
+   mcp_godot_get_debug_output()
+   ```
+
+3. **Stop the game and get final output:**
+   ```
+   mcp_godot_stop_project()
+   ```
+   - **ALWAYS** call this when done testing to properly close the game
+   - Returns final output including any errors
+
+#### For Quick Validation Only:
+
+```
+mcp_godot_run_scene(projectPath, scenePath, debug=true)
+```
+- ⚠️ **WARNING: This BLOCKS until the user closes the game window!**
+- Only use when you want a one-shot test that waits for completion
+- The agent will STALL if used expecting to continue working
+
+### Standard Test Cycle
+
+After non-trivial code changes:
+1. Run `mcp_godot_run_scene` or `mcp_godot_run_with_debug`
+2. Check output for errors or expected debug messages via `mcp_godot_get_debug_output`
+3. Call `mcp_godot_stop_project` to close and get final output
+4. If errors exist, fix them and repeat
+5. If no errors exist, testing is complete
+
+### Debug Output Best Practices
+
+- Add `print()` statements with prefixed tags like `[ClassName DEBUG]` for tracking
+- Check debug output for these tags to verify code paths executed
+- Use `print()` liberally during debugging, clean up after fix is verified
 
 ## Development Guidelines
 
@@ -114,10 +169,17 @@ This document provides essential information for AI agents working on this Godot
 
 ### Testing
 
-1. Use `mcp_godot_run_with_debug` for comprehensive testing
-2. Check `mcp_godot_get_debug_output` for errors and warnings
-3. Use `mcp_godot_capture_screenshot` to verify visual changes
-4. Use `mcp_godot_remote_tree_dump` to inspect runtime scene structure
+See **"Testing & Runtime Checks"** section above for detailed workflow.
+
+Key tools:
+1. `mcp_godot_run_with_debug` - Run project with output capture
+2. `mcp_godot_run_scene` - Run specific scene for focused testing
+3. `mcp_godot_get_debug_output` - Check output while running
+4. `mcp_godot_stop_project` - Stop game and get final output (ALWAYS call this)
+5. `mcp_godot_capture_screenshot` - Verify visual changes
+6. `mcp_godot_remote_tree_dump` - Inspect runtime scene structure
+
+**Never use terminal commands to run Godot** - use MCP tools instead.
 
 ### Debugging
 

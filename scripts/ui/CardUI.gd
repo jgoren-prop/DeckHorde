@@ -370,7 +370,10 @@ func _get_flavor_description() -> String:
 			var armor: int = card_def.get_scaled_value("armor_amount", tier)
 			return "[color=#88ddff]Instant:[/color] Gain " + str(armor) + " Armor. Heal 1 per Melee enemy."
 		"push_enemies":
-			return "[color=#88ddff]Instant:[/color] Push enemies back " + str(card_def.push_amount) + " ring."
+			if card_def.requires_target:
+				return "[color=#88ddff]Instant:[/color] Push enemies in chosen ring back " + str(card_def.push_amount) + " ring."
+			else:
+				return "[color=#88ddff]Instant:[/color] Push enemies back " + str(card_def.push_amount) + " ring."
 		"shield_bash":
 			return "[color=#88ddff]Instant:[/color] Deal damage equal to your Armor."
 		_:

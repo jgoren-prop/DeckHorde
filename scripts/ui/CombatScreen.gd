@@ -94,6 +94,7 @@ func _ready() -> void:
 	_create_intent_bar()
 	_create_weapon_icons_panel()
 	_create_deck_viewer_overlay()
+	_create_dev_panel()
 	_setup_animation_manager()
 	_start_combat()
 	_hide_settings_overlay()
@@ -912,11 +913,15 @@ func _on_card_clicked(card_def, tier: int, _hand_index: int) -> void:  # card_de
 	_show_drag_hint()
 
 
-func _on_card_hovered(_card_def, _tier: int, is_hovering: bool) -> void:  # card_def: CardDefinition
+func _on_card_hovered(card_def, tier: int, is_hovering: bool) -> void:  # card_def: CardDefinition
 	if is_hovering:
-		# Preview what would happen if card is played
-		# This could update the threat preview panel
-		pass
+		# Show targeting hints on enemies that would be hit
+		if battlefield_arena and card_def:
+			battlefield_arena.show_card_targeting_hints(card_def, tier)
+	else:
+		# Clear targeting hints when mouse leaves card
+		if battlefield_arena:
+			battlefield_arena.clear_card_targeting_hints()
 
 
 func _on_card_drag_started(card_def, _tier: int, hand_index: int) -> void:  # card_def: CardDefinition
@@ -1596,6 +1601,112 @@ func _on_deck_viewer_close() -> void:
 	"""Close the deck viewer overlay."""
 	AudioManager.play_button_click()
 	deck_viewer_overlay.visible = false
+
+
+# === Dev Panel Functions ===
+
+func _create_dev_panel() -> void:
+	"""Create a dev cheat panel in the top-right corner."""
+	var dev_panel: PanelContainer = PanelContainer.new()
+	dev_panel.name = "DevPanel"
+	
+	# Position in top-right corner using manual anchors
+	dev_panel.anchor_left = 1.0
+	dev_panel.anchor_right = 1.0
+	dev_panel.anchor_top = 0.0
+	dev_panel.anchor_bottom = 0.0
+	dev_panel.offset_left = -180
+	dev_panel.offset_top = 55
+	dev_panel.offset_right = -10
+	dev_panel.offset_bottom = 210
+	
+	# Style the panel
+	var style: StyleBoxFlat = StyleBoxFlat.new()
+	style.bg_color = Color(0.15, 0.1, 0.2, 0.9)
+	style.set_border_width_all(2)
+	style.border_color = Color(1.0, 0.4, 0.4, 0.8)
+	style.set_corner_radius_all(8)
+	style.content_margin_left = 10.0
+	style.content_margin_right = 10.0
+	style.content_margin_top = 8.0
+	style.content_margin_bottom = 8.0
+	dev_panel.add_theme_stylebox_override("panel", style)
+	
+	# VBox for buttons
+	var vbox: VBoxContainer = VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 6)
+	dev_panel.add_child(vbox)
+	
+	# Title
+	var title: Label = Label.new()
+	title.text = "🔧 DEV"
+	title.add_theme_font_size_override("font_size", 14)
+	title.add_theme_color_override("font_color", Color(1.0, 0.5, 0.5))
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(title)
+	
+	# Force Win button
+	var win_btn: Button = Button.new()
+	win_btn.text = "🏆 Force Win"
+	win_btn.custom_minimum_size = Vector2(150, 30)
+	win_btn.pressed.connect(_dev_force_win)
+	vbox.add_child(win_btn)
+	
+	# Force Lose button
+	var lose_btn: Button = Button.new()
+	lose_btn.text = "💀 Force Lose"
+	lose_btn.custom_minimum_size = Vector2(150, 30)
+	lose_btn.pressed.connect(_dev_force_lose)
+	vbox.add_child(lose_btn)
+	
+	# Add Energy button
+	var energy_btn: Button = Button.new()
+	energy_btn.text = "⚡ +3 Energy"
+	energy_btn.custom_minimum_size = Vector2(150, 30)
+	energy_btn.pressed.connect(_dev_add_energy)
+	vbox.add_child(energy_btn)
+	
+	# Add Scrap button
+	var scrap_btn: Button = Button.new()
+	scrap_btn.text = "⚙️ +1000 Scrap"
+	scrap_btn.custom_minimum_size = Vector2(150, 30)
+	scrap_btn.pressed.connect(_dev_add_scrap)
+	vbox.add_child(scrap_btn)
+	
+	add_child(dev_panel)
+
+
+func _dev_force_win() -> void:
+	"""Force win the current wave by killing all enemies."""
+	print("[DEV] Force Win triggered")
+	if CombatManager.battlefield:
+		# Kill all enemies on the battlefield
+		var all_enemies: Array = CombatManager.battlefield.get_all_enemies()
+		for enemy in all_enemies:
+			CombatManager.battlefield.remove_enemy(enemy)
+			CombatManager.enemy_killed.emit(enemy)
+		
+		# Trigger wave end check
+		CombatManager._check_wave_end()
+
+
+func _dev_force_lose() -> void:
+	"""Force lose by setting player HP to 0."""
+	print("[DEV] Force Lose triggered")
+	RunManager.take_damage(RunManager.current_hp + RunManager.armor + 100)
+
+
+func _dev_add_energy() -> void:
+	"""Add 3 energy to the player."""
+	print("[DEV] Add Energy triggered")
+	CombatManager.current_energy += 3
+	CombatManager.energy_changed.emit(CombatManager.current_energy, CombatManager.max_energy)
+
+
+func _dev_add_scrap() -> void:
+	"""Add 1000 scrap to the player."""
+	print("[DEV] Add Scrap triggered")
+	RunManager.add_scrap(1000)
 
 
 func _on_card_fly_debug_tick(timer: Timer) -> void:

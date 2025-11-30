@@ -14,7 +14,7 @@ signal energy_changed(current: int, max_energy: int)
 signal card_played(card, tier: int)
 signal enemy_spawned(enemy)
 signal enemy_killed(enemy)
-signal enemy_damaged(enemy, amount: int)  # Specific enemy took damage
+signal enemy_damaged(enemy, amount: int, hex_triggered: bool)  # Specific enemy took damage
 signal enemy_moved(enemy, from_ring: int, to_ring: int)
 signal _enemies_spawned_together(enemies: Array, ring: int, enemy_id: String)  # Internal: enemies spawned in same batch
 signal damage_dealt_to_enemies(amount: int, ring: int)
@@ -28,6 +28,8 @@ signal barrier_placed(ring: int, damage: int, duration: int)  # Barrier created
 signal ring_phase_started(ring: int, ring_name: String)  # Ring is being processed
 signal ring_phase_ended(ring: int)  # Ring processing complete
 signal enemy_attacking(enemy, damage: int)  # Enemy is about to attack
+signal weapons_phase_started()  # Persistent weapons starting to fire
+signal weapons_phase_ended()  # All persistent weapons finished firing
 
 enum CombatPhase { INACTIVE, WAVE_START, DRAW_PHASE, PLAYER_PHASE, END_PLAYER_PHASE, ENEMY_PHASE, WAVE_CHECK }
 
@@ -123,6 +125,9 @@ func _trigger_persistent_weapons() -> void:
 	if active_weapons.is_empty():
 		return
 	
+	# Signal that weapons phase is starting (BattlefieldArena will hold stacks open)
+	weapons_phase_started.emit()
+	
 	# Process each weapon with delay for visual clarity
 	for i: int in range(active_weapons.size()):
 		var weapon: Dictionary = active_weapons[i]
@@ -149,6 +154,12 @@ func _trigger_persistent_weapons() -> void:
 		# Delay between weapons
 		if i < active_weapons.size() - 1:
 			await get_tree().create_timer(0.3).timeout
+	
+	# Wait for final weapon animations to complete (projectile travel + hit effect + viewing time)
+	await get_tree().create_timer(1.2).timeout
+	
+	# Signal that weapons phase is ending (BattlefieldArena can release holds)
+	weapons_phase_ended.emit()
 	
 	# Remove expired weapons
 	active_weapons = active_weapons.filter(func(w: Dictionary) -> bool: return w.triggers_remaining != 0)
@@ -406,6 +417,8 @@ func _process_enemy_movement_from_ring(ring: int) -> void:
 		# Emit all movement signals at once (so visual updates as a single animation)
 		for move_data: Dictionary in group_moves:
 			enemy_moved.emit(move_data.enemy, move_data.old_ring, move_data.new_ring)
+			# Check if bomber entered melee - show warning banner
+			_check_bomber_melee_warning(move_data.enemy, move_data.new_ring)
 		# Delay after the whole group moves
 		if not group_moves.is_empty():
 			await get_tree().create_timer(0.15).timeout
@@ -414,7 +427,25 @@ func _process_enemy_movement_from_ring(ring: int) -> void:
 	for move_data: Dictionary in ungrouped_to_move:
 		battlefield.move_enemy(move_data.enemy, move_data.new_ring)
 		enemy_moved.emit(move_data.enemy, move_data.old_ring, move_data.new_ring)
+		# Check if bomber entered melee - show warning banner
+		_check_bomber_melee_warning(move_data.enemy, move_data.new_ring)
 		await get_tree().create_timer(0.1).timeout
+
+
+func _check_bomber_melee_warning(enemy, new_ring: int) -> void:
+	"""Check if a bomber entered melee ring and emit warning."""
+	if new_ring != 0:
+		return
+	
+	var enemy_def = EnemyDatabase.get_enemy(enemy.enemy_id)
+	if not enemy_def:
+		return
+	
+	# Check if this is a bomber (suicide attack type with explode_on_death)
+	if enemy_def.special_ability == "explode_on_death" or enemy_def.behavior_type == EnemyDefinition.BehaviorType.BOMBER:
+		var explosion_damage: int = enemy_def.buff_amount if enemy_def.buff_amount > 0 else 5
+		enemy_ability_triggered.emit(enemy, "bomber_melee_warning", explosion_damage)
+		print("[CombatManager] BOMBER WARNING: ", enemy_def.enemy_name, " entered melee!")
 
 
 func _process_enemy_abilities_visual() -> void:
@@ -540,12 +571,18 @@ func _get_torchbearer_buff() -> int:
 	"""Get the damage buff from any alive Torchbearers."""
 	var buff: int = 0
 	var all_enemies: Array = battlefield.get_all_enemies()
+	var torchbearers: Array = []
 	
 	for enemy in all_enemies:
 		var enemy_def = EnemyDatabase.get_enemy(enemy.enemy_id)
 		if enemy_def and enemy_def.special_ability == "buff_allies":
 			buff += enemy_def.buff_amount
+			torchbearers.append({"enemy": enemy, "amount": enemy_def.buff_amount})
 			print("[CombatManager] Torchbearer buffing allies: +", enemy_def.buff_amount, " damage")
+	
+	# Emit ability triggered for each torchbearer (for event banners)
+	for tb: Dictionary in torchbearers:
+		enemy_ability_triggered.emit(tb.enemy, "buff_allies", tb.amount)
 	
 	return buff
 
@@ -636,7 +673,7 @@ func _deal_hex_tick_damage(damage: int) -> void:
 		if enemy.has_status("hex"):
 			# Deal damage WITHOUT consuming hex (just tick damage)
 			enemy.current_hp -= damage
-			enemy_damaged.emit(enemy, damage)
+			enemy_damaged.emit(enemy, damage, false)  # Not a hex trigger, just tick damage
 			print("[CombatManager] Hex Amplifier dealt ", damage, " to ", enemy.enemy_id)
 			
 			if enemy.current_hp <= 0:
@@ -654,8 +691,8 @@ func deal_damage_to_ring(ring: int, damage: int) -> void:
 		var result: Dictionary = enemy.take_damage(damage)
 		var total_damage: int = result.total_damage
 		
-		# Emit damage signal for visual feedback
-		enemy_damaged.emit(enemy, total_damage)
+		# Emit damage signal for visual feedback (with hex_triggered info)
+		enemy_damaged.emit(enemy, total_damage, result.hex_triggered)
 		
 		if result.hex_triggered:
 			print("[CombatManager] Hex triggered! ", damage, " + ", result.hex_bonus, " = ", total_damage)
@@ -690,8 +727,8 @@ func deal_damage_to_random_enemy(ring_mask: int, damage: int, show_targeting: bo
 		
 		print("[CombatManager] Dealt ", total_damage, " damage to ", target.enemy_id, " in ring ", target.ring, " (HP: ", target.current_hp + total_damage, " -> ", target.current_hp, ")")
 		
-		# Emit signal with the specific enemy instance for visual updates
-		enemy_damaged.emit(target, total_damage)
+		# Emit signal with the specific enemy instance for visual updates (with hex_triggered info)
+		enemy_damaged.emit(target, total_damage, result.hex_triggered)
 		
 		if target.current_hp <= 0:
 			print("[CombatManager] Enemy killed: ", target.enemy_id)

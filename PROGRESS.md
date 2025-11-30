@@ -90,6 +90,15 @@
 4. Meta progression save/load
 
 ## Recently Completed (This Session)
+- ✅ **Fixed Group Card Movement Animation Bug** - Groups no longer fly from (0,0):
+  - Root cause: When groups moved between rings, the stack_key changed (includes ring number)
+  - Old position was stored under old key (e.g., `3_husk_group_1`) but new stack used new key (`2_husk_group_1`)
+  - **Fix**: Added `_group_positions` dictionary to track positions by group_id (which persists across rings)
+  - When destroying a stack, position is saved to `_group_positions[group_id]`
+  - When creating new stack, position is restored from `_group_positions` if no stack_key position exists
+  - First-time placements now skip animation (appear directly at target position)
+  - Cross-ring movements now smoothly animate from old position to new position
+
 - ✅ **Danger Highlighting** - Pulsing glow effects on high-priority threats:
   - **CRITICAL (Red, fast pulse)**: Bombers about to explode
   - **HIGH (Orange)**: Enemies reaching melee next turn

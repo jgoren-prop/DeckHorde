@@ -28,12 +28,12 @@ func _create_default_cards() -> void:
 func _create_weapon_cards() -> void:
 	# === WEAPON CARDS ===
 	
-	# Infernal Pistol - persistent weapon, hits random enemy each turn
+	# Infernal Pistol - persistent weapon, hits random enemy at end of turn
 	var pistol := CardDef.new()
 	pistol.card_id = "infernal_pistol"
 	pistol.card_name = "Infernal Pistol"
-	pistol.description = "Persistent: Deal {damage} damage to a random enemy each turn."
-	pistol.persistent_description = "Deal {damage} to a random enemy at turn start."
+	pistol.description = "Persistent: Deal {damage} damage to a random enemy at end of turn."
+	pistol.persistent_description = "Deal {damage} to a random enemy at turn end."
 	pistol.card_type = "weapon"
 	pistol.effect_type = "weapon_persistent"
 	pistol.tags = ["gun", "persistent"]
@@ -41,7 +41,7 @@ func _create_weapon_cards() -> void:
 	pistol.base_damage = 4
 	pistol.target_type = "random_enemy"
 	pistol.target_rings = [0, 1, 2, 3]  # All rings
-	pistol.weapon_trigger = "turn_start"
+	pistol.weapon_trigger = "turn_end"
 	_register_card(pistol)
 	
 	# Choirbreaker Shotgun - AoE damage to Close ring
@@ -152,21 +152,20 @@ func _create_weapon_cards() -> void:
 	flamethrower.rarity = 2
 	_register_card(flamethrower)
 	
-	# Rift Turret - instant damage + persists firing each turn (example of both)
+	# Rift Turret - persists firing at end of each turn
 	var turret := CardDef.new()
 	turret.card_id = "rift_turret"
 	turret.card_name = "Rift Turret"
-	turret.description = "Deploy a turret that attacks each turn."
-	turret.instant_description = "Deal {damage} to a random enemy."
-	turret.persistent_description = "Deal 2 to a random enemy at turn start."
+	turret.description = "Deploy a turret that attacks at end of turn."
+	turret.persistent_description = "Deal {damage} to a random enemy at turn end."
 	turret.card_type = "weapon"
 	turret.effect_type = "weapon_persistent"  # Primary effect type for gameplay
 	turret.tags = ["gun", "persistent"]
 	turret.base_cost = 2
-	turret.base_damage = 3  # Initial instant damage
+	turret.base_damage = 3  # Damage per turn
 	turret.target_type = "random_enemy"
 	turret.target_rings = [0, 1, 2, 3]  # All rings
-	turret.weapon_trigger = "turn_start"
+	turret.weapon_trigger = "turn_end"
 	turret.rarity = 2
 	_register_card(turret)
 
@@ -410,15 +409,15 @@ func _create_defense_cards() -> void:
 	var repulsion := CardDef.new()
 	repulsion.card_id = "repulsion"
 	repulsion.card_name = "Repulsion"
-	repulsion.description = "Push all enemies in Melee back 1 ring."
+	repulsion.description = "Push all enemies in chosen ring back 1 ring."
 	repulsion.card_type = "defense"
 	repulsion.effect_type = "push_enemies"
 	repulsion.tags = ["crowd_control"]
 	repulsion.base_cost = 1
 	repulsion.push_amount = 1
 	repulsion.target_type = "ring"
-	repulsion.target_rings = [0]  # Melee
-	repulsion.requires_target = false
+	repulsion.target_rings = [0, 1, 2, 3]  # All rings can be targeted
+	repulsion.requires_target = true  # Player chooses the ring
 	_register_card(repulsion)
 	
 	# Shield Bash - damage based on armor

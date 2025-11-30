@@ -283,8 +283,12 @@ static func _resolve_push_enemies(card_def, _tier: int, target_ring: int, combat
 	for ring: int in rings_to_push:
 		var enemies: Array = combat.battlefield.get_enemies_in_ring(ring)
 		for enemy in enemies:  # enemy: EnemyInstance
-			var new_ring: int = mini(BattlefieldStateScript.Ring.FAR, enemy.ring + push_amount)
-			combat.battlefield.move_enemy(enemy, new_ring)
+			var old_ring: int = enemy.ring
+			var new_ring: int = mini(BattlefieldStateScript.Ring.FAR, old_ring + push_amount)
+			if new_ring != old_ring:
+				combat.battlefield.move_enemy(enemy, new_ring)
+				# Emit CombatManager signal so BattlefieldArena updates visuals
+				CombatManager.enemy_moved.emit(enemy, old_ring, new_ring)
 
 
 static func _resolve_damage_and_draw(card_def, tier: int, combat: Node) -> void:  # card_def: CardDefinition
@@ -395,12 +399,12 @@ static func _resolve_damage_and_hex(card_def, tier: int, combat: Node) -> void: 
 	var result: Dictionary = target.take_damage(damage)
 	var total_damage: int = result.total_damage
 	
-	# Emit damage signal for visual feedback
-	combat.enemy_damaged.emit(target, total_damage)
+	# Emit damage signal for visual feedback (with hex_triggered info)
+	combat.enemy_damaged.emit(target, total_damage, result.hex_triggered)
 	
 	if target.current_hp <= 0:
 		# Use CombatManager's death handler for proper artifact triggers
-		combat._handle_enemy_death(target)
+		combat._handle_enemy_death(target, result.hex_triggered)
 	else:
 		# Apply NEW hex only if enemy survived - emit hex signal for visual
 		combat.enemy_hexed.emit(target, hex_damage)
@@ -432,11 +436,11 @@ static func _resolve_shield_bash(card_def, _tier: int, combat: Node) -> void:  #
 	var result: Dictionary = target.take_damage(damage)
 	var total_damage: int = result.total_damage
 	
-	# Emit damage signal for visual feedback
-	combat.enemy_damaged.emit(target, total_damage)
+	# Emit damage signal for visual feedback (with hex_triggered info)
+	combat.enemy_damaged.emit(target, total_damage, result.hex_triggered)
 	
 	if target.current_hp <= 0:
 		# Use CombatManager's death handler for proper artifact triggers
-		combat._handle_enemy_death(target)
+		combat._handle_enemy_death(target, result.hex_triggered)
 	
 	combat.damage_dealt_to_enemies.emit(total_damage, target.ring)

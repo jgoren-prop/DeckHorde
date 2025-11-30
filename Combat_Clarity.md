@@ -49,23 +49,23 @@ In horde-based combat, players face cognitive overload when tracking many enemy 
 - [ ] Priority: Bombers about to explode > Enemies reaching melee > Active buffers
 - [ ] Configurable in settings (can be disabled)
 
-### Layer 6: Turn Countdown Badges ✅ IMPLEMENTED
-- [x] Add turn countdown badge to each enemy panel (top-right corner)
-- [x] Badge shows "→X" where X is turns until melee
-- [x] Color coding: Red (melee), Orange (1 turn), Yellow (2 turns), Green (3+ turns), Blue (ranged/won't reach)
-- [x] Update badges when enemies move
-- [x] Tooltips explain what each badge means
+### Layer 6: Turn Countdown Badges ❌ REMOVED
+- Removed in favor of simpler danger highlighting system
+- The colored border (Layer 5) provides enough visual feedback without cluttering the UI
 
-### Layer 7: Card Targeting Hints (Future)
-- [ ] On card hover, highlight effective targets
-- [ ] Show damage preview per ring for AoE cards
-- [ ] Highlight enemies that would die from the card
+### Layer 7: Card Targeting Hints ✅ IMPLEMENTED
+- [x] On card hover, highlight effective targets with yellow overlay
+- [x] Show damage preview (-X) on each targetable enemy
+- [x] Show skull icon (💀) and red highlight on enemies that would die from the card
+- [x] Works with stacked enemy groups too
 
-### Layer 8: Event Callouts (Future)
-- [ ] Flash banner when buffer activates
-- [ ] Flash banner when spawner creates enemy
-- [ ] Flash banner when bomber is about to explode
-- [ ] Banners auto-dismiss after 2 seconds
+### Layer 8: Event Callouts ✅ IMPLEMENTED
+- [x] Flash banner when buffer activates (purple, "📢 TORCHBEARER - Enemies gain +2 damage!")
+- [x] Flash banner when spawner creates enemy (cyan, "⚙️ CHANNELER spawned 1 Husk!")
+- [x] Flash banner when bomber reaches melee (yellow, "💣 BOMBER in MELEE - will explode for 5 damage!")
+- [x] Flash banner when bomber explodes (red-orange, "💥 BOMBER EXPLODED! 5 damage!")
+- [x] Banners auto-dismiss after 1.5-2.5 seconds
+- [x] Banners queue and display sequentially if multiple events happen at once
 
 ---
 

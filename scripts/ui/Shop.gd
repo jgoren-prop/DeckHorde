@@ -42,6 +42,7 @@ const ARTIFACT_BASE_PRICE: int = 80
 
 func _ready() -> void:
 	_create_deck_viewer_overlay()
+	_create_dev_panel()
 	_refresh_shop()
 	_update_ui()
 	_check_merges()
@@ -622,3 +623,89 @@ func _on_deck_viewer_close() -> void:
 	"""Close the deck viewer overlay."""
 	AudioManager.play_button_click()
 	deck_viewer_overlay.visible = false
+
+
+# === Dev Panel Functions ===
+
+func _create_dev_panel() -> void:
+	"""Create a dev cheat panel in the top-right corner."""
+	var dev_panel: PanelContainer = PanelContainer.new()
+	dev_panel.name = "DevPanel"
+	
+	# Position in top-right corner using manual anchors
+	dev_panel.anchor_left = 1.0
+	dev_panel.anchor_right = 1.0
+	dev_panel.anchor_top = 0.0
+	dev_panel.anchor_bottom = 0.0
+	dev_panel.offset_left = -180
+	dev_panel.offset_top = 10
+	dev_panel.offset_right = -10
+	dev_panel.offset_bottom = 165
+	
+	# Style the panel
+	var style: StyleBoxFlat = StyleBoxFlat.new()
+	style.bg_color = Color(0.15, 0.1, 0.2, 0.9)
+	style.set_border_width_all(2)
+	style.border_color = Color(1.0, 0.4, 0.4, 0.8)
+	style.set_corner_radius_all(8)
+	style.content_margin_left = 10.0
+	style.content_margin_right = 10.0
+	style.content_margin_top = 8.0
+	style.content_margin_bottom = 8.0
+	dev_panel.add_theme_stylebox_override("panel", style)
+	
+	# VBox for buttons
+	var vbox: VBoxContainer = VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 6)
+	dev_panel.add_child(vbox)
+	
+	# Title
+	var title: Label = Label.new()
+	title.text = "🔧 DEV"
+	title.add_theme_font_size_override("font_size", 14)
+	title.add_theme_color_override("font_color", Color(1.0, 0.5, 0.5))
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(title)
+	
+	# Force Win button (skip to next wave)
+	var win_btn: Button = Button.new()
+	win_btn.text = "🏆 Skip Wave"
+	win_btn.custom_minimum_size = Vector2(150, 30)
+	win_btn.pressed.connect(_dev_skip_wave)
+	vbox.add_child(win_btn)
+	
+	# Add Scrap button
+	var scrap_btn: Button = Button.new()
+	scrap_btn.text = "⚙️ +1000 Scrap"
+	scrap_btn.custom_minimum_size = Vector2(150, 30)
+	scrap_btn.pressed.connect(_dev_add_scrap)
+	vbox.add_child(scrap_btn)
+	
+	# Full Heal button
+	var heal_btn: Button = Button.new()
+	heal_btn.text = "❤️ Full Heal"
+	heal_btn.custom_minimum_size = Vector2(150, 30)
+	heal_btn.pressed.connect(_dev_full_heal)
+	vbox.add_child(heal_btn)
+	
+	add_child(dev_panel)
+
+
+func _dev_skip_wave() -> void:
+	"""Skip directly to next wave."""
+	print("[DEV] Skip Wave triggered")
+	GameManager.start_next_wave()
+
+
+func _dev_add_scrap() -> void:
+	"""Add 1000 scrap to the player."""
+	print("[DEV] Add Scrap triggered")
+	RunManager.add_scrap(1000)
+
+
+func _dev_full_heal() -> void:
+	"""Fully heal the player."""
+	print("[DEV] Full Heal triggered")
+	var heal_amount: int = RunManager.max_hp - RunManager.current_hp
+	if heal_amount > 0:
+		RunManager.heal(heal_amount)
