@@ -66,6 +66,7 @@ func _show_card_selection() -> void:
 	for i: int in range(offered_cards.size()):
 		var card = offered_cards[i]  # CardDefinition
 		var card_ui: Control = card_ui_scene.instantiate()
+		card_ui.check_playability = false  # Don't dim cards in reward selection
 		card_ui.setup(card, 1, i)
 		card_ui.card_clicked.connect(_on_card_selected)
 		card_options.add_child(card_ui)
@@ -100,4 +101,3 @@ func _check_merge_prompt(card_id: String, tier: int) -> void:
 
 func _proceed_to_shop() -> void:
 	GameManager.go_to_shop()
-

@@ -202,3 +202,9 @@ text = "Skip"
 [connection signal="pressed" from="CardSelection/VBox/SkipButton" to="." method="_on_skip_card_pressed"]
 
 
+
+
+
+
+
+

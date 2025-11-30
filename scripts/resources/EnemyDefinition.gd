@@ -2,6 +2,19 @@ extends Resource
 class_name EnemyDefinition
 ## EnemyDefinition - Data resource for enemy definitions
 
+## Behavior archetypes for visual badges
+enum BehaviorType {
+	RUSHER,   # 🏃 Moves every turn until melee
+	FAST,     # ⚡ Moves 2+ rings per turn
+	RANGED,   # 🏹 Stops early and attacks from distance
+	BOMBER,   # 💣 Explodes on death
+	BUFFER,   # 📢 Strengthens nearby enemies
+	SPAWNER,  # ⚙️ Creates additional enemies
+	TANK,     # 🛡️ High HP/armor, slow threat
+	AMBUSH,   # 🗡️ Spawns close to player
+	BOSS      # 👑 Special mechanics, high danger
+}
+
 @export var enemy_id: String = ""
 @export var enemy_name: String = ""
 @export_multiline var description: String = ""
@@ -10,6 +23,9 @@ class_name EnemyDefinition
 @export_enum("grunt", "elite", "boss") var enemy_type: String = "grunt"
 @export var is_elite: bool = false
 @export var is_boss: bool = false
+
+# Behavior archetype for visual badge
+@export var behavior_type: BehaviorType = BehaviorType.RUSHER
 
 # Base stats
 @export var base_hp: int = 10
@@ -48,5 +64,85 @@ func get_scaled_damage(wave: int) -> int:
 	"""Get damage scaled by wave number."""
 	var scale: float = 1.0 + (wave - 1) * 0.1
 	return int(base_damage * scale)
+
+
+func get_behavior_badge_icon() -> String:
+	"""Get the emoji icon for this enemy's behavior type."""
+	match behavior_type:
+		BehaviorType.RUSHER:
+			return "🏃"
+		BehaviorType.FAST:
+			return "⚡"
+		BehaviorType.RANGED:
+			return "🏹"
+		BehaviorType.BOMBER:
+			return "💣"
+		BehaviorType.BUFFER:
+			return "📢"
+		BehaviorType.SPAWNER:
+			return "⚙️"
+		BehaviorType.TANK:
+			return "🛡️"
+		BehaviorType.AMBUSH:
+			return "🗡️"
+		BehaviorType.BOSS:
+			return "👑"
+		_:
+			return "🏃"
+
+
+func get_behavior_badge_color() -> Color:
+	"""Get the color associated with this enemy's behavior type."""
+	match behavior_type:
+		BehaviorType.RUSHER:
+			return Color(0.9, 0.3, 0.3)  # Red
+		BehaviorType.FAST:
+			return Color(1.0, 0.6, 0.2)  # Orange
+		BehaviorType.RANGED:
+			return Color(0.4, 0.6, 1.0)  # Blue
+		BehaviorType.BOMBER:
+			return Color(1.0, 0.85, 0.2)  # Yellow
+		BehaviorType.BUFFER:
+			return Color(0.7, 0.4, 1.0)  # Purple
+		BehaviorType.SPAWNER:
+			return Color(0.3, 0.9, 0.9)  # Cyan
+		BehaviorType.TANK:
+			return Color(0.6, 0.6, 0.7)  # Gray
+		BehaviorType.AMBUSH:
+			return Color(0.9, 0.5, 0.7)  # Pink
+		BehaviorType.BOSS:
+			return Color(1.0, 0.8, 0.2)  # Gold
+		_:
+			return Color(0.9, 0.3, 0.3)
+
+
+func get_behavior_tooltip() -> String:
+	"""Get tooltip text explaining this enemy's behavior."""
+	match behavior_type:
+		BehaviorType.RUSHER:
+			return "Rusher - Advances every turn until reaching melee"
+		BehaviorType.FAST:
+			return "Fast - Moves 2 rings per turn"
+		BehaviorType.RANGED:
+			return "Ranged - Stops at distance and attacks from afar"
+		BehaviorType.BOMBER:
+			return "Bomber - Explodes when killed, dealing damage"
+		BehaviorType.BUFFER:
+			return "Buffer - Increases nearby enemy damage"
+		BehaviorType.SPAWNER:
+			return "Spawner - Creates additional enemies each turn"
+		BehaviorType.TANK:
+			return "Tank - High health and armor, slow but deadly"
+		BehaviorType.AMBUSH:
+			return "Ambush - Spawns directly in close range"
+		BehaviorType.BOSS:
+			return "Boss - Powerful enemy with special abilities"
+		_:
+			return "Unknown behavior"
+
+
+
+
+
 
 

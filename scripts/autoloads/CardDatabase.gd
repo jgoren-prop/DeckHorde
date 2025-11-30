@@ -32,14 +32,15 @@ func _create_weapon_cards() -> void:
 	var pistol := CardDef.new()
 	pistol.card_id = "infernal_pistol"
 	pistol.card_name = "Infernal Pistol"
-	pistol.description = "Persistent: Deal {damage} damage to random enemy in Mid/Close each turn."
+	pistol.description = "Persistent: Deal {damage} damage to a random enemy each turn."
+	pistol.persistent_description = "Deal {damage} to a random enemy at turn start."
 	pistol.card_type = "weapon"
 	pistol.effect_type = "weapon_persistent"
 	pistol.tags = ["gun", "persistent"]
 	pistol.base_cost = 1
 	pistol.base_damage = 4
 	pistol.target_type = "random_enemy"
-	pistol.target_rings = [1, 2]  # Close, Mid
+	pistol.target_rings = [0, 1, 2, 3]  # All rings
 	pistol.weapon_trigger = "turn_start"
 	_register_card(pistol)
 	
@@ -48,6 +49,7 @@ func _create_weapon_cards() -> void:
 	shotgun.card_id = "choirbreaker_shotgun"
 	shotgun.card_name = "Choirbreaker Shotgun"
 	shotgun.description = "Deal {damage} damage to ALL enemies in Close ring."
+	shotgun.instant_description = "Deal {damage} to ALL enemies in Close ring."
 	shotgun.card_type = "weapon"
 	shotgun.effect_type = "instant_damage"
 	shotgun.tags = ["gun"]
@@ -138,6 +140,7 @@ func _create_weapon_cards() -> void:
 	flamethrower.card_id = "flamethrower"
 	flamethrower.card_name = "Flamethrower"
 	flamethrower.description = "Deal {damage} damage to ALL enemies in Melee and Close."
+	flamethrower.instant_description = "Deal {damage} to ALL enemies in Melee and Close."
 	flamethrower.card_type = "weapon"
 	flamethrower.effect_type = "instant_damage"
 	flamethrower.tags = ["fire"]
@@ -148,6 +151,24 @@ func _create_weapon_cards() -> void:
 	flamethrower.requires_target = false
 	flamethrower.rarity = 2
 	_register_card(flamethrower)
+	
+	# Rift Turret - instant damage + persists firing each turn (example of both)
+	var turret := CardDef.new()
+	turret.card_id = "rift_turret"
+	turret.card_name = "Rift Turret"
+	turret.description = "Deploy a turret that attacks each turn."
+	turret.instant_description = "Deal {damage} to a random enemy."
+	turret.persistent_description = "Deal 2 to a random enemy at turn start."
+	turret.card_type = "weapon"
+	turret.effect_type = "weapon_persistent"  # Primary effect type for gameplay
+	turret.tags = ["gun", "persistent"]
+	turret.base_cost = 2
+	turret.base_damage = 3  # Initial instant damage
+	turret.target_type = "random_enemy"
+	turret.target_rings = [0, 1, 2, 3]  # All rings
+	turret.weapon_trigger = "turn_start"
+	turret.rarity = 2
+	_register_card(turret)
 
 
 func _create_skill_cards() -> void:
@@ -440,3 +461,17 @@ func get_random_card(exclude_ids: Array = []):
 	if available.size() > 0:
 		return cards[available[randi() % available.size()]]
 	return null
+
+
+func get_shop_cards(count: int, _wave: int) -> Array[CardDefinition]:
+	"""Get random cards for shop/rewards."""
+	var result: Array[CardDefinition] = []
+	var used_ids: Array = []
+	
+	for i: int in range(count):
+		var card = get_random_card(used_ids)
+		if card:
+			result.append(card)
+			used_ids.append(card.card_id)
+	
+	return result

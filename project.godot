@@ -17,6 +17,8 @@ config/icon="res://icon.svg"
 
 [autoload]
 
+AudioManager="*res://scripts/autoloads/AudioManager.gd"
+SettingsManager="*res://scripts/autoloads/SettingsManager.gd"
 GameManager="*res://scripts/autoloads/GameManager.gd"
 RunManager="*res://scripts/autoloads/RunManager.gd"
 CombatManager="*res://scripts/autoloads/CombatManager.gd"
@@ -24,15 +26,15 @@ CardDatabase="*res://scripts/autoloads/CardDatabase.gd"
 EnemyDatabase="*res://scripts/autoloads/EnemyDatabase.gd"
 MergeManager="*res://scripts/autoloads/MergeManager.gd"
 ArtifactManager="*res://scripts/autoloads/ArtifactManager.gd"
+CombatAnimationManager="*res://scripts/autoloads/CombatAnimationManager.gd"
 
 [display]
 
-window/size/viewport_width=720
-window/size/viewport_height=1280
-window/size/mode=2
+window/size/viewport_width=1920
+window/size/viewport_height=1080
+window/size/mode=3
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
-window/handheld/orientation=1
 
 [input]
 

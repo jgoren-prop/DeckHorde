@@ -7,6 +7,9 @@ var ring: int = 3  # Current ring (FAR by default)
 var current_hp: int = 10
 var max_hp: int = 10
 
+# Persistent group tracking - enemies stay in groups even when count drops
+var group_id: String = ""  # Empty string means not in a group
+
 # Status effects: Dictionary of effect_name -> {value: int, duration: int}
 var status_effects: Dictionary = {}
 
@@ -67,6 +70,31 @@ func tick_status_effects() -> void:
 	
 	for effect_name: String in expired:
 		status_effects.erase(effect_name)
+
+
+func take_damage(base_damage: int) -> Dictionary:
+	"""
+	Apply damage to this enemy, triggering hex if present.
+	Returns: {total_damage: int, hex_triggered: bool, hex_bonus: int}
+	"""
+	var hex_bonus: int = 0
+	var hex_triggered: bool = false
+	
+	# Check for hex stacks
+	if has_status("hex"):
+		hex_bonus = get_status_value("hex")
+		hex_triggered = true
+		remove_status("hex")  # Consume hex on damage
+		print("[EnemyInstance] Hex triggered on ", enemy_id, ": ", hex_bonus, " bonus damage")
+	
+	var total_damage: int = base_damage + hex_bonus
+	current_hp -= total_damage
+	
+	return {
+		"total_damage": total_damage,
+		"hex_triggered": hex_triggered,
+		"hex_bonus": hex_bonus
+	}
 
 
 func get_hp_percentage() -> float:

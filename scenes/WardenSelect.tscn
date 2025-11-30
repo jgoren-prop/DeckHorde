@@ -145,3 +145,9 @@ text = "Starting Deck: 10 cards"
 [connection signal="pressed" from="MarginContainer/VBoxContainer/StartButton" to="." method="_on_start_pressed"]
 
 
+
+
+
+
+
+

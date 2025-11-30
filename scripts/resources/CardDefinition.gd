@@ -6,6 +6,10 @@ class_name CardDefinition
 @export var card_name: String = ""
 @export_multiline var description: String = ""
 
+# Explicit effect descriptions (displayed with labels)
+@export_multiline var instant_description: String = ""  # "Instant: ___" effect
+@export_multiline var persistent_description: String = ""  # "Persistent: ___" effect
+
 # Card classification
 @export_enum("weapon", "skill", "hex", "defense", "curse") var card_type: String = "weapon"
 @export var tags: Array = []  # Array[String]

@@ -37,18 +37,20 @@ func _create_default_wardens() -> Array:
 		"description": "Ex-riot cop branded with a burning sigil.",
 		"passive_description": "Gun cards deal +15% damage to Close/Melee.",
 		"drawback_description": "-10% Max HP.",
+		"passive_id": "gun_close_damage",  # +15% gun damage to Close/Melee
 		"max_hp": 54,
 		"base_armor": 2,
-		"damage_multiplier": 1.15,
+		"damage_multiplier": 1.0,  # Base multiplier, passive handles gun damage
 		"base_energy": 3,
 		"hand_size": 5,
 		"portrait_color": Color(1.0, 0.4, 0.2),
 		"icon": "🔥",
+		"tag_damage_bonuses": {"gun": 0.15},  # +15% to gun cards
 		"starting_deck": [
 			{"card_id": "infernal_pistol", "tier": 1, "count": 3},
 			{"card_id": "glass_ward", "tier": 1, "count": 3},
 			{"card_id": "simple_hex", "tier": 1, "count": 2},
-			{"card_id": "emergency_medkit", "tier": 1, "count": 2}
+			{"card_id": "quick_strike", "tier": 1, "count": 2}
 		]
 	})
 	
@@ -58,18 +60,20 @@ func _create_default_wardens() -> Array:
 		"description": "Cult defector bound to a parasitic entity.",
 		"passive_description": "Heal 1 HP when Hexed enemies die.",
 		"drawback_description": "-10% Armor.",
+		"passive_id": "hex_lifesteal",  # Heal 1 HP when hexed enemy dies
 		"max_hp": 55,
 		"base_armor": 1,
-		"damage_multiplier": 1.1,
+		"damage_multiplier": 1.0,
 		"base_energy": 3,
 		"hand_size": 5,
 		"portrait_color": Color(0.5, 0.2, 0.6),
 		"icon": "🌑",
+		"tag_damage_bonuses": {},
 		"starting_deck": [
 			{"card_id": "infernal_pistol", "tier": 1, "count": 2},
 			{"card_id": "simple_hex", "tier": 1, "count": 4},
 			{"card_id": "glass_ward", "tier": 1, "count": 2},
-			{"card_id": "emergency_medkit", "tier": 1, "count": 2}
+			{"card_id": "quick_strike", "tier": 1, "count": 2}
 		]
 	})
 	
@@ -79,6 +83,7 @@ func _create_default_wardens() -> Array:
 		"description": "Sigil-knight encased in reflective glass armor.",
 		"passive_description": "First death per wave: survive at 1 HP.",
 		"drawback_description": "Base Energy reduced to 2.",
+		"passive_id": "cheat_death",  # Survive fatal hit once per wave at 1 HP
 		"max_hp": 70,
 		"base_armor": 4,
 		"damage_multiplier": 1.0,
@@ -86,11 +91,12 @@ func _create_default_wardens() -> Array:
 		"hand_size": 5,
 		"portrait_color": Color(0.7, 0.9, 1.0),
 		"icon": "💎",
+		"tag_damage_bonuses": {},
 		"starting_deck": [
 			{"card_id": "infernal_pistol", "tier": 1, "count": 2},
 			{"card_id": "glass_ward", "tier": 1, "count": 4},
 			{"card_id": "simple_hex", "tier": 1, "count": 2},
-			{"card_id": "emergency_medkit", "tier": 1, "count": 2}
+			{"card_id": "quick_strike", "tier": 1, "count": 2}
 		]
 	})
 	
@@ -209,6 +215,9 @@ func _on_start_pressed() -> void:
 	
 	print("[WardenSelect] Starting run with: ", selected_warden.warden_name)
 	
+	# Store the full warden data in RunManager
+	RunManager.current_warden = selected_warden
+	
 	# Set up run state
 	RunManager.max_hp = selected_warden.max_hp
 	RunManager.current_hp = selected_warden.max_hp
@@ -217,6 +226,7 @@ func _on_start_pressed() -> void:
 	RunManager.max_energy = selected_warden.base_energy
 	RunManager.damage_multiplier = selected_warden.damage_multiplier
 	RunManager.danger_level = int(difficulty_slider.value)
+	RunManager.cheat_death_available = true  # Reset Glass Warden passive
 	
 	# Initialize deck
 	RunManager.deck.clear()

@@ -1,0 +1,257 @@
+[gd_scene load_steps=2 format=3 uid="uid://dp3k2mwvqx5r7"]
+
+[ext_resource type="Script" path="res://scripts/ui/Settings.gd" id="1_settings"]
+
+[node name="Settings" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_settings")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.08, 0.06, 0.12, 1)
+
+[node name="PanelContainer" type="PanelContainer" parent="."]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -280.0
+offset_top = -350.0
+offset_right = 280.0
+offset_bottom = 350.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="PanelContainer"]
+layout_mode = 2
+theme_override_constants/margin_left = 30
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 30
+theme_override_constants/margin_bottom = 20
+
+[node name="VBoxContainer" type="VBoxContainer" parent="PanelContainer/MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 15
+
+[node name="Title" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.9, 0.75, 0.5, 1)
+theme_override_font_sizes/font_size = 36
+text = "SETTINGS"
+horizontal_alignment = 1
+
+[node name="HSeparator" type="HSeparator" parent="PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="AudioHeader" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.6, 0.5, 1)
+theme_override_font_sizes/font_size = 20
+text = "Audio"
+
+[node name="MasterVolumeContainer" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/MasterVolumeContainer"]
+custom_minimum_size = Vector2(180, 0)
+layout_mode = 2
+text = "Master Volume"
+
+[node name="MasterVolumeSlider" type="HSlider" parent="PanelContainer/MarginContainer/VBoxContainer/MasterVolumeContainer"]
+custom_minimum_size = Vector2(200, 20)
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 1.0
+step = 0.05
+value = 1.0
+
+[node name="MasterVolumeValue" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/MasterVolumeContainer"]
+custom_minimum_size = Vector2(50, 0)
+layout_mode = 2
+text = "100%"
+horizontal_alignment = 2
+
+[node name="SFXVolumeContainer" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/SFXVolumeContainer"]
+custom_minimum_size = Vector2(180, 0)
+layout_mode = 2
+text = "SFX Volume"
+
+[node name="SFXVolumeSlider" type="HSlider" parent="PanelContainer/MarginContainer/VBoxContainer/SFXVolumeContainer"]
+custom_minimum_size = Vector2(200, 20)
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 1.0
+step = 0.05
+value = 0.8
+
+[node name="SFXVolumeValue" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/SFXVolumeContainer"]
+custom_minimum_size = Vector2(50, 0)
+layout_mode = 2
+text = "80%"
+horizontal_alignment = 2
+
+[node name="MusicVolumeContainer" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/MusicVolumeContainer"]
+custom_minimum_size = Vector2(180, 0)
+layout_mode = 2
+text = "Music Volume"
+
+[node name="MusicVolumeSlider" type="HSlider" parent="PanelContainer/MarginContainer/VBoxContainer/MusicVolumeContainer"]
+custom_minimum_size = Vector2(200, 20)
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 1.0
+step = 0.05
+value = 0.5
+
+[node name="MusicVolumeValue" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/MusicVolumeContainer"]
+custom_minimum_size = Vector2(50, 0)
+layout_mode = 2
+text = "50%"
+horizontal_alignment = 2
+
+[node name="MuteContainer" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/MuteContainer"]
+custom_minimum_size = Vector2(180, 0)
+layout_mode = 2
+text = "Mute All Audio"
+
+[node name="MuteCheckBox" type="CheckBox" parent="PanelContainer/MarginContainer/VBoxContainer/MuteContainer"]
+layout_mode = 2
+
+[node name="HSeparator2" type="HSeparator" parent="PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="GameplayHeader" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.6, 0.5, 1)
+theme_override_font_sizes/font_size = 20
+text = "Gameplay"
+
+[node name="ScreenShakeContainer" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/ScreenShakeContainer"]
+custom_minimum_size = Vector2(180, 0)
+layout_mode = 2
+text = "Screen Shake"
+
+[node name="ScreenShakeCheckBox" type="CheckBox" parent="PanelContainer/MarginContainer/VBoxContainer/ScreenShakeContainer"]
+layout_mode = 2
+button_pressed = true
+
+[node name="DamageNumbersContainer" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/DamageNumbersContainer"]
+custom_minimum_size = Vector2(180, 0)
+layout_mode = 2
+text = "Damage Numbers"
+
+[node name="DamageNumbersCheckBox" type="CheckBox" parent="PanelContainer/MarginContainer/VBoxContainer/DamageNumbersContainer"]
+layout_mode = 2
+button_pressed = true
+
+[node name="AutoEndTurnContainer" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/AutoEndTurnContainer"]
+custom_minimum_size = Vector2(180, 0)
+layout_mode = 2
+text = "Auto End Turn"
+
+[node name="AutoEndTurnCheckBox" type="CheckBox" parent="PanelContainer/MarginContainer/VBoxContainer/AutoEndTurnContainer"]
+layout_mode = 2
+
+[node name="HSeparator3" type="HSeparator" parent="PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="DisplayHeader" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.6, 0.5, 1)
+theme_override_font_sizes/font_size = 20
+text = "Display"
+
+[node name="ScreenModeContainer" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/ScreenModeContainer"]
+custom_minimum_size = Vector2(180, 0)
+layout_mode = 2
+text = "Screen Mode"
+
+[node name="ScreenModeDropdown" type="OptionButton" parent="PanelContainer/MarginContainer/VBoxContainer/ScreenModeContainer"]
+custom_minimum_size = Vector2(200, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+item_count = 3
+popup/item_0/text = "Windowed"
+popup/item_1/text = "Fullscreen"
+popup/item_1/id = 1
+popup/item_2/text = "Windowed Fullscreen"
+popup/item_2/id = 2
+
+[node name="VSyncContainer" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/VSyncContainer"]
+custom_minimum_size = Vector2(180, 0)
+layout_mode = 2
+text = "VSync"
+
+[node name="VSyncCheckBox" type="CheckBox" parent="PanelContainer/MarginContainer/VBoxContainer/VSyncContainer"]
+layout_mode = 2
+button_pressed = true
+
+[node name="Spacer" type="Control" parent="PanelContainer/MarginContainer/VBoxContainer"]
+custom_minimum_size = Vector2(0, 10)
+layout_mode = 2
+
+[node name="ButtonContainer" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+alignment = 1
+theme_override_constants/separation = 20
+
+[node name="ResetButton" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer/ButtonContainer"]
+custom_minimum_size = Vector2(150, 45)
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "Reset Defaults"
+
+[node name="BackButton" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer/ButtonContainer"]
+custom_minimum_size = Vector2(150, 45)
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "Back"
+
+[connection signal="value_changed" from="PanelContainer/MarginContainer/VBoxContainer/MasterVolumeContainer/MasterVolumeSlider" to="." method="_on_master_volume_changed"]
+[connection signal="value_changed" from="PanelContainer/MarginContainer/VBoxContainer/SFXVolumeContainer/SFXVolumeSlider" to="." method="_on_sfx_volume_changed"]
+[connection signal="value_changed" from="PanelContainer/MarginContainer/VBoxContainer/MusicVolumeContainer/MusicVolumeSlider" to="." method="_on_music_volume_changed"]
+[connection signal="toggled" from="PanelContainer/MarginContainer/VBoxContainer/MuteContainer/MuteCheckBox" to="." method="_on_mute_toggled"]
+[connection signal="toggled" from="PanelContainer/MarginContainer/VBoxContainer/ScreenShakeContainer/ScreenShakeCheckBox" to="." method="_on_screen_shake_toggled"]
+[connection signal="toggled" from="PanelContainer/MarginContainer/VBoxContainer/DamageNumbersContainer/DamageNumbersCheckBox" to="." method="_on_damage_numbers_toggled"]
+[connection signal="toggled" from="PanelContainer/MarginContainer/VBoxContainer/AutoEndTurnContainer/AutoEndTurnCheckBox" to="." method="_on_auto_end_turn_toggled"]
+[connection signal="item_selected" from="PanelContainer/MarginContainer/VBoxContainer/ScreenModeContainer/ScreenModeDropdown" to="." method="_on_screen_mode_selected"]
+[connection signal="toggled" from="PanelContainer/MarginContainer/VBoxContainer/VSyncContainer/VSyncCheckBox" to="." method="_on_vsync_toggled"]
+[connection signal="pressed" from="PanelContainer/MarginContainer/VBoxContainer/ButtonContainer/ResetButton" to="." method="_on_reset_pressed"]
+[connection signal="pressed" from="PanelContainer/MarginContainer/VBoxContainer/ButtonContainer/BackButton" to="." method="_on_back_pressed"]
+

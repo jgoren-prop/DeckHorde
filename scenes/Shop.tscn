@@ -91,7 +91,24 @@ theme_override_font_sizes/font_size = 16
 text = "Artifacts"
 
 [node name="ArtifactSlots" type="HBoxContainer" parent="MarginContainer/VBox/ArtifactsSection"]
-custom_minimum_size = Vector2(0, 100)
+custom_minimum_size = Vector2(0, 140)
+layout_mode = 2
+theme_override_constants/separation = 20
+alignment = 1
+
+[node name="MergeSection" type="VBoxContainer" parent="MarginContainer/VBox"]
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="SectionLabel" type="Label" parent="MarginContainer/VBox/MergeSection"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.4, 0.9, 0.4, 1)
+theme_override_font_sizes/font_size = 16
+text = "⬆ Available Merges"
+
+[node name="MergeSlots" type="HBoxContainer" parent="MarginContainer/VBox/MergeSection"]
+custom_minimum_size = Vector2(0, 80)
 layout_mode = 2
 theme_override_constants/separation = 20
 alignment = 1
@@ -156,6 +173,21 @@ theme_override_font_sizes/font_size = 12
 text = "10 Scrap"
 horizontal_alignment = 1
 
+[node name="ViewDeck" type="VBoxContainer" parent="MarginContainer/VBox/ServicesSection/ServiceButtons"]
+layout_mode = 2
+
+[node name="Button" type="Button" parent="MarginContainer/VBox/ServicesSection/ServiceButtons/ViewDeck"]
+custom_minimum_size = Vector2(120, 50)
+layout_mode = 2
+text = "📚 Deck"
+
+[node name="Label" type="Label" parent="MarginContainer/VBox/ServicesSection/ServiceButtons/ViewDeck"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.6, 0.7, 0.9, 1)
+theme_override_font_sizes/font_size = 12
+text = "View Cards"
+horizontal_alignment = 1
+
 [node name="Spacer" type="Control" parent="MarginContainer/VBox"]
 layout_mode = 2
 size_flags_vertical = 3
@@ -208,7 +240,10 @@ text = "Cancel"
 [connection signal="pressed" from="MarginContainer/VBox/ServicesSection/ServiceButtons/RemoveCard/Button" to="." method="_on_remove_card_pressed"]
 [connection signal="pressed" from="MarginContainer/VBox/ServicesSection/ServiceButtons/Heal/Button" to="." method="_on_heal_pressed"]
 [connection signal="pressed" from="MarginContainer/VBox/ServicesSection/ServiceButtons/Reroll/Button" to="." method="_on_reroll_pressed"]
+[connection signal="pressed" from="MarginContainer/VBox/ServicesSection/ServiceButtons/ViewDeck/Button" to="." method="_on_view_deck_pressed"]
 [connection signal="pressed" from="MarginContainer/VBox/ContinueButton" to="." method="_on_continue_pressed"]
 [connection signal="pressed" from="DeckViewPanel/VBox/CloseButton" to="." method="_on_deck_view_close"]
+
+
 
 

@@ -29,11 +29,30 @@ Enemies spawn in the **FAR** ring and advance toward the player each turn:
 - `BattlefieldArena.gd` sets `max_radius = min(size.x, size.y) * 0.58`, so the FAR ring almost touches both the top HUD and the card row on tall and wide devices.
 - Enemy panels scale with the viewport: width = `clamp(shortest_side * 0.11, 70, 150)` and height = `clamp(width * 1.25, 90, 190)`. All internal labels/bars position themselves using those dynamic dimensions so the HP bar always spans `panel_width - 8` pixels and damage text centers regardless of scale.
 
+#### Enemy Display System (Horde Handling)
+When many enemies spawn in the same ring, the system uses two strategies to prevent overlap:
+
+**Multi-Row Distribution** (5-8 enemies in a ring):
+- Enemies are distributed across inner (35% depth) and outer (75% depth) rows within the ring
+- This doubles the visual capacity without changing gameplay
+
+**Overflow Stacking** (3+ of same enemy type):
+- Identical enemies collapse into a single "stack" panel with count badge (e.g., "x5")
+- Stack shows aggregate HP bar and "total HP" text
+- **Expand on Hover**: Hovering a stack fans out mini-panels showing each enemy's individual HP
+- **Damage Feedback**: When stacked enemy takes damage, stack briefly expands to show which one was hit
+- Mini-panels support hover for full enemy tooltip and individual targeting
+
+**Constants** (in `BattlefieldArena.gd`):
+- `MAX_ENEMIES_BEFORE_MULTIROW = 4` — Use single row up to this count
+- `MAX_TOTAL_BEFORE_STACKING = 2` — Stacking kicks in when 3+ enemies present
+- `STACK_THRESHOLD = 3` — Minimum same-type enemies to form a stack
+
 ### Turn Structure
 1. **Draw Phase** - Draw cards to hand (5 by default)
 2. **Player Phase** - Play cards using Energy (3 by default)
 3. **Enemy Phase** - Enemies move inward and attack
-4. **Wave Check** - Win if all enemies dead, lose if player dead or turn limit reached
+4. **Wave Check** - Win if all enemies dead, lose if player HP reaches 0
 
 ### Card Types
 | Type | Description |
@@ -57,51 +76,295 @@ Enemies spawn in the **FAR** ring and advance toward the player each turn:
 
 ---
 
+## Card UI Specification
+
+### Card Layout (170x260 pixels)
+
+```
+┌─────────────────────────────┐
+│ [1] Card Name Here      T2  │  ← Header: Cost, Name, Tier
+├─────────────────────────────┤
+│           ⚔️                │  ← Type Icon (large)
+│                             │
+│  ┌───────────────────────┐  │
+│  │   EFFECT STATS ROW    │  │  ← Stats: DMG/HEX/HEAL/ARMOR
+│  │   ⚔ 4    ☠ 0    ♥ 0  │  │
+│  └───────────────────────┘  │
+│                             │
+│  Card description text      │  ← Description (flavor text)
+│  explaining what it does.   │
+│                             │
+├─────────────────────────────┤
+│  🎯 1 Random │ ALL Rings    │  ← Target Row
+├─────────────────────────────┤
+│  ⚡ INSTANT    │ gun, fire   │  ← Footer: Timing Badge + Tags
+└─────────────────────────────┘
+```
+
+### UI Components
+
+#### 1. Header Row
+| Element | Display | Example |
+|---------|---------|---------|
+| Cost | Energy cost in circle | `[1]`, `[2]`, `[0]` |
+| Name | Card name | "Infernal Pistol" |
+| Tier | If Tier 2+, show badge | "T2", "T3" |
+
+#### 2. Type Icon (Center)
+Large emoji/icon based on card type:
+| Type | Icon | Color Tint |
+|------|------|------------|
+| Weapon | ⚔️ | Red/Orange |
+| Skill | ✨ | Blue |
+| Hex | ☠️ | Purple |
+| Defense | 🛡️ | Green |
+| Curse | 💀 | Gray |
+
+#### 3. Effect Stats Row
+Compact display of card's numeric effects. Only show non-zero values:
+
+| Stat | Icon | Color | Example |
+|------|------|-------|---------|
+| Damage | ⚔ | Red | `⚔ 4` |
+| Hex | ☠ | Purple | `☠ 3` |
+| Heal | ♥ | Green | `♥ 5` |
+| Armor | 🛡 | Cyan | `🛡 3` |
+| Draw | 📜 | Blue | `📜 1` |
+| Energy | ⚡ | Yellow | `⚡ +1` |
+
+**Examples:**
+- Infernal Pistol: `⚔ 4`
+- Blood Bolt: `⚔ 5  ♥ 2`
+- Soul Rend: `⚔ 3  ☠ 5`
+- Adrenaline: `⚡ +1  📜 1`
+
+#### 4. Target Row
+Shows what the card hits. Two parts: **Scope** and **Rings**
+
+**Scope Options:**
+| Code | Display | Meaning |
+|------|---------|---------|
+| `random_enemy` + count=1 | `🎯 1 Random` | Hits 1 random enemy |
+| `random_enemy` + count=3 | `🎯 3 Random` | Hits 3 random enemies |
+| `ring` + requires_target=false | `🎯 Ring (auto)` | Hits all in fixed ring(s) |
+| `ring` + requires_target=true | `🎯 Ring (choose)` | Player picks ring |
+| `all_enemies` | `🎯 ALL Enemies` | Hits every enemy |
+| `self` | `🎯 Self` | Affects player |
+
+**Ring Display:**
+| Rings | Display |
+|-------|---------|
+| [0] | `M` (Melee) |
+| [1] | `C` (Close) |
+| [2] | `D` (Mid/Distance) |
+| [3] | `F` (Far) |
+| [0,1] | `M C` |
+| [0,1,2,3] | `ALL` |
+| [1,2,3] | `C D F` |
+
+**Combined Examples:**
+| Card | Target Row Display |
+|------|-------------------|
+| Infernal Pistol | `🎯 1 Random │ ALL` |
+| Choirbreaker Shotgun | `🎯 Ring (auto) │ C` |
+| Ember Grenade | `🎯 Ring (choose) │ ALL` |
+| Scatter Shot | `🎯 3 Random │ ALL` |
+| Soul Rend | `🎯 1 Random │ M` |
+| Flamethrower | `🎯 Ring (auto) │ M C` |
+| Plague Cloud | `🎯 ALL Enemies` |
+| Glass Ward | `🎯 Self` |
+
+#### 5. Footer Row (Timing + Tags)
+
+**Timing Badges:**
+| Timing | Badge | Color | When |
+|--------|-------|-------|------|
+| Instant | `⚡ INSTANT` | White | Effect happens once on play |
+| Persistent | `🔁 PERSISTENT` | Gold | Stays in play, triggers each turn |
+| Buff | `✦ BUFF` | Blue | Modifies future actions this turn |
+
+**Tags:**
+Small gray text showing card tags: `gun`, `fire`, `hex`, `armor`, etc.
+
+### Complete Card Examples
+
+#### Infernal Pistol (Weapon)
+```
+┌─────────────────────────────┐
+│ [1] Infernal Pistol         │
+├─────────────────────────────┤
+│           ⚔️                │
+│         ⚔ 4                 │
+│                             │
+│  Fires at a random enemy    │
+│  at the start of each turn. │
+│                             │
+├─────────────────────────────┤
+│  🎯 1 Random │ ALL          │
+├─────────────────────────────┤
+│  🔁 PERSISTENT │ gun        │
+└─────────────────────────────┘
+```
+
+#### Blood Bolt (Weapon)
+```
+┌─────────────────────────────┐
+│ [1] Blood Bolt              │
+├─────────────────────────────┤
+│           ⚔️                │
+│       ⚔ 5    ♥ 2            │
+│                             │
+│  Drain life from a random   │
+│  enemy.                     │
+│                             │
+├─────────────────────────────┤
+│  🎯 1 Random │ ALL          │
+├─────────────────────────────┤
+│  ⚡ INSTANT │ gun, lifesteal│
+└─────────────────────────────┘
+```
+
+#### Simple Hex (Hex)
+```
+┌─────────────────────────────┐
+│ [1] Simple Hex              │
+├─────────────────────────────┤
+│           ☠️                │
+│         ☠ 3                 │
+│                             │
+│  Curse all enemies in the   │
+│  targeted ring.             │
+│                             │
+├─────────────────────────────┤
+│  🎯 Ring (choose) │ ALL     │
+├─────────────────────────────┤
+│  ⚡ INSTANT │ hex           │
+└─────────────────────────────┘
+```
+
+#### Barrier Sigil (Defense)
+```
+┌─────────────────────────────┐
+│ [1] Barrier Sigil           │
+├─────────────────────────────┤
+│           🛡️                │
+│       ⚔ 4    ⏱ 2            │
+│                             │
+│  Create barrier: enemies    │
+│  crossing take damage.      │
+│                             │
+├─────────────────────────────┤
+│  🎯 Ring (choose) │ C D F   │
+├─────────────────────────────┤
+│  ⚡ INSTANT │ barrier       │
+└─────────────────────────────┘
+```
+
+### Color Scheme
+
+**Card Background by Type:**
+| Type | Background | Border |
+|------|------------|--------|
+| Weapon | Dark Red `#2a1515` | Red `#e66450` |
+| Skill | Dark Blue `#151a2a` | Blue `#50a0e6` |
+| Hex | Dark Purple `#1f152a` | Purple `#9050e6` |
+| Defense | Dark Green `#152a1f` | Green `#50e690` |
+
+**Tier Border Colors:**
+| Tier | Border Color |
+|------|--------------|
+| Tier 1 | Gray `#b0b0b0` |
+| Tier 2 | Blue `#4d99ff` |
+| Tier 3 | Gold `#ffcc33` |
+
+### Implementation Notes
+
+1. **Stats Row**: Use `HBoxContainer` with icons + labels, hide if value is 0
+2. **Target Row**: Generate text from `target_type`, `target_rings`, `requires_target`, `target_count`
+3. **Timing Badge**: Check `effect_type == "weapon_persistent"` for persistent, check for buff types
+4. **Ring Display**: Convert ring array `[0,1,2,3]` to letters `M C D F` or `ALL` if all 4
+
+---
+
 ## Detailed Card Definitions
 
-### Currently Implemented (26 cards)
+### Card Description System
 
-**Weapons (8 cards)**
-| Card | Cost | Effect |
-|------|------|--------|
-| Infernal Pistol | 1 | Persistent: Deal 4 damage to random enemy in Mid/Close each turn |
-| Choirbreaker Shotgun | 1 | Deal 6 damage to ALL enemies in Close ring |
-| Riftshard Rifle | 2 | Deal 8 damage to single enemy in Far ring |
-| Ember Grenade | 2 | Deal 4 damage to ALL enemies in target ring (requires targeting) |
-| Void Revolver | 1 | Deal 3 damage to random enemy, draw 1 card |
-| Scatter Shot | 1 | Deal 2 damage to 3 random enemies |
-| Blood Bolt | 1 | Deal 5 damage to random enemy, heal 2 HP |
-| Flamethrower | 2 | Deal 3 damage to ALL enemies in Melee and Close |
+Cards now display explicit effect labels in their description area:
+
+**Instant Effects** (blue): `[color=#88ddff]Instant:[/color] Effect text`
+- Displayed when card has an `instant_description` field set
+- Or auto-generated based on `effect_type` for backward compatibility
+
+**Persistent Effects** (gold): `[color=#ffcc55]Persistent:[/color] Effect text`
+- Displayed when card has a `persistent_description` field set
+- Shows for `weapon_persistent` cards automatically if no explicit description
+
+**Cards with Both Effects:**
+Cards can have both `instant_description` AND `persistent_description` set to show:
+```
+Instant: Deal 3 to a random enemy.
+Persistent: Deal 2 to a random enemy at turn start.
+```
+
+**Placeholders in descriptions:**
+- `{damage}` - Scaled damage value
+- `{hex_damage}` - Scaled hex value
+- `{heal_amount}` - Scaled heal value
+- `{armor}` - Scaled armor value
+- `{duration}` - Scaled duration value
+- `{draw}` - Cards to draw
+- `{target_count}` - Number of targets
+
+### Currently Implemented (27 cards)
+
+**Weapons (9 cards)**
+| Card | Cost | Stats | Target | Timing | Tags |
+|------|------|-------|--------|--------|------|
+| Infernal Pistol | 1 | ⚔4 | 1 Random / ALL | 🔁 Persistent | gun |
+| Choirbreaker Shotgun | 1 | ⚔6 | Ring (auto) / C | ⚡ Instant | gun |
+| Riftshard Rifle | 2 | ⚔8 | 1 Random / F | ⚡ Instant | gun |
+| Ember Grenade | 2 | ⚔4 | Ring (choose) / ALL | ⚡ Instant | explosive |
+| Void Revolver | 1 | ⚔3 📜1 | 1 Random / ALL | ⚡ Instant | gun |
+| Scatter Shot | 1 | ⚔2 | 3 Random / ALL | ⚡ Instant | gun |
+| Blood Bolt | 1 | ⚔5 ♥2 | 1 Random / ALL | ⚡ Instant | gun, lifesteal |
+| Flamethrower | 2 | ⚔3 | Ring (auto) / M C | ⚡ Instant | fire |
+| Rift Turret | 2 | ⚔3 | 1 Random / ALL | ⚡+🔁 Both | gun, persistent |
 
 **Skills (6 cards)**
-| Card | Cost | Effect |
-|------|------|--------|
-| Emergency Medkit | 1 | Heal 5 HP |
-| Adrenaline | 1 | Gain 1 Energy this turn, draw 1 card |
-| Second Wind | 2 | Heal 8 HP |
-| Ritual Focus | 0 | Your next Hex card this turn deals double Hex |
-| Gambit | 1 | Discard your hand, draw 5 cards |
-| Quick Strike | 0 | Deal 2 damage to random enemy |
+| Card | Cost | Stats | Target | Timing | Tags |
+|------|------|-------|--------|--------|------|
+| Emergency Medkit | 1 | ♥5 | Self | ⚡ Instant | heal |
+| Adrenaline | 1 | ⚡+1 📜1 | Self | ⚡ Instant | utility |
+| Second Wind | 2 | ♥8 | Self | ⚡ Instant | heal |
+| Ritual Focus | 0 | ✦2x Hex | Self | ✦ Buff | hex, utility |
+| Gambit | 1 | 📜5 | Self | ⚡ Instant | utility |
+| Quick Strike | 0 | ⚔2 | 1 Random / ALL | ⚡ Instant | attack |
 
 **Hexes (6 cards)**
-| Card | Cost | Effect |
-|------|------|--------|
-| Simple Hex | 1 | Apply 3 Hex to all enemies in target ring |
-| Mark of Gloom | 1 | Apply 4 Hex to single enemy |
-| Plague Cloud | 2 | Apply 2 Hex to ALL enemies |
-| Wither | 1 | Apply 3 Hex to all enemies in Close/Melee |
-| Cheap Curse | 0 | Apply 2 Hex to random enemy |
-| Soul Rend | 2 | Deal 3 damage + apply 5 Hex to single enemy in Melee |
+| Card | Cost | Stats | Target | Timing | Tags |
+|------|------|-------|--------|--------|------|
+| Simple Hex | 1 | ☠3 | Ring (choose) / ALL | ⚡ Instant | hex |
+| Mark of Gloom | 1 | ☠4 | 1 Random / ALL | ⚡ Instant | hex |
+| Plague Cloud | 2 | ☠2 | ALL Enemies | ⚡ Instant | hex |
+| Wither | 1 | ☠3 | Ring (auto) / M C | ⚡ Instant | hex |
+| Cheap Curse | 0 | ☠2 | 1 Random / ALL | ⚡ Instant | hex |
+| Soul Rend | 2 | ⚔3 ☠5 | 1 Random / M | ⚡ Instant | hex |
 
 **Defense (6 cards)**
-| Card | Cost | Effect |
-|------|------|--------|
-| Glass Ward | 1 | Gain 3 Armor |
-| Iron Bastion | 2 | Gain 6 Armor |
-| Barrier Sigil | 1 | Create barrier on target ring: enemies crossing take 4 damage (2 turns) |
-| Draining Shield | 1 | Gain 3 Armor, heal 1 HP for each enemy in Melee |
-| Repulsion | 1 | Push all enemies in Melee back 1 ring |
-| Shield Bash | 1 | Deal damage equal to your Armor to enemy in Melee |
+| Card | Cost | Stats | Target | Timing | Tags |
+|------|------|-------|--------|--------|------|
+| Glass Ward | 1 | 🛡3 | Self | ⚡ Instant | armor |
+| Iron Bastion | 2 | 🛡6 | Self | ⚡ Instant | armor |
+| Barrier Sigil | 1 | ⚔4 ⏱2 | Ring (choose) / C D F | ⚡ Instant | barrier |
+| Draining Shield | 1 | 🛡3 ♥? | Self | ⚡ Instant | armor, lifesteal |
+| Repulsion | 1 | ↗1 | Ring (auto) / M | ⚡ Instant | crowd_control |
+| Shield Bash | 1 | ⚔=🛡 | 1 Random / M | ⚡ Instant | armor, attack |
+
+**Legend:**
+- **Stats**: ⚔=Damage, ☠=Hex, ♥=Heal, 🛡=Armor, 📜=Draw, ⚡=Energy, ⏱=Duration, ↗=Push
+- **Rings**: M=Melee, C=Close, D=Mid, F=Far, ALL=All rings
+- **Timing**: ⚡Instant=On play, 🔁Persistent=Each turn, ✦Buff=Modifies next action
 
 ---
 
@@ -110,26 +373,26 @@ Enemies spawn in the **FAR** ring and advance toward the player each turn:
 ### Currently Implemented (10 enemies)
 
 **Grunt Enemies (5)**
-| Enemy | HP | Damage | Speed | Behavior |
-|-------|-----|--------|-------|----------|
-| Husk | 8 | 4 | 1 ring/turn | Basic melee, walks toward player |
-| Spitter | 6 | 3 | 1 ring/turn | Ranged, stops at Mid ring, attacks from there |
-| Spinecrawler | 6 | 3 | 2 rings/turn | Fast melee, reaches player quickly |
-| Bomber | 8 | 0 | 1 ring/turn | Explodes on death: deals 6 damage to player |
-| Cultist | 4 | 2 | 1 ring/turn | Weak melee enemy, spawns in groups |
+| Enemy | HP | Damage | Speed | Badge | Behavior |
+|-------|-----|--------|-------|-------|----------|
+| Husk | 8 | 4 | 1 ring/turn | 🏃 RUSHER | Basic melee, walks toward player |
+| Spitter | 6 | 3 | 1 ring/turn | 🏹 RANGED | Ranged, stops at Mid ring, attacks from there |
+| Spinecrawler | 6 | 3 | 2 rings/turn | ⚡ FAST | Fast melee, reaches player quickly |
+| Bomber | 8 | 0 | 1 ring/turn | 💣 BOMBER | Explodes on death: deals 6 damage to player |
+| Cultist | 4 | 2 | 1 ring/turn | 🏃 RUSHER | Weak melee enemy, spawns in groups |
 
 **Elite Enemies (4)**
-| Enemy | HP | Damage | Speed | Behavior |
-|-------|-----|--------|-------|----------|
-| Shell Titan | 20 | 8 | 1 ring/turn | High HP tank with 2 armor, slow but deadly |
-| Torchbearer | 10 | 2 | 1 ring/turn | Support: buffs nearby enemies +2 damage, stays at Close |
-| Channeler | 12 | 3 | 1 ring/turn | Elite caster: spawns 1 Husk each turn, stays at Close |
-| Stalker | 8 | 5 | 1 ring/turn | Ambush enemy, spawns directly in Close ring |
+| Enemy | HP | Damage | Speed | Badge | Behavior |
+|-------|-----|--------|-------|-------|----------|
+| Shell Titan | 20 | 8 | 1 ring/turn | 🛡️ TANK | High HP tank with 2 armor, slow but deadly |
+| Torchbearer | 10 | 2 | 1 ring/turn | 📢 BUFFER | Support: buffs nearby enemies +2 damage, stays at Close |
+| Channeler | 12 | 3 | 1 ring/turn | ⚙️ SPAWNER | Elite caster: spawns 1 Husk each turn, stays at Close |
+| Stalker | 8 | 5 | 1 ring/turn | 🗡️ AMBUSH | Ambush enemy, spawns directly in Close ring |
 
 **Boss Enemies (1)**
-| Enemy | HP | Damage | Speed | Behavior |
-|-------|-----|--------|-------|----------|
-| Ember Saint | 50 | 10 | 0 | BOSS: Stays at Far, 3 armor, AoE attacks, spawns Bombers |
+| Enemy | HP | Damage | Speed | Badge | Behavior |
+|-------|-----|--------|-------|-------|----------|
+| Ember Saint | 50 | 10 | 0 | 👑 BOSS | BOSS: Stays at Far, 3 armor, AoE attacks, spawns Bombers |
 
 ---
 
@@ -168,6 +431,7 @@ Enemies spawn in the **FAR** ring and advance toward the player each turn:
 ### Autoloads (Singletons)
 | Script | Purpose |
 |--------|---------|
+| `SettingsManager.gd` | User settings persistence (audio, display, gameplay) |
 | `GameManager.gd` | Scene transitions, game state |
 | `RunManager.gd` | Current run: HP, scrap, deck, wave |
 | `CombatManager.gd` | Turn flow, card playing, enemy AI |
@@ -175,11 +439,14 @@ Enemies spawn in the **FAR** ring and advance toward the player each turn:
 | `EnemyDatabase.gd` | All enemy definitions |
 | `MergeManager.gd` | Triple-merge card upgrades |
 | `ArtifactManager.gd` | Artifact effects |
+| `AudioManager.gd` | Sound effect handling |
+| `CombatAnimationManager.gd` | Combat visual effects and animation sequencing |
 
 ### Key Scenes
 | Scene | Path |
 |-------|------|
 | Main Menu | `scenes/MainMenu.tscn` |
+| Settings | `scenes/Settings.tscn` |
 | Warden Select | `scenes/WardenSelect.tscn` |
 | Combat | `scenes/Combat.tscn` |
 | Shop | `scenes/Shop.tscn` |
@@ -213,62 +480,115 @@ Enemies spawn in the **FAR** ring and advance toward the player each turn:
 - Turn system (draw, play, enemy phase)
 - Ring battlefield with enemy movement
 - BattlefieldArena renders concentric rings, centered warden icon, animated enemy panels, hover tooltips with HP/damage/speed/intent, and now keeps the arena centered on screen while scaling the play space + enemy panels to fill the available area
+- Enemy display system with multi-row distribution (5-8 enemies use inner/outer rows) and overflow stacking (9+ enemies of same type collapse into "x5" stacks)
+- Stack panels expand on hover to show individual enemy HP bars for tactical targeting
+- Damage feedback on stacked enemies shows brief expand animation with flashing mini-panel
 - Card playing with all effect types (damage, heal, armor, hex, push, draw, etc.)
-- 26 cards across 4 types (Weapons, Skills, Hexes, Defense)
+- 27 cards across 4 types (Weapons, Skills, Hexes, Defense)
 - 10 enemies across 3 types (Grunts, Elites, Boss)
-- 10 artifacts with various trigger types
+- 10 artifacts with various trigger types, ALL hooked into combat
 - Enemy spawning from wave definitions
 - Damage system (player and enemies)
 - Visual polish (particles, shake, banners)
 - CardEffectResolver with 18 effect types
+- **Enemy special abilities**: Bomber explosion (6 damage on death), Channeler spawns Husks, Torchbearer buffs +2 damage, Ember Saint spawns Bombers
+- **All 10 artifact triggers wired**: on_turn_start (Quick Draw, Hex Amplifier), on_wave_start (Iron Shell), on_card_play (Ember Charm, Refracting Core), on_kill (Blood Sigil, Scavenger's Eye), on_turn_end (Leech Tooth), passive (Void Heart hex mult, Gun Harness cost reduction)
+- **All 3 Warden passives implemented**:
+  - Ash Warden: Gun cards deal +15% damage to Close/Melee rings
+  - Gloom Warden: Heal 1 HP when hexed enemies die
+  - Glass Warden: Survive fatal hit once per wave at 1 HP
 
-### 🔶 Partially Implemented
-- **MergeManager**: Structure exists, no UI integration
-- **Artifact triggers**: Artifacts defined but not all trigger types hooked into combat
+### ✅ Fully Implemented
+- **MergeManager**: Full triple-merge system with shop UI integration
+- **AudioManager**: Procedural placeholder SFX for all game events
+- **Screen Transitions**: Fade effects on scene changes via GameManager
+- **Combat Clarity System**: Three-layer UX system to reduce cognitive overload:
+  - **Behavior Badges**: Each enemy panel shows an archetype badge (🏃⚡🏹💣📢⚙️🛡️🗡️👑) in top-left corner
+  - **Ring Threat Colors**: Ring borders change color based on threat level (green/yellow/orange/red, pulses red for lethal damage)
+  - **Aggregated Intent Bar**: Top bar shows: ⚔️ incoming damage, 💣 bomber count, 📢 buff status, ⚙️ spawner status, ⚡ fast enemy count
+- **Combat Visual Feedback System**: Slay the Spire-style telegraphed animations:
+  - **Attack Indicators**: Target reticles (┌┐└┘) pulse around enemies before they're hit
+  - **Projectile Effects**: Bullets fly from warden to targets with trailing effects
+  - **Enemy Shake**: Hit enemies shake with intensity based on damage dealt
+  - **Hex Flash**: Purple flash when hex damage triggers
+  - **Stack Expansion**: When attacking grouped enemies, stack expands to show which one was hit
+  - **Card Fly Animation**: Cards animate flying from hand to target position when played
+  - **Weapon Icons**: Active persistent weapons shown as icons (not just text) with fire animations
+  - **Barrier Visuals**: Ring barriers shown with pulsing green glow, icons (🚧), and damage/duration stats
 
 ### ❓ Untested
-- Shop scene (`scenes/Shop.tscn`)
-- Post-Wave Reward scene (`scenes/PostWaveReward.tscn`)
-- Run End scene (`scenes/RunEnd.tscn`)
 - Meta Menu scene (`scenes/MetaMenu.tscn`)
-- Full game loop (win wave → reward → shop → next wave)
 
 ### ❌ Not Implemented
-- Sound effects
-- Warden passive abilities (code exists but not wired)
 - Meta progression save/load
-- Enemy special abilities (bomber explosion, channeler spawning, torchbearer buffs)
+- Real audio files (currently using procedural placeholders)
+
+### Settings System
+**SettingsManager** (`scripts/autoloads/SettingsManager.gd`) handles persistent user settings:
+
+| Category | Settings |
+|----------|----------|
+| Audio | Master Volume (0-100%), SFX Volume (0-100%), Music Volume (0-100%), Mute All |
+| Gameplay | Screen Shake (on/off), Damage Numbers (on/off), Auto End Turn (on/off) |
+| Display | Fullscreen (on/off), VSync (on/off) |
+
+Settings are saved to `user://settings.cfg` and loaded automatically on game start. The Settings scene (`scenes/Settings.tscn`) provides a UI for adjusting all options with immediate feedback.
 
 ---
 
 ## What Needs To Be Done
 
-### Priority 1: Test Full Game Loop ⬅️ CURRENT
-1. Win a wave → should go to PostWaveReward
-2. Pick reward → should go to Shop
-3. Leave shop → should start next wave
-4. Reach wave 12 → boss fight
-5. Win/lose → RunEnd screen
+### ✅ COMPLETED - Full Game Loop
+1. ✅ Win a wave → goes to PostWaveReward
+2. ✅ Pick reward → goes to Shop
+3. ✅ Leave shop → starts next wave
+4. ✅ Reach wave 12 → boss fight
+5. ✅ Win/lose → RunEnd screen
 
-### Priority 2: Wire Enemy Special Abilities
-- **Bomber**: Explode on death, deal damage to player
-- **Channeler**: Spawn Husks each turn
-- **Torchbearer**: Buff nearby enemy damage
-- **Stalker**: Spawn directly in Close ring (handled by WaveDefinition)
+### ✅ COMPLETED - Enemy Special Abilities
+- **Bomber**: ✅ Explodes on death, deals 6 damage to player
+- **Channeler**: ✅ Spawns 1 Husk each turn at Far ring (when at target ring)
+- **Torchbearer**: ✅ Buffs nearby enemy damage +2 (when at target ring)
+- **Ember Saint**: ✅ Spawns 1 Bomber each turn at Far ring
+- **Stalker**: ✅ Spawn directly in Close ring (handled by WaveDefinition)
 
-### Priority 3: Wire Artifact Triggers
-- Hook artifact triggers into CombatManager:
-  - `on_turn_start`: Quick Draw, Hex Amplifier
-  - `on_turn_end`: Leech Tooth
-  - `on_kill`: Blood Sigil, Scavenger's Eye
-  - `on_wave_start`: Iron Shell
-  - `on_card_play`: Ember Charm, Refracting Core
+### ✅ COMPLETED - Artifact Triggers
+All 10 artifacts are wired into CombatManager:
+- `on_turn_start`: Quick Draw (draw +1), Hex Amplifier (1 damage to hexed)
+- `on_turn_end`: Leech Tooth (heal 2 if killed this turn)
+- `on_kill`: Blood Sigil (heal 1), Scavenger's Eye (+1 scrap)
+- `on_wave_start`: Iron Shell (gain 3 armor)
+- `on_card_play`: Ember Charm (+2 gun damage), Refracting Core (+1 armor)
+- `passive`: Void Heart (hex +50%), Gun Harness (first gun -1 cost)
 
-### Priority 4: Polish
-- Sound effects for card play, damage, death
-- More particle effects
-- Screen transitions
-- Warden passive abilities
+### ✅ COMPLETED - Warden Passives
+All 3 Warden passives are implemented:
+- **Ash Warden**: Gun cards deal +15% damage to Close/Melee rings
+- **Gloom Warden**: Heal 1 HP when hexed enemies die
+- **Glass Warden**: Survive fatal hit once per wave (reset each wave)
+
+### ✅ COMPLETED - Polish
+- ✅ Sound effects via AudioManager (procedural placeholders)
+- ✅ Screen transitions (fade effect in GameManager)
+- ✅ Death burst particles
+
+### ✅ COMPLETED - MergeManager UI
+- ✅ Triple-merge UI integrated into Shop screen
+- ✅ "Available Merges" section shows when 3+ copies exist
+- ✅ Merge/Decline buttons with scrap cost
+
+### Priority 1: Balance & Content ⬅️ NEXT
+- Tune difficulty curve
+- Test all wave compositions
+- Verify artifact and warden balance
+
+### Priority 2: Real Audio Assets
+- Replace procedural SFX with real audio files
+- Add background music
+
+### Priority 3: Meta Progression
+- Save/load system for unlocks
+- Meta Menu functionality
 
 ---
 

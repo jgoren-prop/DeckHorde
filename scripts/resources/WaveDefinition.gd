@@ -40,8 +40,9 @@ static func create_basic_wave(wave_num: int) -> WaveDefinition:
 	wave.wave_number = wave_num
 	wave.wave_name = "Wave " + str(wave_num)
 	
-	# Scale turn limit with wave
-	wave.turn_limit = 4 + int(wave_num / 4)
+	# Scale turn limit with wave (integer division is intentional)
+	@warning_ignore("integer_division")
+	wave.turn_limit = 4 + wave_num / 4
 	
 	# Determine wave type
 	if wave_num == 12:
@@ -72,6 +73,7 @@ static func _generate_initial_spawns(wave_num: int, is_elite: bool, is_boss: boo
 	elif is_elite:
 		# Elite wave
 		spawns.append({"enemy_id": "channeler", "count": 1, "ring": BattlefieldStateScript.Ring.FAR})
+		@warning_ignore("integer_division")
 		spawns.append({"enemy_id": "husk", "count": 3 + wave_num / 2, "ring": BattlefieldStateScript.Ring.FAR})
 		spawns.append({"enemy_id": "spitter", "count": 2, "ring": BattlefieldStateScript.Ring.FAR})
 	else:
@@ -86,6 +88,7 @@ static func _generate_initial_spawns(wave_num: int, is_elite: bool, is_boss: boo
 		
 		# Add variety in later waves
 		if wave_num >= 3:
+			@warning_ignore("integer_division")
 			spawns.append({"enemy_id": "spinecrawler", "count": wave_num / 3, "ring": BattlefieldStateScript.Ring.FAR})
 		
 		if wave_num >= 5:
@@ -106,7 +109,7 @@ static func _generate_phase_spawns(wave_num: int, is_elite: bool, is_boss: bool)
 	else:
 		# Normal waves get reinforcements in later waves
 		if wave_num >= 4:
+			@warning_ignore("integer_division")
 			spawns.append({"enemy_id": "husk", "count": 1 + wave_num / 4, "ring": BattlefieldStateScript.Ring.FAR})
 	
 	return spawns
-

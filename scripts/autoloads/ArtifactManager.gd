@@ -239,7 +239,7 @@ func trigger_artifacts(trigger_type: String, context: Dictionary = {}) -> Dictio
 			"bonus_armor":
 				effects.bonus_armor += artifact.effect_value
 			"gain_armor":
-				RunManager.armor += artifact.effect_value
+				RunManager.add_armor(artifact.effect_value)
 			"heal":
 				RunManager.heal(artifact.effect_value)
 			"draw_cards":
@@ -289,3 +289,33 @@ func get_random_artifact(exclude_ids: Array = []):
 	if available.size() > 0:
 		return artifacts[available[randi() % available.size()]]
 	return null
+
+
+func get_available_artifacts() -> Array:
+	"""Get all artifacts that are not equipped yet (for shop)."""
+	var result: Array = []
+	for artifact_id: String in artifacts.keys():
+		if artifact_id not in equipped_artifacts:
+			var artifact = artifacts[artifact_id]
+			# Convert to dictionary for easier use in Shop UI
+			result.append({
+				"artifact_id": artifact.artifact_id,
+				"artifact_name": artifact.artifact_name,
+				"description": artifact.get_description_with_values(),
+				"rarity": artifact.rarity,
+				"cost": artifact.base_cost,
+				"icon": artifact.icon,
+				"icon_color": artifact.icon_color
+			})
+	return result
+
+
+func acquire_artifact(artifact_id: String) -> bool:
+	"""Acquire an artifact (purchase from shop)."""
+	if artifact_id in equipped_artifacts:
+		return false
+	if not artifacts.has(artifact_id):
+		return false
+	
+	equip_artifact(artifact_id)
+	return true
