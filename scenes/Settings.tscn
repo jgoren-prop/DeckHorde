@@ -243,6 +243,13 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 16
 text = "Back"
 
+[node name="QuitButton" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer/ButtonContainer"]
+custom_minimum_size = Vector2(150, 45)
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+theme_override_colors/font_color = Color(0.9, 0.3, 0.3, 1)
+text = "Quit Game"
+
 [connection signal="value_changed" from="PanelContainer/MarginContainer/VBoxContainer/MasterVolumeContainer/MasterVolumeSlider" to="." method="_on_master_volume_changed"]
 [connection signal="value_changed" from="PanelContainer/MarginContainer/VBoxContainer/SFXVolumeContainer/SFXVolumeSlider" to="." method="_on_sfx_volume_changed"]
 [connection signal="value_changed" from="PanelContainer/MarginContainer/VBoxContainer/MusicVolumeContainer/MusicVolumeSlider" to="." method="_on_music_volume_changed"]
@@ -254,4 +261,5 @@ text = "Back"
 [connection signal="toggled" from="PanelContainer/MarginContainer/VBoxContainer/VSyncContainer/VSyncCheckBox" to="." method="_on_vsync_toggled"]
 [connection signal="pressed" from="PanelContainer/MarginContainer/VBoxContainer/ButtonContainer/ResetButton" to="." method="_on_reset_pressed"]
 [connection signal="pressed" from="PanelContainer/MarginContainer/VBoxContainer/ButtonContainer/BackButton" to="." method="_on_back_pressed"]
+[connection signal="pressed" from="PanelContainer/MarginContainer/VBoxContainer/ButtonContainer/QuitButton" to="." method="_on_quit_pressed"]
 

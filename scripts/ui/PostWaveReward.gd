@@ -74,7 +74,7 @@ func _show_card_selection() -> void:
 	card_selection.visible = true
 
 
-func _on_card_selected(card_def, tier: int, index: int) -> void:  # card_def: CardDefinition
+func _on_card_selected(card_def, _tier: int, _index: int) -> void:  # card_def: CardDefinition
 	# Add card to deck
 	RunManager.add_card_to_deck(card_def.card_id, 1)
 	print("[PostWaveReward] Added card: ", card_def.card_name)

@@ -12,10 +12,82 @@ var transition_rect: ColorRect
 var is_transitioning: bool = false
 const FADE_DURATION: float = 0.3
 
+# Settings overlay system
+var settings_overlay_layer: CanvasLayer
+var settings_overlay_instance: Control = null
+var is_settings_open: bool = false
+const SETTINGS_SCENE_PATH: String = "res://scenes/Settings.tscn"
+
 
 func _ready() -> void:
+	# Allow GameManager to process input even when game is paused
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	_setup_transition_layer()
+	_setup_settings_overlay_layer()
 	print("[GameManager] Initialized")
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("ui_cancel"):
+		toggle_settings_overlay()
+		get_viewport().set_input_as_handled()
+
+
+func _setup_settings_overlay_layer() -> void:
+	"""Create the layer for the settings overlay."""
+	settings_overlay_layer = CanvasLayer.new()
+	settings_overlay_layer.layer = 99  # Below transition layer but above everything else
+	add_child(settings_overlay_layer)
+
+
+func toggle_settings_overlay() -> void:
+	"""Toggle the settings menu overlay."""
+	if is_settings_open:
+		close_settings_overlay()
+	else:
+		open_settings_overlay()
+
+
+func open_settings_overlay() -> void:
+	"""Open settings as an overlay on any screen."""
+	if is_settings_open or is_transitioning:
+		return
+	
+	# Don't open overlay if we're already on the settings scene
+	var current_scene: Node = get_tree().current_scene
+	if current_scene and current_scene.name == "Settings":
+		return
+	
+	is_settings_open = true
+	
+	# Load and instantiate settings scene
+	var settings_scene: PackedScene = load(SETTINGS_SCENE_PATH)
+	settings_overlay_instance = settings_scene.instantiate()
+	settings_overlay_instance.set_meta("is_overlay", true)  # Mark as overlay mode
+	settings_overlay_layer.add_child(settings_overlay_instance)
+	
+	# Pause the game tree (optional - keeps game paused while in settings)
+	get_tree().paused = true
+	settings_overlay_instance.process_mode = Node.PROCESS_MODE_ALWAYS
+	
+	print("[GameManager] Settings overlay opened")
+
+
+func close_settings_overlay() -> void:
+	"""Close the settings overlay."""
+	if not is_settings_open:
+		return
+	
+	is_settings_open = false
+	
+	if settings_overlay_instance:
+		settings_overlay_instance.queue_free()
+		settings_overlay_instance = null
+	
+	# Unpause the game
+	get_tree().paused = false
+	
+	print("[GameManager] Settings overlay closed")
 
 
 func _setup_transition_layer() -> void:

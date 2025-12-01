@@ -1,6 +1,7 @@
 extends Control
 ## CardUI - Visual representation of a card in hand
 ## Supports drag-and-drop targeting for cards that require targets
+## Features compact display with expand-on-hover for readability
 
 signal card_clicked(card_def, tier: int, hand_index: int)  # card_def: CardDefinition
 signal card_hovered(card_def, tier: int, is_hovering: bool)  # card_def: CardDefinition
@@ -30,9 +31,7 @@ signal card_drag_ended(card_def, tier: int, hand_index: int, drop_position: Vect
 @onready var target_row: Panel = $CardBackground/VBox/TargetRow
 @onready var target_label: Label = $CardBackground/VBox/TargetRow/TargetLabel
 
-# Footer
-@onready var timing_badge: Panel = $CardBackground/VBox/Footer/TimingBadge
-@onready var timing_label: Label = $CardBackground/VBox/Footer/TimingBadge/TimingLabel
+# Footer (tags only now)
 @onready var tags_label: Label = $CardBackground/VBox/Footer/TagsLabel
 
 @onready var click_area: Button = $ClickArea
@@ -43,6 +42,11 @@ var hand_index: int = -1
 
 # When false, card always displays at full brightness (for shop/deck viewer)
 var check_playability: bool = true
+
+# Fan layout support
+var fan_index: int = 0  # Position in the fan (0 = leftmost)
+var fan_total: int = 1  # Total cards in fan
+var fan_rotation: float = 0.0  # Rotation applied by fan layout
 
 # Drag state
 var is_dragging: bool = false
@@ -55,12 +59,48 @@ var is_being_played: bool = false  # Flag to prevent return animation if card is
 var active_tween: Tween = null  # Track active tween to kill if needed
 var hover_tween: Tween = null  # Track hover tween separately
 
+# Hover expansion settings
+const HOVER_SCALE: Vector2 = Vector2(1.5, 1.5)  # Bigger on hover for readability
+const HOVER_LIFT: float = 80.0  # Lift card up
+const HOVER_DURATION: float = 0.12  # Animation speed
+const DEFAULT_SCALE: Vector2 = Vector2(1.0, 1.0)
+
 const TYPE_ICONS: Dictionary = {
 	"weapon": "⚔️",
 	"skill": "✨",
 	"hex": "☠️",
 	"defense": "🛡️",
 	"curse": "💀"
+}
+
+# V2 Core type icons (from tags)
+const CORE_TYPE_ICONS: Dictionary = {
+	"gun": "🔫",
+	"hex": "☠️",
+	"barrier": "🚧",
+	"defense": "🛡️",
+	"skill": "✨",
+	"engine": "⚙️"
+}
+
+# V2 Family tag colors for synergy display
+const FAMILY_TAG_COLORS: Dictionary = {
+	"lifedrain": Color(0.8, 0.3, 0.3),      # Red - vampire/sustain
+	"hex_ritual": Color(0.6, 0.2, 0.8),     # Purple - dark magic
+	"fortress": Color(0.4, 0.6, 0.8),       # Steel blue - tank
+	"barrier_trap": Color(0.9, 0.6, 0.2),   # Orange - traps
+	"volatile": Color(1.0, 0.4, 0.1),       # Bright orange - risky
+	"engine_core": Color(0.3, 0.8, 0.5)     # Green - economy
+}
+
+# V2 Family tag display names
+const FAMILY_TAG_NAMES: Dictionary = {
+	"lifedrain": "Lifedrain",
+	"hex_ritual": "Hex Ritual",
+	"fortress": "Fortress",
+	"barrier_trap": "Trap",
+	"volatile": "Volatile",
+	"engine_core": "Engine"
 }
 
 const TYPE_COLORS: Dictionary = {
@@ -93,6 +133,9 @@ func _ready() -> void:
 	click_area.button_up.connect(_on_button_up)
 	click_area.mouse_entered.connect(_on_mouse_entered)
 	click_area.mouse_exited.connect(_on_mouse_exited)
+	
+	# Set pivot to bottom center for better hover animation
+	pivot_offset = Vector2(size.x / 2, size.y)
 
 
 func setup(card, card_tier: int, index: int) -> void:  # card: CardDefinition
@@ -124,20 +167,24 @@ func _update_display() -> void:
 	else:
 		tier_label.text = ""
 	
-	# Type icon
-	type_icon.text = TYPE_ICONS.get(card_def.card_type, "📜")
+	# Type icon - prefer V2 core type tag, fall back to legacy card_type
+	var core_type: String = card_def.get_core_type()
+	if core_type != "" and CORE_TYPE_ICONS.has(core_type):
+		type_icon.text = CORE_TYPE_ICONS[core_type]
+	else:
+		type_icon.text = TYPE_ICONS.get(card_def.card_type, "📜")
 	
 	# Stats row
 	_update_stats_row()
 	
-	# Description (flavor text)
+	# Description (flavor text with Instant/Persistent labels)
 	var desc_text: String = _get_flavor_description()
 	description.text = "[center]" + desc_text + "[/center]"
 	
-	# Target row
+	# Target row (now shows targeting info)
 	_update_target_row()
 	
-	# Footer (timing + tags)
+	# Footer (tags only)
 	_update_footer()
 	
 	# Apply type color to background
@@ -209,37 +256,37 @@ func _update_target_row() -> void:
 	# Determine scope based on target_type
 	match card_def.target_type:
 		"self":
-			scope_text = "🎯 Self"
+			scope_text = "Self"
 		"random_enemy":
 			var count: int = card_def.target_count if card_def.target_count > 0 else 1
 			if count == 1:
-				scope_text = "🎯 1 Random"
+				scope_text = "1 Random"
 			else:
-				scope_text = "🎯 " + str(count) + " Random"
+				scope_text = str(count) + " Random"
 		"ring":
 			if card_def.requires_target:
-				scope_text = "🎯 Ring (choose)"
+				scope_text = "Ring (choose)"
 			else:
-				scope_text = "🎯 Ring (auto)"
+				scope_text = "Ring"
 		"all_rings":
-			scope_text = "🎯 ALL Rings"
+			scope_text = "All Rings"
 		"all_enemies":
-			scope_text = "🎯 ALL Enemies"
+			scope_text = "All Enemies"
 		_:
 			# Default for cards without targeting (self-targeting skills)
-			scope_text = "🎯 Self"
+			scope_text = "Self"
 	
 	# Determine rings text
 	if card_def.target_type != "self" and card_def.target_type != "all_enemies":
 		rings_text = _get_rings_text(card_def.target_rings)
 	
-	# Combine
+	# Combine into compact format
 	if rings_text != "" and rings_text != "ALL":
-		target_label.text = scope_text + " │ " + rings_text
+		target_label.text = "🎯 " + scope_text + " │ " + rings_text
 	elif rings_text == "ALL" and card_def.target_type != "all_enemies":
-		target_label.text = scope_text + " │ ALL"
+		target_label.text = "🎯 " + scope_text + " │ ALL"
 	else:
-		target_label.text = scope_text
+		target_label.text = "🎯 " + scope_text
 
 
 func _get_rings_text(rings: Array) -> String:
@@ -269,32 +316,49 @@ func _get_rings_text(rings: Array) -> String:
 
 
 func _update_footer() -> void:
-	"""Update the footer with timing badge and tags."""
-	# Timing badge
-	var timing_text: String = "⚡ INSTANT"
-	var timing_color: Color = Color(0.8, 0.8, 0.8)
+	"""Update the footer with tags only (timing is shown in description)."""
+	# Tags display
+	tags_label.text = _format_tags_display()
+
+
+func _format_tags_display() -> String:
+	"""Format tags for display: core type icon + family tags."""
+	if card_def.tags.size() == 0:
+		return ""
 	
-	if card_def.effect_type == "weapon_persistent":
-		timing_text = "🔁 PERSISTENT"
-		timing_color = Color(1.0, 0.85, 0.3)  # Gold
-	elif card_def.effect_type == "buff":
-		timing_text = "✦ BUFF"
-		timing_color = Color(0.5, 0.7, 1.0)  # Blue
+	var parts: Array[String] = []
 	
-	timing_label.text = timing_text
-	timing_label.add_theme_color_override("font_color", timing_color)
+	# Get core type (gun, hex, barrier, defense, skill, engine)
+	var core_type: String = card_def.get_core_type()
+	if core_type != "":
+		var icon: String = CORE_TYPE_ICONS.get(core_type, "")
+		if icon != "":
+			parts.append(icon)
 	
-	# Style timing badge background
-	var badge_style: StyleBoxFlat = StyleBoxFlat.new()
-	badge_style.bg_color = Color(0.1, 0.1, 0.12, 0.8)
-	badge_style.set_corner_radius_all(3)
-	timing_badge.add_theme_stylebox_override("panel", badge_style)
+	# Get family tags (lifedrain, hex_ritual, fortress, etc.)
+	var family_tags: Array[String] = card_def.get_family_tags()
+	for family_tag: String in family_tags:
+		var display_name: String = FAMILY_TAG_NAMES.get(family_tag, family_tag.capitalize())
+		parts.append(display_name)
 	
-	# Tags
-	if card_def.tags.size() > 0:
-		tags_label.text = ", ".join(card_def.tags)
+	if parts.size() == 0:
+		return ""
+	elif parts.size() == 1:
+		return parts[0]
 	else:
-		tags_label.text = ""
+		# Format: "🔫 │ Volatile, Lifedrain"
+		var core_part: String = parts[0] if core_type != "" else ""
+		var family_part: String = ""
+		
+		if core_type != "" and family_tags.size() > 0:
+			# Skip the first part (icon) and join the rest
+			var family_names: Array[String] = []
+			for i: int in range(1, parts.size()):
+				family_names.append(parts[i])
+			family_part = ", ".join(family_names)
+			return core_part + " │ " + family_part
+		else:
+			return ", ".join(parts)
 
 
 func _get_flavor_description() -> String:
@@ -316,66 +380,66 @@ func _get_flavor_description() -> String:
 	# Fall back to auto-generated descriptions for cards without explicit descriptions
 	match card_def.effect_type:
 		"weapon_persistent":
-			return "[color=#ffcc55]Persistent:[/color] Deal " + str(card_def.get_scaled_value("damage", tier)) + " to a random enemy each turn."
+			return "[color=#ffcc55]Persistent:[/color] Deal " + str(card_def.get_scaled_value("damage", tier)) + " to random enemy."
 		"instant_damage":
 			var dmg: int = card_def.get_scaled_value("damage", tier)
 			if card_def.target_type == "ring" and not card_def.requires_target:
-				return "[color=#88ddff]Instant:[/color] Deal " + str(dmg) + " to all enemies in range."
+				return "[color=#88ddff]Instant:[/color] Deal " + str(dmg) + " to all in range."
 			elif card_def.target_type == "ring" and card_def.requires_target:
-				return "[color=#88ddff]Instant:[/color] Deal " + str(dmg) + " to all enemies in chosen ring."
+				return "[color=#88ddff]Instant:[/color] Deal " + str(dmg) + " to ring."
 			else:
-				return "[color=#88ddff]Instant:[/color] Deal " + str(dmg) + " to random enemy."
+				return "[color=#88ddff]Instant:[/color] Deal " + str(dmg) + " damage."
 		"scatter_damage":
 			var dmg: int = card_def.get_scaled_value("damage", tier)
-			return "[color=#88ddff]Instant:[/color] Deal " + str(dmg) + " to " + str(card_def.target_count) + " random enemies."
+			return "[color=#88ddff]Instant:[/color] Deal " + str(dmg) + " to " + str(card_def.target_count) + " random."
 		"damage_and_draw":
 			var dmg: int = card_def.get_scaled_value("damage", tier)
-			return "[color=#88ddff]Instant:[/color] Deal " + str(dmg) + " to random enemy. Draw " + str(card_def.cards_to_draw) + " card."
+			return "[color=#88ddff]Instant:[/color] Deal " + str(dmg) + ". Draw " + str(card_def.cards_to_draw) + "."
 		"damage_and_heal":
 			var dmg: int = card_def.get_scaled_value("damage", tier)
 			var heal: int = card_def.get_scaled_value("heal_amount", tier)
-			return "[color=#88ddff]Instant:[/color] Deal " + str(dmg) + ", heal " + str(heal) + " HP."
+			return "[color=#88ddff]Instant:[/color] Deal " + str(dmg) + ", heal " + str(heal) + "."
 		"heal":
 			var heal: int = card_def.get_scaled_value("heal_amount", tier)
 			return "[color=#88ddff]Instant:[/color] Heal " + str(heal) + " HP."
 		"energy_and_draw":
-			return "[color=#88ddff]Instant:[/color] Gain " + str(card_def.buff_value) + " Energy. Draw " + str(card_def.cards_to_draw) + " card."
+			return "[color=#88ddff]Instant:[/color] Gain " + str(card_def.buff_value) + " Energy. Draw " + str(card_def.cards_to_draw) + "."
 		"gambit":
-			return "[color=#88ddff]Instant:[/color] Discard hand, draw " + str(card_def.cards_to_draw) + " cards."
+			return "[color=#88ddff]Instant:[/color] Discard hand, draw " + str(card_def.cards_to_draw) + "."
 		"buff":
 			if card_def.buff_type == "hex_damage":
-				return "[color=#88ddff]Instant:[/color] Your next Hex deals double."
-			return "[color=#88ddff]Instant:[/color] Apply a temporary buff."
+				return "[color=#88ddff]Instant:[/color] Next Hex deals double."
+			return "[color=#88ddff]Instant:[/color] Apply buff."
 		"apply_hex":
 			var hex: int = card_def.get_scaled_value("hex_damage", tier)
 			if card_def.target_type == "all_enemies":
-				return "[color=#88ddff]Instant:[/color] Apply " + str(hex) + " Hex to ALL enemies."
+				return "[color=#88ddff]Instant:[/color] Apply " + str(hex) + " Hex to ALL."
 			elif card_def.target_type == "ring" and card_def.requires_target:
-				return "[color=#88ddff]Instant:[/color] Apply " + str(hex) + " Hex to enemies in chosen ring."
+				return "[color=#88ddff]Instant:[/color] Apply " + str(hex) + " Hex to ring."
 			elif card_def.target_type == "ring":
-				return "[color=#88ddff]Instant:[/color] Apply " + str(hex) + " Hex to enemies in range."
-			return "[color=#88ddff]Instant:[/color] Apply " + str(hex) + " Hex to random enemy."
+				return "[color=#88ddff]Instant:[/color] Apply " + str(hex) + " Hex in range."
+			return "[color=#88ddff]Instant:[/color] Apply " + str(hex) + " Hex."
 		"damage_and_hex":
 			var dmg: int = card_def.get_scaled_value("damage", tier)
 			var hex: int = card_def.get_scaled_value("hex_damage", tier)
-			return "[color=#88ddff]Instant:[/color] Deal " + str(dmg) + " and apply " + str(hex) + " Hex."
+			return "[color=#88ddff]Instant:[/color] Deal " + str(dmg) + " + " + str(hex) + " Hex."
 		"gain_armor":
 			var armor: int = card_def.get_scaled_value("armor_amount", tier)
 			return "[color=#88ddff]Instant:[/color] Gain " + str(armor) + " Armor."
 		"ring_barrier":
 			var dmg: int = card_def.get_scaled_value("damage", tier)
 			var dur: int = card_def.get_scaled_value("duration", tier)
-			return "[color=#88ddff]Instant:[/color] Create barrier (" + str(dmg) + " dmg, " + str(dur) + " turns)."
+			return "[color=#88ddff]Instant:[/color] Barrier (" + str(dmg) + " dmg, " + str(dur) + "t)."
 		"armor_and_lifesteal":
 			var armor: int = card_def.get_scaled_value("armor_amount", tier)
-			return "[color=#88ddff]Instant:[/color] Gain " + str(armor) + " Armor. Heal 1 per Melee enemy."
+			return "[color=#88ddff]Instant:[/color] " + str(armor) + " Armor. Heal per Melee."
 		"push_enemies":
 			if card_def.requires_target:
-				return "[color=#88ddff]Instant:[/color] Push enemies in chosen ring back " + str(card_def.push_amount) + " ring."
+				return "[color=#88ddff]Instant:[/color] Push ring back " + str(card_def.push_amount) + "."
 			else:
-				return "[color=#88ddff]Instant:[/color] Push enemies back " + str(card_def.push_amount) + " ring."
+				return "[color=#88ddff]Instant:[/color] Push back " + str(card_def.push_amount) + " ring."
 		"shield_bash":
-			return "[color=#88ddff]Instant:[/color] Deal damage equal to your Armor."
+			return "[color=#88ddff]Instant:[/color] Deal damage = Armor."
 		_:
 			return card_def.get_description_with_values(tier)
 
@@ -407,7 +471,7 @@ func _apply_style() -> void:
 	var tier_color: Color = TIER_COLORS[tier - 1] if tier <= 3 else TIER_COLORS[2]
 	style.border_color = tier_color
 	style.set_border_width_all(2)
-	style.set_corner_radius_all(10)
+	style.set_corner_radius_all(8)
 	
 	card_background.add_theme_stylebox_override("panel", style)
 	
@@ -445,15 +509,6 @@ func _process(_delta: float) -> void:
 		# Follow mouse while dragging
 		var mouse_pos: Vector2 = get_global_mouse_position()
 		var new_global_pos: Vector2 = mouse_pos - drag_offset
-		
-		# Check if position changed significantly (debug)
-		var pos_delta: Vector2 = new_global_pos - global_position
-		if pos_delta.length() > 1.0:  # Only log if moved more than 1 pixel
-			print("[CardUI DEBUG] Position update - card: ", card_def.card_name if card_def else "null",
-				  " | mouse: ", mouse_pos, " | drag_offset: ", drag_offset,
-				  " | new global: ", new_global_pos, " | old global: ", global_position,
-				  " | delta: ", pos_delta, " | parent: ", str(get_parent().name) if get_parent() else "null")
-		
 		global_position = new_global_pos
 
 
@@ -481,13 +536,12 @@ func _on_button_down() -> void:
 	z_index = 100  # Bring to front while dragging
 	drag_offset = get_global_mouse_position() - global_position
 	
-	print("[CardUI DEBUG] Drag started - card: ", card_def.card_name if card_def else "null", 
-		  " | local pos: ", original_position, " | global pos: ", original_global_position,
-		  " | parent: ", str(get_parent().name) if get_parent() else "null")
+	# Reset rotation when dragging
+	rotation = 0.0
 	
-	# Scale up while dragging
+	# Scale up while dragging (from hover scale back to slightly larger)
 	active_tween = create_tween()
-	active_tween.tween_property(self, "scale", Vector2(1.15, 1.15), 0.1)
+	active_tween.tween_property(self, "scale", Vector2(1.3, 1.3), 0.1)
 	
 	card_drag_started.emit(card_def, tier, hand_index)
 
@@ -506,11 +560,6 @@ func _on_button_up() -> void:
 	# Get drop position before resetting
 	var drop_pos: Vector2 = get_global_mouse_position()
 	
-	print("[CardUI DEBUG] Drag ended - card: ", card_def.card_name if card_def else "null",
-		  " | current global pos: ", global_position, " | drop pos: ", drop_pos,
-		  " | original local pos: ", original_position, " | original global pos: ", original_global_position,
-		  " | parent: ", str(get_parent().name) if get_parent() else "null")
-	
 	# Emit drag ended signal with drop position
 	card_drag_ended.emit(card_def, tier, hand_index, drop_pos)
 	
@@ -525,53 +574,33 @@ func _on_button_up() -> void:
 	
 	# Check parent context - if parent changed, original_position might be invalid
 	var current_parent: Node = get_parent()
-	var parent_changed: bool = false
+	var _parent_changed: bool = false
 	if current_parent and original_parent:
 		# Check if we're still in the hand
 		var is_in_hand: bool = current_parent == original_parent
 		if not is_in_hand:
-			parent_changed = true
-			print("[CardUI DEBUG] WARNING - Parent changed! Original parent context may be invalid")
+			_parent_changed = true
 	
 	if not is_being_played and is_instance_valid(self) and current_parent == original_parent:
-		# Only return if we're still in the original parent (CardHand)
-		# HBoxContainer will automatically position the card, so we just need to:
-		# 1. Reset position to let container handle it
-		# 2. Animate scale back to normal
-		
-		print("[CardUI DEBUG] Returning card - card: ", card_def.card_name if card_def else "null",
-			  " | current position: ", position, " | original position: ", original_position)
-		
 		# Kill any existing tweens
 		if active_tween and active_tween.is_valid():
 			active_tween.kill()
 		
-		# Reset position immediately - let HBoxContainer handle layout
-		# Store the original position's Y for hover effects
-		var hand_container: HBoxContainer = current_parent as HBoxContainer
-		if hand_container:
-			# HBoxContainer will auto-position, but we need to reset Y to 0 for hover to work
-			position = Vector2(position.x, 0.0)  # Keep X, reset Y
-			set_meta("hover_base_y", 0.0)
-		else:
-			# Not in HBoxContainer - use original position
-			position = original_position
-			set_meta("hover_base_y", original_position.y)
+		# Restore fan rotation
+		rotation = fan_rotation
+		
+		# Reset position for fan layout
+		position = original_position
 		
 		# Animate scale back to normal
 		active_tween = create_tween()
 		active_tween.set_ease(Tween.EASE_OUT)
 		active_tween.set_trans(Tween.TRANS_BACK)
-		active_tween.tween_property(self, "scale", Vector2.ONE, 0.25)
+		active_tween.tween_property(self, "scale", DEFAULT_SCALE, 0.25)
 		
 		active_tween.finished.connect(func():
 			active_tween = null
-			print("[CardUI DEBUG] Return animation finished - final position: ", position)
 		)
-	elif parent_changed:
-		print("[CardUI DEBUG] Card parent changed, cannot return - card: ", card_def.card_name if card_def else "null")
-	else:
-		print("[CardUI DEBUG] Card is being played, skipping return animation - card: ", card_def.card_name if card_def else "null")
 
 
 func _on_mouse_entered() -> void:
@@ -583,22 +612,25 @@ func _on_mouse_entered() -> void:
 		hover_tween.kill()
 		hover_tween = null
 	
-	# Store original position for hover (use current position, not meta)
-	var hover_base_y: float = position.y
-	if not has_meta("hover_base_y"):
-		set_meta("hover_base_y", hover_base_y)
-	else:
-		# Update hover_base_y to current position if card was moved
-		hover_base_y = get_meta("hover_base_y", position.y)
+	# Store original position for hover
+	if not has_meta("hover_base_pos"):
+		set_meta("hover_base_pos", position)
+		set_meta("hover_base_rotation", rotation)
 	
-	# Hover effect - scale up and lift card
+	var base_pos: Vector2 = get_meta("hover_base_pos", position)
+	
+	# Hover effect - scale up and lift card up (negative Y), reset rotation for readability
 	hover_tween = create_tween()
-	hover_tween.tween_property(self, "scale", Vector2(1.08, 1.08), 0.1)
-	hover_tween.parallel().tween_property(self, "position:y", hover_base_y - 50, 0.1)
+	hover_tween.set_ease(Tween.EASE_OUT)
+	hover_tween.set_trans(Tween.TRANS_BACK)
+	hover_tween.set_parallel(true)
+	hover_tween.tween_property(self, "scale", HOVER_SCALE, HOVER_DURATION)
+	hover_tween.tween_property(self, "position:y", base_pos.y - HOVER_LIFT, HOVER_DURATION)
+	hover_tween.tween_property(self, "rotation", 0.0, HOVER_DURATION)  # Straighten card
 	hover_tween.finished.connect(func(): hover_tween = null)
 	
 	# Bring to front
-	z_index = 10
+	z_index = 50
 	
 	card_hovered.emit(card_def, tier, true)
 
@@ -612,14 +644,37 @@ func _on_mouse_exited() -> void:
 		hover_tween.kill()
 		hover_tween = null
 	
-	# Reset hover effect - get the base Y from meta, or use current position if not set
-	var base_y: float = get_meta("hover_base_y", position.y + 50)
+	# Reset hover effect
+	var base_pos: Vector2 = get_meta("hover_base_pos", position)
+	var base_rotation: float = get_meta("hover_base_rotation", fan_rotation)
 	
 	hover_tween = create_tween()
-	hover_tween.tween_property(self, "scale", Vector2.ONE, 0.1)
-	hover_tween.parallel().tween_property(self, "position:y", base_y, 0.1)
+	hover_tween.set_ease(Tween.EASE_OUT)
+	hover_tween.set_trans(Tween.TRANS_QUAD)
+	hover_tween.set_parallel(true)
+	hover_tween.tween_property(self, "scale", DEFAULT_SCALE, HOVER_DURATION)
+	hover_tween.tween_property(self, "position:y", base_pos.y, HOVER_DURATION)
+	hover_tween.tween_property(self, "rotation", base_rotation, HOVER_DURATION)  # Restore fan rotation
 	hover_tween.finished.connect(func(): hover_tween = null)
 	
-	z_index = 0
+	z_index = fan_index  # Use fan index for z-ordering
 	
 	card_hovered.emit(card_def, tier, false)
+
+
+func set_fan_position(index: int, total: int, pos: Vector2, rot: float) -> void:
+	"""Set the card's position and rotation in the fan layout."""
+	fan_index = index
+	fan_total = total
+	fan_rotation = rot
+	
+	position = pos
+	rotation = rot
+	z_index = index
+	
+	# Store for hover restoration
+	set_meta("hover_base_pos", pos)
+	set_meta("hover_base_rotation", rot)
+	
+	# Update pivot for better rotation (center-bottom)
+	pivot_offset = Vector2(size.x / 2, size.y)

@@ -183,11 +183,13 @@ func _notification(what: int) -> void:
 
 
 func _recalculate_layout() -> void:
-	# The arena draws as a top-half semicircle, so its visual center is halfway
-	# between the warden (bottom) and the top of the FAR ring.
-	# Use most of the available vertical space for the battlefield
-	max_radius = min(size.x * 0.48, size.y * 0.85)
-	center = Vector2(size.x / 2.0, size.y - 40.0)
+	# The arena draws as a top-half semicircle with the warden at the center/bottom.
+	# The center point is anchored at the bottom of this control (which should be at screen midpoint).
+	# Radius is based on available height with some margin for the warden circle.
+	var available_height: float = size.y - 60.0  # Leave 60px margin at top
+	max_radius = min(size.x * 0.45, available_height)
+	# Center is at the horizontal center, at the bottom of the arena
+	center = Vector2(size.x / 2.0, size.y)
 
 
 func update_ring_threat_levels() -> void:
@@ -337,6 +339,7 @@ func _connect_signals() -> void:
 		CombatManager.enemy_targeted.connect(_on_enemy_targeted)
 		CombatManager.enemy_hexed.connect(_on_enemy_hexed)
 		CombatManager.barrier_placed.connect(_on_barrier_placed)
+		CombatManager.barrier_triggered.connect(_on_barrier_triggered)
 		CombatManager._enemies_spawned_together.connect(_on_enemies_spawned_together)
 		CombatManager.enemy_ability_triggered.connect(_on_enemy_ability_triggered)
 		# Weapons phase signals - keep stacks open during weapon firing
@@ -400,6 +403,19 @@ func _on_enemy_hexed(enemy, hex_amount: int) -> void:
 func _on_barrier_placed(ring: int, damage: int, duration: int) -> void:
 	"""Handle barrier being placed on a ring."""
 	set_ring_barrier(ring, damage, duration)
+
+
+func _on_barrier_triggered(enemy, ring: int, _damage: int) -> void:
+	"""Show barrier trigger visual on an enemy (different from gun projectile animation)."""
+	# Check if enemy is in a stack - if so, expand first then show barrier effect
+	var stack_key: String = _get_stack_key_for_enemy(enemy)
+	
+	if not stack_key.is_empty() and stack_visuals.has(stack_key):
+		# Expand the stack and show barrier effect on the specific mini-card
+		_expand_stack_and_barrier_effect(enemy, stack_key, ring)
+	else:
+		# Individual enemy - show barrier effect directly (not a gun projectile)
+		_show_barrier_trigger_on_enemy(enemy, ring)
 
 
 func _on_enemies_spawned_together(enemies: Array, ring: int, enemy_id: String) -> void:
@@ -648,9 +664,9 @@ func _create_enemy_visual(enemy) -> void:  # enemy: EnemyInstance
 	
 	# Enemy icon
 	var icon_label: Label = Label.new()
-	icon_label.position = Vector2((width - 30.0) * 0.5, 6.0)
-	icon_label.size = Vector2(30, 30)
-	icon_label.add_theme_font_size_override("font_size", 26)
+	icon_label.position = Vector2((width - 36.0) * 0.5, 6.0)
+	icon_label.size = Vector2(36, 36)
+	icon_label.add_theme_font_size_override("font_size", 30)
 	icon_label.text = "👤" if not enemy_def else enemy_def.display_icon
 	icon_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	visual.add_child(icon_label)
@@ -658,9 +674,9 @@ func _create_enemy_visual(enemy) -> void:  # enemy: EnemyInstance
 	# Damage indicator (shows how much damage this enemy deals)
 	var damage_label: Label = Label.new()
 	damage_label.name = "DamageLabel"
-	damage_label.position = Vector2(0.0, height * 0.42)
-	damage_label.size = Vector2(width, 20.0)
-	damage_label.add_theme_font_size_override("font_size", 12)
+	damage_label.position = Vector2(0.0, height * 0.40)
+	damage_label.size = Vector2(width, 22.0)
+	damage_label.add_theme_font_size_override("font_size", 14)
 	damage_label.add_theme_color_override("font_color", Color(1.0, 0.4, 0.4, 1.0))
 	damage_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	damage_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -671,8 +687,8 @@ func _create_enemy_visual(enemy) -> void:  # enemy: EnemyInstance
 	
 	# HP bar background
 	var hp_bg: ColorRect = ColorRect.new()
-	hp_bg.position = Vector2(4.0, height * 0.68)
-	hp_bg.size = Vector2(width - 8.0, 10.0)
+	hp_bg.position = Vector2(4.0, height * 0.66)
+	hp_bg.size = Vector2(width - 8.0, 12.0)
 	hp_bg.color = Color(0.1, 0.1, 0.1, 1.0)
 	hp_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	visual.add_child(hp_bg)
@@ -690,9 +706,9 @@ func _create_enemy_visual(enemy) -> void:  # enemy: EnemyInstance
 	# HP text
 	var hp_text: Label = Label.new()
 	hp_text.name = "HPText"
-	hp_text.position = Vector2(0.0, height * 0.8)
-	hp_text.size = Vector2(width, 18.0)
-	hp_text.add_theme_font_size_override("font_size", 11)
+	hp_text.position = Vector2(0.0, height * 0.78)
+	hp_text.size = Vector2(width, 20.0)
+	hp_text.add_theme_font_size_override("font_size", 13)
 	hp_text.add_theme_color_override("font_color", Color(0.95, 0.95, 0.95, 1.0))
 	hp_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hp_text.text = str(enemy.current_hp)
@@ -703,8 +719,8 @@ func _create_enemy_visual(enemy) -> void:  # enemy: EnemyInstance
 	if enemy_def and enemy.ring == 0:  # In melee range
 		var intent: Label = Label.new()
 		intent.name = "IntentIcon"
-		intent.position = Vector2(width - 20.0, -10.0)
-		intent.add_theme_font_size_override("font_size", 16)
+		intent.position = Vector2(width - 22.0, -12.0)
+		intent.add_theme_font_size_override("font_size", 18)
 		intent.add_theme_color_override("font_color", Color(1.0, 0.3, 0.3, 1.0))
 		intent.text = "⚔️"
 		intent.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -713,9 +729,9 @@ func _create_enemy_visual(enemy) -> void:  # enemy: EnemyInstance
 	# Hex indicator (hidden by default, shown when hex applied)
 	var hex_label: Label = Label.new()
 	hex_label.name = "HexLabel"
-	hex_label.position = Vector2(0.0, -12.0)
-	hex_label.size = Vector2(width, 20.0)
-	hex_label.add_theme_font_size_override("font_size", 12)
+	hex_label.position = Vector2(0.0, -14.0)
+	hex_label.size = Vector2(width, 22.0)
+	hex_label.add_theme_font_size_override("font_size", 14)
 	hex_label.add_theme_color_override("font_color", Color(0.8, 0.3, 1.0, 1.0))
 	hex_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hex_label.text = ""
@@ -738,7 +754,7 @@ func _create_enemy_visual(enemy) -> void:  # enemy: EnemyInstance
 	_apply_danger_highlighting(visual, enemy, "enemy_" + str(enemy.instance_id))
 
 
-func _play_death_animation(enemy) -> void:  # enemy: EnemyInstance
+func _play_death_animation(enemy: Variant) -> void:
 	"""Play a polished death animation and transform the visual into a destroyed state."""
 	if not enemy_visuals.has(enemy.instance_id):
 		return
@@ -809,7 +825,7 @@ func _play_death_animation(enemy) -> void:  # enemy: EnemyInstance
 	tween.tween_callback(_transform_to_destroyed_state.bind(visual, enemy))
 
 
-func _play_death_animation_mini_panel(mini_panel: Panel, enemy) -> void:
+func _play_death_animation_mini_panel(mini_panel: Panel, enemy: Variant) -> void:
 	"""Play death animation on a mini-panel in an expanded stack."""
 	if not is_instance_valid(mini_panel):
 		return
@@ -845,8 +861,10 @@ func _play_death_animation_mini_panel(mini_panel: Panel, enemy) -> void:
 	tween.tween_callback(_transform_mini_panel_to_destroyed.bind(mini_panel, enemy))
 
 
-func _transform_to_destroyed_state(visual: Panel, enemy) -> void:
+func _transform_to_destroyed_state(visual_obj: Variant, _enemy: Variant) -> void:
 	"""Transform an enemy visual into its destroyed appearance."""
+	# Cast from Variant to avoid tween callback type conversion issues
+	var visual: Panel = visual_obj as Panel
 	if not is_instance_valid(visual):
 		return
 	
@@ -889,8 +907,10 @@ func _transform_to_destroyed_state(visual: Panel, enemy) -> void:
 	visual.add_child(overlay)
 
 
-func _transform_mini_panel_to_destroyed(mini_panel: Panel, enemy) -> void:
+func _transform_mini_panel_to_destroyed(mini_panel_obj: Variant, _enemy: Variant) -> void:
 	"""Transform a mini-panel into its destroyed appearance."""
+	# Cast from Variant to avoid tween callback type conversion issues
+	var mini_panel: Panel = mini_panel_obj as Panel
 	if not is_instance_valid(mini_panel):
 		return
 	
@@ -1099,10 +1119,7 @@ func _update_enemy_position(enemy) -> void:  # enemy: EnemyInstance
 	if _enemy_position_tweens.has(enemy.instance_id):
 		var old_tween: Tween = _enemy_position_tweens[enemy.instance_id]
 		if old_tween and old_tween.is_valid():
-			print("[BattlefieldArena DEBUG] Killing existing tween for enemy instance_id: ", enemy.instance_id)
 			old_tween.kill()
-		else:
-			print("[BattlefieldArena DEBUG] Existing tween found but invalid for instance_id: ", enemy.instance_id)
 		_enemy_position_tweens.erase(enemy.instance_id)
 	
 	# Stop and cleanup any existing debug timer
@@ -1132,8 +1149,6 @@ func _update_enemy_position(enemy) -> void:  # enemy: EnemyInstance
 	
 	# Track the tween
 	_enemy_position_tweens[enemy.instance_id] = tween
-	
-	print("[BattlefieldArena DEBUG] Created new tween - animating from ", start_pos, " to ", target_pos)
 	
 	# Add debug tracking during animation
 	var debug_timer: Timer = Timer.new()
@@ -1270,7 +1285,9 @@ func _get_enemy_position(enemy) -> Vector2:  # enemy: EnemyInstance
 			_group_angular_positions[group_id] = angle
 			print("[BattlefieldArena DEBUG] Stored angular position for group ", group_id, ": ", angle)
 	
-	return center + Vector2(cos(angle), sin(angle)) * ring_radius
+	var final_pos: Vector2 = center + Vector2(cos(angle), sin(angle)) * ring_radius
+	print("[BattlefieldArena DEBUG] _get_enemy_position: center=", center, " angle=", angle, " (", rad_to_deg(angle), "deg) ring_radius=", ring_radius, " cos=", cos(angle), " sin=", sin(angle), " final_pos=", final_pos)
+	return final_pos
 
 
 func _get_enemy_display_info(enemy) -> Dictionary:
@@ -1411,23 +1428,23 @@ func _get_enemy_display_info(enemy) -> Dictionary:
 func _get_enemy_visual_size(is_mini_size: bool = false) -> Vector2:
 	var shortest_side: float = min(size.x, size.y)
 	if shortest_side <= 0.0:
-		return Vector2(100.0, 130.0) if not is_mini_size else Vector2(50.0, 65.0)
+		return Vector2(120.0, 150.0) if not is_mini_size else Vector2(60.0, 78.0)
 	
 	if is_mini_size:
 		# Smaller size for expanded stack mini-panels
-		var width: float = clamp(shortest_side * 0.08, 50.0, 100.0)
-		var height: float = clamp(width * 1.25, 60.0, 125.0)
+		var width: float = clamp(shortest_side * 0.10, 60.0, 120.0)
+		var height: float = clamp(width * 1.25, 75.0, 150.0)
 		return Vector2(width, height)
 	else:
-		var width: float = clamp(shortest_side * 0.14, 90.0, 180.0)
-		var height: float = clamp(width * 1.25, 110.0, 220.0)
+		var width: float = clamp(shortest_side * 0.17, 110.0, 200.0)
+		var height: float = clamp(width * 1.25, 135.0, 250.0)
 		return Vector2(width, height)
 
 
 func _create_behavior_badge(enemy_def, is_mini_badge: bool = false) -> Panel:
 	"""Create a behavior badge showing the enemy's archetype icon."""
-	var badge_size: float = 20.0 if not is_mini_badge else 14.0
-	var font_size: int = 12 if not is_mini_badge else 9
+	var badge_size: float = 24.0 if not is_mini_badge else 16.0
+	var font_size: int = 14 if not is_mini_badge else 10
 	
 	var badge: Panel = Panel.new()
 	badge.custom_minimum_size = Vector2(badge_size, badge_size)
@@ -3337,7 +3354,7 @@ func _create_enemy_instance_mini_card(enemy) -> PanelContainer:
 		return PanelContainer.new()
 	
 	var card: PanelContainer = PanelContainer.new()
-	card.custom_minimum_size = Vector2(55, 70)
+	card.custom_minimum_size = Vector2(65, 85)
 	
 	# Check if this enemy has danger highlighting
 	var danger_level: DangerLevel = _get_enemy_danger_level(enemy)
@@ -3372,14 +3389,14 @@ func _create_enemy_instance_mini_card(enemy) -> PanelContainer:
 	# Enemy icon
 	var icon_label: Label = Label.new()
 	icon_label.text = enemy_def.display_icon
-	icon_label.add_theme_font_size_override("font_size", 18)
+	icon_label.add_theme_font_size_override("font_size", 22)
 	icon_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	icon_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(icon_label)
 	
 	# HP bar background
 	var hp_bar_bg: ColorRect = ColorRect.new()
-	hp_bar_bg.custom_minimum_size = Vector2(48, 5)
+	hp_bar_bg.custom_minimum_size = Vector2(56, 6)
 	hp_bar_bg.color = Color(0.15, 0.1, 0.1, 1.0)
 	hp_bar_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(hp_bar_bg)
@@ -3387,7 +3404,7 @@ func _create_enemy_instance_mini_card(enemy) -> PanelContainer:
 	# HP bar fill
 	var hp_percent: float = enemy.get_hp_percentage()
 	var hp_bar_fill: ColorRect = ColorRect.new()
-	hp_bar_fill.custom_minimum_size = Vector2(48 * hp_percent, 5)
+	hp_bar_fill.custom_minimum_size = Vector2(56 * hp_percent, 6)
 	hp_bar_fill.color = Color(0.2, 0.85, 0.2).lerp(Color(0.95, 0.2, 0.2), 1.0 - hp_percent)
 	hp_bar_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hp_bar_fill.position = hp_bar_bg.position
@@ -3396,7 +3413,7 @@ func _create_enemy_instance_mini_card(enemy) -> PanelContainer:
 	# HP text
 	var hp_label: Label = Label.new()
 	hp_label.text = str(enemy.current_hp)
-	hp_label.add_theme_font_size_override("font_size", 9)
+	hp_label.add_theme_font_size_override("font_size", 11)
 	hp_label.add_theme_color_override("font_color", Color(0.9, 0.9, 0.9))
 	hp_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hp_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -3406,7 +3423,7 @@ func _create_enemy_instance_mini_card(enemy) -> PanelContainer:
 	var dmg: int = enemy_def.get_scaled_damage(RunManager.current_wave)
 	var dmg_label: Label = Label.new()
 	dmg_label.text = "⚔️" + str(dmg)
-	dmg_label.add_theme_font_size_override("font_size", 9)
+	dmg_label.add_theme_font_size_override("font_size", 11)
 	dmg_label.add_theme_color_override("font_color", Color(1.0, 0.4, 0.4))
 	dmg_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	dmg_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -3416,7 +3433,7 @@ func _create_enemy_instance_mini_card(enemy) -> PanelContainer:
 	if enemy.has_status("hex"):
 		var hex_label: Label = Label.new()
 		hex_label.text = "☠" + str(enemy.get_status_value("hex"))
-		hex_label.add_theme_font_size_override("font_size", 8)
+		hex_label.add_theme_font_size_override("font_size", 10)
 		hex_label.add_theme_color_override("font_color", Color(0.8, 0.3, 1.0))
 		hex_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		hex_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -3427,8 +3444,8 @@ func _create_enemy_instance_mini_card(enemy) -> PanelContainer:
 
 func _create_individual_enemy_cards(enemies: Array, visual: Panel) -> void:
 	"""Create small mini cards for each individual enemy, centered above the enemy/stack."""
-	var mini_card_size: Vector2 = Vector2(55, 70)
-	var spacing: float = 6.0
+	var mini_card_size: Vector2 = Vector2(65, 85)
+	var spacing: float = 8.0
 	
 	# Calculate total width of all mini cards
 	var total_width: float = (mini_card_size.x + spacing) * enemies.size() - spacing
@@ -3714,7 +3731,6 @@ func _show_targeting_hint_for_enemy(enemy, damage: int, hex_damage: int) -> void
 	# Find the visual for this enemy (could be individual or in a stack)
 	var visual: Control = enemy_visuals.get(instance_id)
 	var in_stack: bool = false
-	var stack_key: String = ""
 	
 	if not visual:
 		# Check if enemy is in a stack
@@ -3724,7 +3740,6 @@ func _show_targeting_hint_for_enemy(enemy, damage: int, hex_damage: int) -> void
 				if stacked_enemy.get_instance_id() == instance_id:
 					visual = stack_data.panel
 					in_stack = true
-					stack_key = sk
 					key = "stack_" + sk
 					break
 			if in_stack:
@@ -4543,6 +4558,131 @@ func _fire_fast_projectile_to_enemy(enemy, projectile_color: Color = Color(1.0, 
 	_fire_fast_projectile_to_position(to_pos, projectile_color)
 
 
+func _expand_stack_and_barrier_effect(enemy, stack_key: String, barrier_ring: int) -> void:
+	"""Expand a stack and show barrier trigger effect on the specific enemy's mini-card."""
+	if not stack_visuals.has(stack_key):
+		return
+	
+	# Store enemy instance_id IMMEDIATELY before any awaits
+	var target_instance_id: int = enemy.instance_id if enemy != null else -1
+	if target_instance_id == -1:
+		return
+	
+	# Hold the stack open during this operation
+	_hold_stack_open(stack_key)
+	
+	var stack_data: Dictionary = stack_visuals[stack_key]
+	var main_panel: Panel = stack_data.panel
+	
+	# Wait for mini-cards to be fully created and visible
+	await get_tree().process_frame
+	await get_tree().create_timer(0.05).timeout
+	
+	if not stack_visuals.has(stack_key):
+		_cleanup_orphaned_mini_panels()
+		_release_stack_hold(stack_key)
+		return
+	
+	# Find the specific mini-card for this enemy using stored instance_id
+	var mini_panels: Array = stack_visuals[stack_key].get("mini_panels", [])
+	var target_mini_panel: Panel = null
+	
+	# Filter out invalid instances first to avoid "freed instance" errors
+	var valid_panels: Array = mini_panels.filter(func(p: Variant) -> bool: return is_instance_valid(p))
+	
+	for mini_panel in valid_panels:
+		var mini_enemy_instance_id: int = mini_panel.get_meta("instance_id", -1)
+		if mini_enemy_instance_id == target_instance_id:
+			target_mini_panel = mini_panel
+			break
+	
+	if target_mini_panel:
+		# Show barrier sparks from the ring to the enemy
+		var ring_pos: Vector2 = _get_ring_edge_position(barrier_ring, target_mini_panel.position + target_mini_panel.size / 2)
+		var target_pos: Vector2 = target_mini_panel.position + target_mini_panel.size / 2
+		_fire_barrier_sparks(ring_pos, target_pos)
+		
+		# Wait for sparks to hit
+		await get_tree().create_timer(0.15).timeout
+		
+		# Flash the mini-card green (barrier color)
+		if is_instance_valid(target_mini_panel):
+			var flash_tween: Tween = target_mini_panel.create_tween()
+			flash_tween.tween_property(target_mini_panel, "modulate", Color(0.3, 1.0, 0.5, 1.0), 0.05)
+			flash_tween.tween_property(target_mini_panel, "modulate", Color.WHITE, 0.1)
+	else:
+		# Fallback: show barrier effect on main panel
+		if is_instance_valid(main_panel):
+			_show_barrier_trigger_on_panel(main_panel, barrier_ring)
+	
+	# Release the hold - the hold system will collapse after delay
+	_release_stack_hold(stack_key)
+
+
+func _show_barrier_trigger_on_enemy(enemy, barrier_ring: int) -> void:
+	"""Show barrier trigger effect on an individual enemy (not in a stack)."""
+	if not enemy_visuals.has(enemy.instance_id):
+		return
+	
+	var visual: Panel = enemy_visuals[enemy.instance_id]
+	_show_barrier_trigger_on_panel(visual, barrier_ring)
+
+
+func _show_barrier_trigger_on_panel(panel: Panel, barrier_ring: int) -> void:
+	"""Show barrier trigger visual effect on a panel."""
+	if not is_instance_valid(panel):
+		return
+	
+	# Show barrier sparks from the ring to the panel
+	var panel_center: Vector2 = panel.position + panel.size / 2
+	var ring_pos: Vector2 = _get_ring_edge_position(barrier_ring, panel_center)
+	_fire_barrier_sparks(ring_pos, panel_center)
+	
+	# Flash the panel green (barrier color)
+	var flash_tween: Tween = panel.create_tween()
+	flash_tween.tween_property(panel, "modulate", Color(0.3, 1.0, 0.5, 1.0), 0.05)
+	flash_tween.tween_property(panel, "modulate", Color.WHITE, 0.15)
+
+
+func _get_ring_edge_position(ring: int, target_pos: Vector2) -> Vector2:
+	"""Get the position on the ring edge closest to the target position."""
+	_recalculate_layout()
+	
+	var ring_radius: float = max_radius * RING_PROPORTIONS[ring]
+	var direction: Vector2 = (target_pos - center).normalized()
+	
+	# If direction is zero (target is at center), use a default direction
+	if direction.length() < 0.01:
+		direction = Vector2.UP
+	
+	return center + direction * ring_radius
+
+
+func _fire_barrier_sparks(from_pos: Vector2, to_pos: Vector2) -> void:
+	"""Fire green barrier sparks from ring to enemy."""
+	var barrier_color: Color = Color(0.3, 1.0, 0.5, 1.0)
+	
+	for i: int in range(5):
+		var spark: ColorRect = ColorRect.new()
+		spark.size = Vector2(6, 6)
+		spark.color = barrier_color
+		spark.z_index = 55
+		
+		# Randomize starting position slightly along the ring
+		var offset: Vector2 = Vector2(randf_range(-15, 15), randf_range(-15, 15))
+		spark.position = from_pos + offset
+		
+		effects_container.add_child(spark)
+		
+		# Animate spark flying to target
+		var tween: Tween = spark.create_tween()
+		var travel_time: float = 0.15 + i * 0.02
+		tween.set_parallel(true)
+		tween.tween_property(spark, "position", to_pos + Vector2(randf_range(-5, 5), randf_range(-5, 5)), travel_time)
+		tween.tween_property(spark, "modulate:a", 0.0, travel_time).set_delay(travel_time * 0.6)
+		tween.chain().tween_callback(spark.queue_free)
+
+
 func _expand_stack_and_show_hex(enemy, stack_key: String, hex_amount: int) -> void:
 	"""Expand a stack and show hex effect on the specific enemy's mini-card with purple shake."""
 	if not stack_visuals.has(stack_key):
@@ -4776,42 +4916,21 @@ func update_enemy_ring(_enemy, _from_ring: int, _to_ring: int) -> void:
 
 
 func _on_enemy_move_debug_tick(timer: Timer) -> void:
-	"""Debug callback for enemy movement tracking."""
+	"""Callback for enemy movement tracking cleanup."""
 	var visual: Panel = timer.get_meta("visual", null)
 	var tween: Tween = timer.get_meta("tween", null)
-	var enemy_id: String = timer.get_meta("enemy_id", "unknown")
-	var target_pos: Vector2 = timer.get_meta("target_pos", Vector2.ZERO)
 	var instance_id: int = timer.get_meta("instance_id", -1)
-	var frame_count: int = timer.get_meta("frame_count", 0)
-	frame_count += 1
-	timer.set_meta("frame_count", frame_count)
 	
 	# Stop timer if tween is invalid or visual is invalid
 	if not is_instance_valid(visual) or not tween or not tween.is_valid():
-		# Clean up the timer
 		timer.stop()
 		timer.queue_free()
 		if instance_id >= 0 and _enemy_debug_timers.has(instance_id):
 			_enemy_debug_timers.erase(instance_id)
-		return
-	
-	print("[BattlefieldArena DEBUG] Enemy moving [frame ", frame_count, "] - ", enemy_id, 
-		  " | pos: ", visual.position, " | global: ", visual.global_position,
-		  " | target: ", target_pos, " | distance to target: ", visual.position.distance_to(target_pos))
-	print("[BattlefieldArena DEBUG]   -> Tween is valid")
 
 
-func _on_enemy_move_tween_finished(instance_id: int, target_pos: Vector2, debug_timer: Timer) -> void:
-	"""Debug callback when enemy movement tween finishes."""
-	var visual: Panel = null
-	var enemy_id: String = "unknown"
-	if is_instance_valid(debug_timer):
-		visual = debug_timer.get_meta("visual", null)
-		enemy_id = debug_timer.get_meta("enemy_id", "unknown")
-	print("[BattlefieldArena DEBUG] Enemy movement tween finished - ", enemy_id, 
-		  " | final pos: ", visual.position if is_instance_valid(visual) else Vector2.ZERO,
-		  " | target was: ", target_pos)
-	
+func _on_enemy_move_tween_finished(instance_id: int, _target_pos: Vector2, debug_timer: Timer) -> void:
+	"""Callback when enemy movement tween finishes."""
 	# Clean up debug timer
 	if is_instance_valid(debug_timer):
 		debug_timer.stop()

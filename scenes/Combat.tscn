@@ -1,7 +1,8 @@
-[gd_scene load_steps=11 format=3 uid="uid://dq1xrk8nv2p4f"]
+[gd_scene load_steps=12 format=3 uid="uid://dq1xrk8nv2p4f"]
 
 [ext_resource type="Script" path="res://scripts/ui/CombatScreen.gd" id="1_combat"]
 [ext_resource type="PackedScene" uid="uid://cbe1qr0xnyd0m" path="res://scenes/BattlefieldArena.tscn" id="2_arena"]
+[ext_resource type="Script" path="res://scripts/ui/CombatLane.gd" id="3_lane"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_topbar"]
 bg_color = Color(0.08, 0.06, 0.12, 0.9)
@@ -124,11 +125,23 @@ anchors_preset = -1
 anchor_left = 0.0
 anchor_top = 0.0
 anchor_right = 1.0
-anchor_bottom = 1.0
+anchor_bottom = 0.5
 offset_left = 0.0
 offset_top = 50.0
 offset_right = 0.0
-offset_bottom = -540.0
+offset_bottom = 0.0
+
+[node name="CombatLane" type="Control" parent="."]
+layout_mode = 1
+anchors_preset = -1
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 150.0
+offset_top = -460.0
+offset_right = -150.0
+offset_bottom = -320.0
+script = ExtResource("3_lane")
 
 [node name="PlayerStatsPanel" type="PanelContainer" parent="."]
 layout_mode = 1
@@ -371,92 +384,99 @@ flat = true
 custom_minimum_size = Vector2(10, 0)
 layout_mode = 2
 
-[node name="BottomSection" type="VBoxContainer" parent="."]
+[node name="BottomSection" type="HBoxContainer" parent="."]
 layout_mode = 1
 anchors_preset = 12
 anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_top = -540.0
+offset_top = -220.0
 grow_horizontal = 2
 grow_vertical = 0
 theme_override_constants/separation = 0
-alignment = 2
-
-[node name="CardHand" type="HBoxContainer" parent="BottomSection"]
-custom_minimum_size = Vector2(0, 460)
-layout_mode = 2
-size_flags_vertical = 8
-theme_override_constants/separation = -60
 alignment = 1
 
-[node name="BottomBar" type="PanelContainer" parent="BottomSection"]
-custom_minimum_size = Vector2(0, 70)
+[node name="LeftSidebar" type="PanelContainer" parent="BottomSection"]
+custom_minimum_size = Vector2(100, 0)
 layout_mode = 2
+size_flags_vertical = 3
 theme_override_styles/panel = SubResource("StyleBoxFlat_bottombar")
 
-[node name="HBox" type="HBoxContainer" parent="BottomSection/BottomBar"]
+[node name="VBox" type="VBoxContainer" parent="BottomSection/LeftSidebar"]
 layout_mode = 2
-theme_override_constants/separation = 40
+theme_override_constants/separation = 12
 alignment = 1
 
-[node name="DeckInfo" type="VBoxContainer" parent="BottomSection/BottomBar/HBox"]
+[node name="DeckInfo" type="VBoxContainer" parent="BottomSection/LeftSidebar/VBox"]
 layout_mode = 2
 alignment = 1
 
-[node name="DeckButton" type="Button" parent="BottomSection/BottomBar/HBox/DeckInfo"]
-custom_minimum_size = Vector2(60, 50)
+[node name="DeckButton" type="Button" parent="BottomSection/LeftSidebar/VBox/DeckInfo"]
+custom_minimum_size = Vector2(60, 40)
 layout_mode = 2
-theme_override_font_sizes/font_size = 18
+theme_override_font_sizes/font_size = 16
 text = "📚"
 flat = true
 
-[node name="DeckCount" type="Label" parent="BottomSection/BottomBar/HBox/DeckInfo"]
+[node name="DeckCount" type="Label" parent="BottomSection/LeftSidebar/VBox/DeckInfo"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.5, 0.75, 1, 1)
-theme_override_font_sizes/font_size = 20
+theme_override_font_sizes/font_size = 16
 text = "10"
 horizontal_alignment = 1
 
-[node name="EnergyContainer" type="HBoxContainer" parent="BottomSection/BottomBar/HBox"]
+[node name="EnergyContainer" type="VBoxContainer" parent="BottomSection/LeftSidebar/VBox"]
 layout_mode = 2
-theme_override_constants/separation = 10
+theme_override_constants/separation = 2
 
-[node name="EnergyIcon" type="Label" parent="BottomSection/BottomBar/HBox/EnergyContainer"]
+[node name="EnergyIcon" type="Label" parent="BottomSection/LeftSidebar/VBox/EnergyContainer"]
 layout_mode = 2
-theme_override_font_sizes/font_size = 32
+theme_override_font_sizes/font_size = 24
 text = "⚡"
+horizontal_alignment = 1
 
-[node name="EnergyLabel" type="Label" parent="BottomSection/BottomBar/HBox/EnergyContainer"]
+[node name="EnergyLabel" type="Label" parent="BottomSection/LeftSidebar/VBox/EnergyContainer"]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.85, 0.2, 1)
-theme_override_font_sizes/font_size = 36
+theme_override_font_sizes/font_size = 28
 text = "3/3"
+horizontal_alignment = 1
 
-[node name="EndTurnButton" type="Button" parent="BottomSection/BottomBar/HBox"]
-custom_minimum_size = Vector2(140, 55)
+[node name="EndTurnButton" type="Button" parent="BottomSection/LeftSidebar/VBox"]
+custom_minimum_size = Vector2(90, 50)
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_colors/font_hover_color = Color(1, 0.9, 0.6, 1)
-theme_override_font_sizes/font_size = 20
-text = "END TURN"
+theme_override_font_sizes/font_size = 14
+text = "END
+TURN"
 
-[node name="DiscardInfo" type="VBoxContainer" parent="BottomSection/BottomBar/HBox"]
+[node name="DiscardInfo" type="VBoxContainer" parent="BottomSection/LeftSidebar/VBox"]
 layout_mode = 2
 alignment = 1
 
-[node name="DiscardIcon" type="Label" parent="BottomSection/BottomBar/HBox/DiscardInfo"]
+[node name="DiscardIcon" type="Label" parent="BottomSection/LeftSidebar/VBox/DiscardInfo"]
 layout_mode = 2
-theme_override_font_sizes/font_size = 18
+theme_override_font_sizes/font_size = 16
 text = "🗑️"
 horizontal_alignment = 1
 
-[node name="DiscardCount" type="Label" parent="BottomSection/BottomBar/HBox/DiscardInfo"]
+[node name="DiscardCount" type="Label" parent="BottomSection/LeftSidebar/VBox/DiscardInfo"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.7, 0.5, 0.5, 1)
-theme_override_font_sizes/font_size = 20
+theme_override_font_sizes/font_size = 16
 text = "0"
 horizontal_alignment = 1
+
+[node name="CardHand" type="Control" parent="BottomSection"]
+custom_minimum_size = Vector2(1000, 220)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="RightSpacer" type="Control" parent="BottomSection"]
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
 
 [node name="RingSelector" type="PanelContainer" parent="."]
 visible = false
@@ -766,8 +786,8 @@ theme_override_constants/separation = 20
 [connection signal="pressed" from="TopBar/HBox/GlossaryButton" to="." method="_on_glossary_pressed"]
 [connection signal="pressed" from="TopBar/HBox/SettingsButton" to="." method="_on_settings_pressed"]
 [connection signal="pressed" from="GlossaryOverlay/GlossaryPanel/VBox/Header/CloseButton" to="." method="_on_glossary_close_pressed"]
-[connection signal="pressed" from="BottomSection/BottomBar/HBox/DeckInfo/DeckButton" to="." method="_on_deck_view_pressed"]
-[connection signal="pressed" from="BottomSection/BottomBar/HBox/EndTurnButton" to="." method="_on_end_turn_pressed"]
+[connection signal="pressed" from="BottomSection/LeftSidebar/VBox/DeckInfo/DeckButton" to="." method="_on_deck_view_pressed"]
+[connection signal="pressed" from="BottomSection/LeftSidebar/VBox/EndTurnButton" to="." method="_on_end_turn_pressed"]
 [connection signal="pressed" from="RingSelector/VBox/Buttons/MeleeButton" to="." method="_on_ring_selected" binds= [0]]
 [connection signal="pressed" from="RingSelector/VBox/Buttons/CloseButton" to="." method="_on_ring_selected" binds= [1]]
 [connection signal="pressed" from="RingSelector/VBox/Buttons/MidButton" to="." method="_on_ring_selected" binds= [2]]

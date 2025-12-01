@@ -25,6 +25,7 @@ signal enemy_ability_triggered(enemy, ability: String, value: int)  # Special ab
 signal enemy_targeted(enemy)  # Enemy is about to be attacked (for visual indicator)
 signal enemy_hexed(enemy, hex_amount: int)  # Enemy received hex (for visual indicator)
 signal barrier_placed(ring: int, damage: int, duration: int)  # Barrier created
+signal barrier_triggered(enemy, ring: int, damage: int)  # Barrier dealt damage to enemy
 signal ring_phase_started(ring: int, ring_name: String)  # Ring is being processed
 signal ring_phase_ended(ring: int)  # Ring processing complete
 signal enemy_attacking(enemy, damage: int)  # Enemy is about to attack
@@ -71,6 +72,7 @@ func initialize_combat(wave_def) -> void:
 	# Create real deck manager with player's deck
 	deck_manager = DeckManagerScript.new()
 	deck_manager.initialize(RunManager.deck.duplicate(true))
+	print("[CombatManager] Deck initialized with ", deck_manager.deck.size(), " cards")
 	
 	# Trigger on_wave_start artifacts (e.g., Iron Shell)
 	ArtifactManager.trigger_artifacts("on_wave_start", {})
@@ -112,8 +114,10 @@ func start_player_turn() -> void:
 	var cards_to_draw: int = 5 if not RunManager.current_warden else RunManager.current_warden.hand_size
 	# Add bonus draws from artifacts (Quick Draw)
 	cards_to_draw += turn_start_effects.draw_cards
+	print("[CombatManager] Drawing ", cards_to_draw, " cards (deck: ", deck_manager.deck.size(), ", hand: ", deck_manager.hand.size(), ")")
 	for i in range(cards_to_draw):
 		deck_manager.draw_card()
+	print("[CombatManager] After draw - hand size: ", deck_manager.hand.size())
 	
 	# Enter player phase
 	current_phase = CombatPhase.PLAYER_PHASE
@@ -333,6 +337,7 @@ func _process_ring_phase(ring: int, buff_amount: int) -> void:
 func _process_melee_attacks(melee_enemies: Array, buff_amount: int) -> void:
 	"""Process attacks from melee enemies with visual feedback."""
 	var total_damage: int = 0
+	var total_armor_shred: int = 0  # V2: Armor Reaver shred
 	
 	for enemy in melee_enemies:
 		var enemy_def = EnemyDatabase.get_enemy(enemy.enemy_id)
@@ -346,11 +351,25 @@ func _process_melee_attacks(melee_enemies: Array, buff_amount: int) -> void:
 			
 			total_damage += final_dmg
 			print("[CombatManager] ", enemy_def.enemy_name, " attacks for ", final_dmg)
+			
+			# V2: Armor Reaver shreds additional armor
+			if enemy_def.armor_shred > 0:
+				total_armor_shred += enemy_def.armor_shred
+				enemy_ability_triggered.emit(enemy, "armor_shred", enemy_def.armor_shred)
+				print("[CombatManager] ", enemy_def.enemy_name, " shreds ", enemy_def.armor_shred, " armor!")
 	
 	if total_damage > 0:
 		await get_tree().create_timer(0.1).timeout
 		RunManager.take_damage(total_damage)
 		player_damaged.emit(total_damage, "melee_enemies")
+	
+	# V2: Apply armor shred AFTER damage (removes armor directly)
+	if total_armor_shred > 0:
+		var actual_shred: int = mini(RunManager.armor, total_armor_shred)
+		if actual_shred > 0:
+			RunManager.armor -= actual_shred
+			RunManager.armor_changed.emit(RunManager.armor)
+			print("[CombatManager] Armor shredded! -", actual_shred, " armor (now ", RunManager.armor, ")")
 
 
 func _process_ranged_attacks_in_ring(ring: int, buff_amount: int) -> void:
@@ -411,24 +430,73 @@ func _process_enemy_movement_from_ring(ring: int) -> void:
 	# Move grouped enemies together (all enemies in a group move at once)
 	for group_id: String in groups_to_move.keys():
 		var group_moves: Array = groups_to_move[group_id]
+		var barrier_results: Array = []  # Store results for visual feedback
+		
 		# Move all enemies in the group without delay between them
 		for move_data: Dictionary in group_moves:
-			battlefield.move_enemy(move_data.enemy, move_data.new_ring)
-		# Emit all movement signals at once (so visual updates as a single animation)
-		for move_data: Dictionary in group_moves:
-			enemy_moved.emit(move_data.enemy, move_data.old_ring, move_data.new_ring)
-			# Check if bomber entered melee - show warning banner
-			_check_bomber_melee_warning(move_data.enemy, move_data.new_ring)
+			var result: Dictionary = battlefield.move_enemy(move_data.enemy, move_data.new_ring)
+			barrier_results.append({"enemy": move_data.enemy, "result": result, "move_data": move_data})
+		
+		# First pass: emit barrier_triggered signals for enemies that took barrier damage (triggers stack popup)
+		var any_barrier_damage: bool = false
+		for i: int in range(group_moves.size()):
+			var barrier_info: Dictionary = barrier_results[i]
+			var result: Dictionary = barrier_info.result
+			var move_data: Dictionary = barrier_info.move_data
+			if result.barrier_damage > 0:
+				# Use barrier_triggered signal (not enemy_targeted) so it shows barrier animation, not gun animation
+				barrier_triggered.emit(barrier_info.enemy, move_data.old_ring, result.barrier_damage)
+				any_barrier_damage = true
+		
+		# Wait for stack expansion animation if any barrier damage occurred
+		if any_barrier_damage:
+			await get_tree().create_timer(0.3).timeout
+		
+		# Second pass: emit damage and movement signals
+		for i: int in range(group_moves.size()):
+			var move_data: Dictionary = group_moves[i]
+			var barrier_info: Dictionary = barrier_results[i]
+			var result: Dictionary = barrier_info.result
+			
+			# Handle barrier damage visual feedback
+			if result.barrier_damage > 0:
+				enemy_damaged.emit(move_data.enemy, result.barrier_damage, false)  # false = not hex
+				print("[CombatManager] Barrier dealt ", result.barrier_damage, " to ", move_data.enemy.enemy_id)
+			
+			# Handle barrier kill
+			if result.killed_by_barrier:
+				print("[CombatManager] ", move_data.enemy.enemy_id, " killed by barrier!")
+				_handle_enemy_death(move_data.enemy, false)
+			else:
+				enemy_moved.emit(move_data.enemy, move_data.old_ring, move_data.new_ring)
+				# Check if bomber entered melee - show warning banner
+				_check_bomber_melee_warning(move_data.enemy, move_data.new_ring)
+		
 		# Delay after the whole group moves
 		if not group_moves.is_empty():
 			await get_tree().create_timer(0.15).timeout
 	
 	# Move ungrouped enemies one at a time with delays
 	for move_data: Dictionary in ungrouped_to_move:
-		battlefield.move_enemy(move_data.enemy, move_data.new_ring)
-		enemy_moved.emit(move_data.enemy, move_data.old_ring, move_data.new_ring)
-		# Check if bomber entered melee - show warning banner
-		_check_bomber_melee_warning(move_data.enemy, move_data.new_ring)
+		var result: Dictionary = battlefield.move_enemy(move_data.enemy, move_data.new_ring)
+		
+		# Handle barrier damage visual feedback
+		if result.barrier_damage > 0:
+			# Emit barrier_triggered first to trigger stack popup with barrier animation (not gun animation)
+			barrier_triggered.emit(move_data.enemy, move_data.old_ring, result.barrier_damage)
+			await get_tree().create_timer(0.3).timeout  # Wait for stack expansion
+			enemy_damaged.emit(move_data.enemy, result.barrier_damage, false)  # false = not hex
+			print("[CombatManager] Barrier dealt ", result.barrier_damage, " to ", move_data.enemy.enemy_id)
+		
+		# Handle barrier kill
+		if result.killed_by_barrier:
+			print("[CombatManager] ", move_data.enemy.enemy_id, " killed by barrier!")
+			_handle_enemy_death(move_data.enemy, false)
+		else:
+			enemy_moved.emit(move_data.enemy, move_data.old_ring, move_data.new_ring)
+			# Check if bomber entered melee - show warning banner
+			_check_bomber_melee_warning(move_data.enemy, move_data.new_ring)
+		
 		await get_tree().create_timer(0.1).timeout
 
 
@@ -653,12 +721,32 @@ func _trigger_death_effect(enemy, enemy_def) -> void:
 	
 	match enemy_def.special_ability:
 		"explode_on_death":
-			# Bomber explodes and deals damage to player
-			var explosion_damage: int = enemy_def.buff_amount
-			RunManager.take_damage(explosion_damage)
-			player_damaged.emit(explosion_damage, "bomber_explosion")
-			enemy_ability_triggered.emit(enemy, "explode_on_death", explosion_damage)
-			print("[CombatManager] BOMBER EXPLODED! Dealt ", explosion_damage, " damage to player")
+			# V2 Bomber: Deals damage to player AND other enemies in same ring
+			var player_damage: int = enemy_def.buff_amount
+			var aoe_damage: int = enemy_def.aoe_damage if enemy_def.aoe_damage > 0 else 0
+			
+			# Damage to player
+			RunManager.take_damage(player_damage)
+			player_damaged.emit(player_damage, "bomber_explosion")
+			enemy_ability_triggered.emit(enemy, "explode_on_death", player_damage)
+			print("[CombatManager] BOMBER EXPLODED! Dealt ", player_damage, " to player")
+			
+			# V2: AoE damage to other enemies in same ring
+			if aoe_damage > 0:
+				var ring_enemies: Array = battlefield.get_enemies_in_ring(enemy.ring)
+				var enemies_to_damage: Array = []
+				for ring_enemy in ring_enemies:
+					if ring_enemy.instance_id != enemy.instance_id:
+						enemies_to_damage.append(ring_enemy)
+				
+				for target_enemy in enemies_to_damage:
+					target_enemy.current_hp -= aoe_damage
+					enemy_damaged.emit(target_enemy, aoe_damage, false)
+					print("[CombatManager] Bomber AoE dealt ", aoe_damage, " to ", target_enemy.enemy_id)
+					
+					if target_enemy.current_hp <= 0:
+						# Queue for death after iteration (avoid modifying array during iteration)
+						call_deferred("_handle_enemy_death", target_enemy, false)
 
 
 func _deal_hex_tick_damage(damage: int) -> void:

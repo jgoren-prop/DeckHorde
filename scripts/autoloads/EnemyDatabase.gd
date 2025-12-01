@@ -49,7 +49,7 @@ func _create_grunt_enemies() -> void:
 	spitter.description = "Ranged enemy. Stops at Mid ring and attacks from there."
 	spitter.enemy_type = "grunt"
 	spitter.behavior_type = EnemyDef.BehaviorType.RANGED
-	spitter.base_hp = 6
+	spitter.base_hp = 7  # V2: was 6
 	spitter.base_damage = 3
 	spitter.movement_speed = 1
 	spitter.target_ring = 2  # Stops at Mid
@@ -81,16 +81,17 @@ func _create_grunt_enemies() -> void:
 	var bomber := EnemyDef.new()
 	bomber.enemy_id = "bomber"
 	bomber.enemy_name = "Bomber"
-	bomber.description = "Explodes on death, dealing 6 damage to player."
+	bomber.description = "Explodes on death: 6 dmg to player, 4 dmg to ring enemies."
 	bomber.enemy_type = "grunt"
 	bomber.behavior_type = EnemyDef.BehaviorType.BOMBER
-	bomber.base_hp = 8
+	bomber.base_hp = 9  # V2: was 8
 	bomber.base_damage = 0  # No regular attack
 	bomber.movement_speed = 1
 	bomber.target_ring = 0
 	bomber.attack_type = "suicide"
 	bomber.special_ability = "explode_on_death"
-	bomber.buff_amount = 6  # Explosion damage
+	bomber.buff_amount = 6  # Explosion damage to player
+	bomber.aoe_damage = 4  # V2: Explosion damage to other enemies in ring
 	bomber.scrap_value = 3
 	bomber.icon_color = Color(0.9, 0.5, 0.1)
 	bomber.display_icon = "💣"
@@ -125,9 +126,9 @@ func _create_elite_enemies() -> void:
 	titan.enemy_type = "elite"
 	titan.behavior_type = EnemyDef.BehaviorType.TANK
 	titan.is_elite = true
-	titan.base_hp = 20
+	titan.base_hp = 22  # V2: was 20
 	titan.base_damage = 8
-	titan.armor = 2
+	titan.armor = 3  # V2: was 2
 	titan.movement_speed = 1
 	titan.target_ring = 0
 	titan.attack_type = "melee"
@@ -185,8 +186,8 @@ func _create_elite_enemies() -> void:
 	stalker.enemy_type = "elite"
 	stalker.behavior_type = EnemyDef.BehaviorType.AMBUSH
 	stalker.is_elite = true
-	stalker.base_hp = 8
-	stalker.base_damage = 5
+	stalker.base_hp = 9  # V2: was 8
+	stalker.base_damage = 6  # V2: was 5
 	stalker.movement_speed = 1
 	stalker.target_ring = 0
 	stalker.attack_type = "melee"
@@ -194,6 +195,27 @@ func _create_elite_enemies() -> void:
 	stalker.icon_color = Color(0.2, 0.2, 0.3)
 	stalker.display_icon = "👁️"
 	_register_enemy(stalker)
+	
+	# Armor Reaver - V2 armor/barrier shredder
+	var reaver := EnemyDef.new()
+	reaver.enemy_id = "armor_reaver"
+	reaver.enemy_name = "Armor Reaver"
+	reaver.description = "Shredder. Deals 3 dmg + removes 3 armor. +1 dmg to barriers."
+	reaver.enemy_type = "elite"
+	reaver.behavior_type = EnemyDef.BehaviorType.SHREDDER
+	reaver.is_elite = true
+	reaver.base_hp = 10
+	reaver.base_damage = 3
+	reaver.armor_shred = 3  # V2: Extra armor removed on hit
+	reaver.barrier_bonus_damage = 1  # V2: Extra damage to barriers
+	reaver.movement_speed = 1
+	reaver.target_ring = 0
+	reaver.attack_type = "melee"
+	reaver.special_ability = "armor_shred"
+	reaver.scrap_value = 6
+	reaver.icon_color = Color(0.7, 0.2, 0.2)
+	reaver.display_icon = "🪓"
+	_register_enemy(reaver)
 
 
 func _create_boss_enemies() -> void:
@@ -203,13 +225,13 @@ func _create_boss_enemies() -> void:
 	var ember_saint := EnemyDef.new()
 	ember_saint.enemy_id = "ember_saint"
 	ember_saint.enemy_name = "Ember Saint"
-	ember_saint.description = "BOSS: Stays at Far. AoE attacks. Spawns Bombers."
+	ember_saint.description = "BOSS: Stays at Far. AoE attacks. Spawns Bombers + Husks."
 	ember_saint.enemy_type = "boss"
 	ember_saint.behavior_type = EnemyDef.BehaviorType.BOSS
 	ember_saint.is_boss = true
-	ember_saint.base_hp = 50
+	ember_saint.base_hp = 60  # V2: was 50
 	ember_saint.base_damage = 10
-	ember_saint.armor = 3
+	ember_saint.armor = 4  # V2: was 3
 	ember_saint.movement_speed = 0  # Doesn't move
 	ember_saint.target_ring = 3  # Stays at Far
 	ember_saint.attack_type = "ranged"

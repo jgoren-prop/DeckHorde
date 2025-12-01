@@ -1,15 +1,27 @@
 # Riftwardens - Development Progress
 
-## Current Status: Mechanically Complete Prototype ✅
+## Current Status: V2 Buildcraft System - Phase 6 Balance Testing 🔄
+
+### V2 System Status
+| Phase | Name | Status |
+|-------|------|--------|
+| Phase 1 | Tag & Stat Model | ✅ COMPLETE |
+| Phase 2 | Veteran Warden | ✅ COMPLETE |
+| Phase 3 | V2 Card Pool | ✅ COMPLETE (48 cards) |
+| Phase 4 | V2 Artifact System | ✅ COMPLETE (26 artifacts) |
+| Phase 5 | Shop & Reward Rework | ✅ COMPLETE |
+| Phase 6 | Balance & Integration | 🔄 IN PROGRESS |
+| Phase 7 | Enemy & Wave Rework | ✅ COMPLETE |
+| Phase 8 | New Wardens | ⏳ FUTURE |
 
 ### Scenes & Navigation
 | Scene | Status | Notes |
 |-------|--------|-------|
 | Main Menu | ✅ Working | Title, buttons functional |
 | Settings | ✅ Working | Audio/Gameplay/Display settings with persistence |
-| Warden Select | ✅ Working | 3 wardens, difficulty slider |
-| Combat | ✅ Working | Full card system, 27 cards, 10 enemies |
-| Shop | ✅ Working | Buy cards, remove cards, heal, reroll |
+| Warden Select | ✅ Working | **4 wardens** (Ash, Gloom, Glass, Veteran) |
+| Combat | ✅ Working | **V2 card system, 48 cards**, 10 enemies |
+| Shop | ✅ Working | **V2 structure** (4 cards, 3 artifacts, 2 services) |
 | Post-Wave Reward | ✅ Working | Card/Scrap/Heal choices |
 | Run End | ✅ Working | Victory/Defeat screens |
 | Meta Menu | ❓ Untested | Scene exists |
@@ -17,15 +29,26 @@
 ### Core Systems
 | System | Status | Notes |
 |--------|--------|-------|
-| SettingsManager | ✅ Working | Persistent settings (audio, display, gameplay) saved to user://settings.cfg |
+| SettingsManager | ✅ Working | Persistent settings saved to user://settings.cfg |
 | GameManager | ✅ Working | Scene transitions, state management |
-| RunManager | ✅ Working | HP, scrap, wave tracking, damage/healing, warden passives |
+| RunManager | ✅ Working | **V2 PlayerStats**, damage multipliers, stat modifiers |
 | CombatManager | ✅ Working | Full turn flow, enemy spawning, card playing, artifact triggers |
-| CardDatabase | ✅ Complete | 27 cards across 4 types |
+| CardDatabase | ✅ Complete | **48 V2 cards** across 5 build families |
 | EnemyDatabase | ✅ Complete | 10 enemies (5 grunts, 4 elites, 1 boss) |
 | MergeManager | ✅ Working | Full implementation with shop UI integration |
-| ArtifactManager | ✅ Complete | 10 artifacts with ALL triggers wired |
+| ArtifactManager | ✅ Complete | **26 V2 artifacts** with tag-based effects |
+| ShopGenerator | ✅ **NEW** | V2 family biasing, dynamic pricing |
 | AudioManager | ✅ Working | Procedural placeholder SFX, volume control |
+
+### V2 Content Summary
+| Content | Count | Notes |
+|---------|-------|-------|
+| Cards | 48 | Gun (12), Hex (12), Barrier (12), Lifedrain (7), Overlap (5) |
+| Artifacts | 26 | Core (10), Lifedrain (4), Hex (4), Barrier (4), Volatile (4) |
+| Enemies | 11 | Husk, Spitter, Spinecrawler, Bomber, Cultist, Shell Titan, Torchbearer, Channeler, Stalker, **Armor Reaver**, Ember Saint |
+| Wardens | 4 | Ash, Gloom, Glass, **Veteran** (V2 baseline) |
+| Build Families | 4 | Gun Board, Hex Ritualist, Barrier Fortress, Lifedrain Bruiser |
+| Wave Bands | 4 | Onboarding (1-3), Build Check (4-6), Stress (7-9), Boss (10-12) |
 
 ### Combat Features
 | Feature | Status | Notes |
@@ -34,22 +57,15 @@
 | Card Hand UI | ✅ Working | Cards display, clickable, hover effects |
 | Turn System | ✅ Working | Draw → Play → End Turn → Enemy Phase |
 | Enemy AI | ✅ Working | Movement, melee/ranged attacks, special abilities |
-| Card Effects | ✅ Full | 18 effect types implemented |
-| Damage System | ✅ Working | Player/enemy damage, death handling |
+| Card Effects | ✅ Full | 18+ effect types implemented |
+| Damage System | ✅ Working | **V2 stat multipliers applied** |
 | Threat Preview | ✅ Working | Shows incoming damage calculation |
 | Enemy Display | ✅ Working | Multi-row distribution + overflow stacking |
 | Enemy Abilities | ✅ Working | Bomber explodes, Channeler spawns, Torchbearer buffs |
-| Artifact Triggers | ✅ Working | All 10 artifacts hooked into combat |
-| Warden Passives | ✅ Working | All 3 wardens have functional passives |
-
-### Content
-| Content | Status | Count |
-|---------|--------|-------|
-| Cards | ✅ Complete | 27 (9 weapons, 6 skills, 6 hexes, 6 defense) |
-| Enemies | ✅ Complete | 10 (5 grunts, 4 elites, 1 boss) with special abilities |
-| Wardens | ✅ Complete | 3 (Ash, Gloom, Glass) with working passives |
-| Artifacts | ✅ Complete | 10 artifacts with ALL triggers wired |
-| Waves | ✅ Generator | WaveDefinition auto-generates based on wave # |
+| Artifact Triggers | ✅ Working | **26 V2 artifacts** hooked into combat |
+| Warden Passives | ✅ Working | **4 wardens** with functional passives |
+| Debug Stat Panel | ✅ Working | Press F3 in combat to view all PlayerStats |
+| **Combat Lane** | ✅ **NEW** | Hearthstone-style board for persistent weapons |
 
 ### Art & Polish
 | Item | Status |
@@ -64,32 +80,126 @@
 ---
 
 ## Completed Implementation Phases
+
+### V1 Foundation (Complete)
 - [x] Phase 1: Project setup, resources, state classes
 - [x] Phase 2: Combat system (battlefield, turns, cards, enemies)
 - [x] Phase 3: Deck management, merge system
 - [x] Phase 4: Combat UI (arena, card hand, threat preview)
-- [x] Phase 5: Wardens (3 with passives - NOW WORKING)
+- [x] Phase 5: Wardens (4 with passives)
 - [x] Phase 6: Enemy archetypes, wave scripting
-- [x] Phase 7: Reward/Shop/Artifact systems (scenes exist)
+- [x] Phase 7: Reward/Shop/Artifact systems
 - [x] Phase 8: Meta progression (structure exists)
 - [x] Phase 9: Polish (animations, particles, effects)
-- [x] Phase 10: Content expansion (26 cards, 10 enemies, 10 artifacts)
-- [x] Phase 11: Enemy special abilities (Bomber, Channeler, Torchbearer, Ember Saint)
-- [x] Phase 12: Artifact trigger wiring (all 10 artifacts functional)
-- [x] Phase 13: Warden passive implementation (all 3 wardens functional)
-- [x] Phase 14: MergeManager UI integration (shop merge section, merge detection)
-- [x] Phase 15: AudioManager (placeholder procedural SFX for all events)
-- [x] Phase 16: Screen transitions (fade effect on scene changes)
-- [x] Phase 17: Combat Clarity system (behavior badges, threat colors, intent bar)
-- [x] Phase 18: Combat Visual Feedback (attack indicators, projectiles, shake, card fly animation, weapon icons, barrier visuals)
+- [x] Phase 10: Content expansion
+- [x] Phase 11: Enemy special abilities
+- [x] Phase 12: Artifact trigger wiring
+- [x] Phase 13: Warden passive implementation
+- [x] Phase 14: MergeManager UI integration
+- [x] Phase 15: AudioManager
+- [x] Phase 16: Screen transitions
+- [x] Phase 17: Combat Clarity system
+- [x] Phase 18: Combat Visual Feedback
 
-## Next Steps
-1. Balance tuning (difficulty curve, artifact costs)
-2. Replace placeholder audio with real sound files
-3. More visual polish (real textures, UI improvements)
-4. Meta progression save/load
+### V2 Buildcraft Rework (In Progress)
+- [x] V2 Phase 1: Tag & Stat Model (TagConstants, PlayerStats, DebugStatPanel)
+- [x] V2 Phase 2: Veteran Warden (V2 baseline, 10-card starter)
+- [x] V2 Phase 3: V2 Card Pool (48 cards, V1 cards removed)
+- [x] V2 Phase 4: V2 Artifact System (26 artifacts, stackable, tag-based)
+- [x] V2 Phase 5: Shop & Reward Rework (ShopGenerator, family biasing)
+- [ ] V2 Phase 6: Balance & Integration Testing
+- [x] V2 Phase 7: Enemy & Wave Rework ✅
+- [ ] V2 Phase 8: New Extreme Wardens
 
-## Recently Completed (This Session)
+## Remaining Work (V2 Buildcraft)
+1. **Phase 6**: Balance testing - verify all 4 build families are viable
+2. **Phase 8**: New extreme wardens (Plaguer, Architect, Sanguine)
+3. See `V2_IMPLEMENTATION_PLAN.md` for full details
+
+## Recently Completed (V2 Implementation)
+
+### Combat Lane System ✅ COMPLETE
+- ✅ **CombatLane.gd** - New UI component for persistent weapon display
+  - Positioned between battlefield and card hand
+  - Displays weapons as scaled-down (55%) CardUI instances
+  - Maximum 7 weapons deployed at once
+
+- ✅ **Deploy Animation**:
+  - Cards fly from hand to lane with shrink effect
+  - Bounce/glow effect when card lands in lane
+  
+- ✅ **Fire Effects**:
+  - Weapon cards pulse when triggering
+  - Damage floater (-X⚔) rises from fired weapon
+  - Lane has subtle glow during weapons phase
+  
+- ✅ **Integration**:
+  - Connected to CombatManager.weapon_triggered signal
+  - Weapons auto-deploy when persistent card played
+  - Lane visibility toggles based on deployed count
+  
+- ✅ **Unit Tests**:
+  - Deploy/remove weapon tests
+  - Fire animation tests
+  - Capacity limit tests
+  - Visibility toggle tests
+
+### V2 Phase 5: Shop & Reward Rework ✅ COMPLETE
+- ✅ **ShopGenerator.gd** - New autoload for V2 shop generation
+  - 4 card slots (was 3), 3 artifact slots (was 2), 2 services
+  - Family tracking: counts cards/artifacts by build family
+  - `get_primary_secondary_families()` for build lean detection
+  
+- ✅ **Family Biasing**:
+  - Early waves (1-3): 70% focused shops, 2+ cards from same family
+  - Mid/late waves (4+): Primary family +2.0 weight, secondary +1.0
+  - Guarantees 2+ primary family cards when player is committed
+  
+- ✅ **Dynamic Pricing**:
+  - Reroll cost: `3 + floor((wave - 1) / 3) + reroll_count * 2`
+  - Heal service: 30% missing HP, cost = `10 + 2 * wave`
+  - Remove card: cost = `10 + 3 * wave`
+
+### V2 Phase 4: Artifact System ✅ COMPLETE
+- ✅ **26 V2 Artifacts** organized by family:
+  - Core Stat (10): Sharpened Rounds, Hex Lens, Reinforced Plating, etc.
+  - Lifedrain (4): Leech Core, Hemorrhage Engine (rare), etc.
+  - Hex Ritual (4): Occult Focus, Creeping Doom (rare), etc.
+  - Barrier (4): Trap Engineer, Punishing Walls (rare), etc.
+  - Volatile (4): Kinetic Harness, Last Stand Protocol (rare), etc.
+  
+- ✅ **Stackable System**: `stackable: bool` per artifact, unlimited stacking
+- ✅ **Tag-based Effects**: `required_tags` for family-specific bonuses
+
+### V2 Phase 3: Card Pool ✅ COMPLETE
+- ✅ **48 V2 Cards** across 5 build families:
+  - Gun Board (12): Persistent weapons, shotgun/sniper variants
+  - Hex Ritualist (12): Hex stacking, ritual synergies
+  - Barrier Fortress (12): Barriers, armor, fortress effects
+  - Lifedrain Bruiser (7): Healing on damage/kill
+  - Overlap/Engine (5): Multi-family synergy cards
+  
+- ✅ **V1 Cards Removed**: All legacy cards deleted
+
+### V2 Phase 2: Veteran Warden ✅ COMPLETE
+- ✅ **Veteran** - V2 baseline warden (HP 70, Energy 3, all stats neutral)
+- ✅ **10-card Starter Deck**: Rusty Pistol×2, Minor Hex, Minor Barrier, Guard Stance×2, Quick Draw×2, Shove×2
+
+### V2 Phase 1: Tag & Stat Model ✅ COMPLETE
+- ✅ **TagConstants.gd** - Canonical tag names
+- ✅ **PlayerStats.gd** - V2 stat sheet with additive multipliers
+- ✅ **RunManager.gd** - Uses PlayerStats, `get_damage_multiplier_for_card()`
+- ✅ **DebugStatPanel.gd** - Press F3 in combat to view all stats
+
+---
+
+## Previous Session
+- ✅ **Restored Persistent Weapon Fun** - Starter deck now has auto-firing weapons:
+  - **Rusty Pistol** converted from instant to **persistent** (3 dmg to ANY ring at turn end)
+  - Veteran starter deck has **2x Rusty Pistol** that auto-fire every turn
+  - This creates the "ramp up" fun of deploying weapons early that auto-fire every turn
+
+## Previous Session (Group Animation Fix)
 - ✅ **Fixed Group Card Movement Animation Bug** - Groups no longer fly from (0,0):
   - Root cause: When groups moved between rings, the stack_key changed (includes ring number)
   - Old position was stored under old key (e.g., `3_husk_group_1`) but new stack used new key (`2_husk_group_1`)

@@ -112,17 +112,29 @@ func _apply_audio_settings() -> void:
 ## Apply display settings
 func _apply_display_settings() -> void:
 	# Window mode
+	# Godot 4 modes:
+	# - WINDOW_MODE_WINDOWED: Regular window with borders
+	# - WINDOW_MODE_FULLSCREEN: Borderless fullscreen (fast alt-tab, windowed fullscreen)
+	# - WINDOW_MODE_EXCLUSIVE_FULLSCREEN: True exclusive fullscreen (slow alt-tab)
 	match window_mode:
 		WINDOW_MODE_WINDOWED:
-			DisplayServer.window_set_flag(DisplayServer.WINDOW_FLAG_BORDERLESS, false)
+			# Regular windowed mode with borders
 			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
-		WINDOW_MODE_FULLSCREEN:
-			# True exclusive fullscreen (takes over display)
 			DisplayServer.window_set_flag(DisplayServer.WINDOW_FLAG_BORDERLESS, false)
+			# Set a reasonable default window size (e.g., 1280x720)
+			DisplayServer.window_set_size(Vector2i(1280, 720))
+			# Center the window on screen
+			var screen_id: int = DisplayServer.window_get_current_screen()
+			var screen_size: Vector2i = DisplayServer.screen_get_size(screen_id)
+			var window_size: Vector2i = DisplayServer.window_get_size()
+			var centered_pos: Vector2i = DisplayServer.screen_get_position(screen_id) + (screen_size - window_size) / 2
+			DisplayServer.window_set_position(centered_pos)
+		WINDOW_MODE_FULLSCREEN:
+			# True exclusive fullscreen (takes over display, slower alt-tab)
 			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN)
 		WINDOW_MODE_BORDERLESS:
-			# Borderless windowed fullscreen (fast alt-tab)
-			DisplayServer.window_set_flag(DisplayServer.WINDOW_FLAG_BORDERLESS, false)
+			# Borderless windowed fullscreen (covers screen but fast alt-tab)
+			# Use Godot's built-in borderless fullscreen mode
 			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
 	
 	# VSync
