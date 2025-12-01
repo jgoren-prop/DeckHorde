@@ -1,6 +1,7 @@
 extends Resource
 class_name ArtifactDefinition
-## ArtifactDefinition - Data resource for artifact (passive item) definitions
+## ArtifactDefinition - V2 Brotato-style artifact/item definitions
+## Artifacts now use stat_modifiers for PlayerStats integration
 
 @export var artifact_id: String = ""
 @export var artifact_name: String = ""
@@ -12,8 +13,19 @@ class_name ArtifactDefinition
 # Cost in shop
 @export var base_cost: int = 50
 
+# V2: Stackability - can you own multiple copies?
+@export var stackable: bool = true  # Most V2 artifacts are stackable
+
+# V2: Stat modifiers applied to PlayerStats (ADDITIVE, like wardens)
+# Format: {"stat_name": modifier_value}
+# Example: {"gun_damage_percent": 10.0} adds +10% gun damage
+@export var stat_modifiers: Dictionary = {}
+
+# V2: Tag requirements - artifact only affects cards with these tags
+@export var required_tags: Array = []  # e.g., ["gun"] for gun-only bonuses
+
 # Effect type determines when/how the artifact triggers
-@export_enum("passive", "on_card_play", "on_kill", "on_damage_taken", "on_turn_start", "on_turn_end", "on_wave_start", "on_wave_end") var trigger_type: String = "passive"
+@export_enum("passive", "on_card_play", "on_kill", "on_damage_taken", "on_turn_start", "on_turn_end", "on_wave_start", "on_wave_end", "on_heal", "on_hex_consumed", "on_barrier_trigger") var trigger_type: String = "passive"
 
 # Filter for when the artifact triggers (e.g., only on Gun cards)
 @export var trigger_tag: String = ""  # Card tag filter

@@ -2,6 +2,9 @@ extends Resource
 class_name CardDefinition
 ## CardDefinition - Data resource for card definitions
 
+# V2: Preload TagConstants to ensure it's available
+const TagConstantsClass = preload("res://scripts/constants/TagConstants.gd")
+
 @export var card_id: String = ""
 @export var card_name: String = ""
 @export_multiline var description: String = ""
@@ -24,6 +27,7 @@ class_name CardDefinition
 # Damage effects
 @export var base_damage: int = 0
 @export var hex_damage: int = 0
+@export var self_damage: int = 0  # V2: Damage dealt to player (for volatile cards)
 
 # Healing effects
 @export var heal_amount: int = 0
@@ -111,4 +115,58 @@ func get_tier_name(tier: int) -> String:
 			return "++"
 		_:
 			return ""
+
+
+# =============================================================================
+# V2 TAG HELPERS
+# =============================================================================
+
+func has_tag(tag: String) -> bool:
+	"""Check if this card has a specific tag."""
+	return tag in tags
+
+
+func get_core_type() -> String:
+	"""Get the core type tag (gun, hex, barrier, defense, skill, engine)."""
+	return TagConstantsClass.get_core_type_from_list(tags)
+
+
+func get_family_tags() -> Array[String]:
+	"""Get all build-family tags on this card."""
+	return TagConstantsClass.get_family_tags_from_list(tags)
+
+
+func is_gun() -> bool:
+	"""Check if this is a gun card."""
+	return has_tag(TagConstantsClass.TAG_GUN)
+
+
+func is_hex() -> bool:
+	"""Check if this is a hex card."""
+	return has_tag(TagConstantsClass.TAG_HEX)
+
+
+func is_barrier() -> bool:
+	"""Check if this is a barrier card."""
+	return has_tag(TagConstantsClass.TAG_BARRIER)
+
+
+func is_defense() -> bool:
+	"""Check if this is a defense card."""
+	return has_tag(TagConstantsClass.TAG_DEFENSE)
+
+
+func is_skill() -> bool:
+	"""Check if this is a skill card."""
+	return has_tag(TagConstantsClass.TAG_SKILL)
+
+
+func is_engine() -> bool:
+	"""Check if this is an engine card."""
+	return has_tag(TagConstantsClass.TAG_ENGINE)
+
+
+func get_tags_display() -> String:
+	"""Get tags formatted for UI display."""
+	return TagConstantsClass.format_tags_for_display(tags)
 

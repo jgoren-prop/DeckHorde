@@ -1,5 +1,6 @@
 extends Control
 ## Settings - Settings menu screen controller
+## Works as both a standalone scene and as an overlay
 
 # Audio controls
 @onready var master_volume_slider: HSlider = $PanelContainer/MarginContainer/VBoxContainer/MasterVolumeContainer/MasterVolumeSlider
@@ -26,11 +27,28 @@ extends Control
 # Flag to prevent saving during initial load
 var _loading: bool = true
 
+# Track if running as overlay
+var _is_overlay: bool = false
+
+# Background reference for overlay mode
+@onready var background: ColorRect = $Background
+
 
 func _ready() -> void:
+	# Check if we're running as an overlay (set by GameManager)
+	_is_overlay = has_meta("is_overlay") and get_meta("is_overlay")
+	
 	_load_current_settings()
 	_loading = false
-	_animate_entrance()
+	
+	# Configure overlay mode appearance
+	if _is_overlay:
+		back_button.text = "Close"
+		# Make background semi-transparent so you can see the game behind
+		background.color = Color(0.08, 0.06, 0.12, 0.85)
+	else:
+		# Only animate entrance for standalone scene mode
+		_animate_entrance()
 
 
 func _load_current_settings() -> void:
@@ -141,5 +159,16 @@ func _on_reset_pressed() -> void:
 func _on_back_pressed() -> void:
 	AudioManager.play_button_click()
 	print("[Settings] Back pressed")
-	GameManager.go_to_scene("main_menu")
+	if _is_overlay:
+		# Close overlay instead of navigating
+		GameManager.close_settings_overlay()
+	else:
+		# Navigate back to main menu (standalone scene mode)
+		GameManager.go_to_scene("main_menu")
+
+
+func _on_quit_pressed() -> void:
+	AudioManager.play_button_click()
+	print("[Settings] Quit game pressed")
+	get_tree().quit()
 

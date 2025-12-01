@@ -12,6 +12,7 @@ enum BehaviorType {
 	SPAWNER,  # ⚙️ Creates additional enemies
 	TANK,     # 🛡️ High HP/armor, slow threat
 	AMBUSH,   # 🗡️ Spawns close to player
+	SHREDDER, # ⚔️ Destroys armor/barriers efficiently (V2)
 	BOSS      # 👑 Special mechanics, high danger
 }
 
@@ -45,6 +46,9 @@ enum BehaviorType {
 @export var buff_amount: int = 0  # For support enemies
 @export var spawn_enemy_id: String = ""  # For spawning enemies
 @export var spawn_count: int = 0
+@export var aoe_damage: int = 0  # V2: Damage to other enemies (e.g., Bomber explosion)
+@export var armor_shred: int = 0  # V2: Extra armor removed on hit (Armor Reaver)
+@export var barrier_bonus_damage: int = 0  # V2: Extra damage to barriers (Armor Reaver)
 
 # Economy
 @export var scrap_value: int = 2
@@ -85,6 +89,8 @@ func get_behavior_badge_icon() -> String:
 			return "🛡️"
 		BehaviorType.AMBUSH:
 			return "🗡️"
+		BehaviorType.SHREDDER:
+			return "⚔️"
 		BehaviorType.BOSS:
 			return "👑"
 		_:
@@ -110,6 +116,8 @@ func get_behavior_badge_color() -> Color:
 			return Color(0.6, 0.6, 0.7)  # Gray
 		BehaviorType.AMBUSH:
 			return Color(0.9, 0.5, 0.7)  # Pink
+		BehaviorType.SHREDDER:
+			return Color(0.8, 0.2, 0.2)  # Dark Red
 		BehaviorType.BOSS:
 			return Color(1.0, 0.8, 0.2)  # Gold
 		_:
@@ -135,6 +143,8 @@ func get_behavior_tooltip() -> String:
 			return "Tank - High health and armor, slow but deadly"
 		BehaviorType.AMBUSH:
 			return "Ambush - Spawns directly in close range"
+		BehaviorType.SHREDDER:
+			return "Shredder - Destroys armor and barriers efficiently"
 		BehaviorType.BOSS:
 			return "Boss - Powerful enemy with special abilities"
 		_:

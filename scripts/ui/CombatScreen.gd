@@ -2,6 +2,7 @@ extends Control
 ## CombatScreen - Main combat UI controller
 
 const BattlefieldStateScript = preload("res://scripts/combat/BattlefieldState.gd")
+const DebugStatPanelClass = preload("res://scripts/ui/DebugStatPanel.gd")
 
 # UI References - Top bar (just wave/turn/scrap)
 @onready var wave_label: Label = $TopBar/HBox/WaveInfo/WaveLabel
@@ -16,9 +17,8 @@ const BattlefieldStateScript = preload("res://scripts/combat/BattlefieldState.gd
 @onready var weapons_list: VBoxContainer = $PlayerStatsPanel/StatsVBox/WeaponsSection/WeaponsList
 @onready var weapons_section: Control = $PlayerStatsPanel/StatsVBox/WeaponsSection
 
-# UI References - Weapon Icons Panel (visual weapon display)
-var weapon_icons_panel: HBoxContainer = null
-var active_weapon_icons: Array[Control] = []
+# UI References - Combat Lane (persistent weapons display)
+@onready var combat_lane: Control = $CombatLane
 
 # UI References - Threat preview
 @onready var incoming_damage: Label = $ThreatPreview/ThreatContent/IncomingDamage
@@ -36,12 +36,19 @@ var active_weapon_icons: Array[Control] = []
 @onready var battlefield_arena = $BattlefieldArena
 
 # UI References - Bottom section
-@onready var bottom_section: VBoxContainer = $BottomSection
-@onready var card_hand: HBoxContainer = $BottomSection/CardHand
-@onready var deck_count: Label = $BottomSection/BottomBar/HBox/DeckInfo/DeckCount
-@onready var energy_label: Label = $BottomSection/BottomBar/HBox/EnergyContainer/EnergyLabel
-@onready var end_turn_button: Button = $BottomSection/BottomBar/HBox/EndTurnButton
-@onready var discard_count: Label = $BottomSection/BottomBar/HBox/DiscardInfo/DiscardCount
+@onready var bottom_section: HBoxContainer = $BottomSection
+@onready var card_hand: Control = $BottomSection/CardHand
+@onready var deck_count: Label = $BottomSection/LeftSidebar/VBox/DeckInfo/DeckCount
+@onready var energy_label: Label = $BottomSection/LeftSidebar/VBox/EnergyContainer/EnergyLabel
+@onready var end_turn_button: Button = $BottomSection/LeftSidebar/VBox/EndTurnButton
+@onready var discard_count: Label = $BottomSection/LeftSidebar/VBox/DiscardInfo/DiscardCount
+
+# Fan layout constants
+const FAN_CARD_WIDTH: float = 200.0  # Match card custom_minimum_size
+const FAN_CARD_HEIGHT: float = 280.0  # Match card custom_minimum_size
+const FAN_MAX_ROTATION: float = 0.20  # Max rotation in radians (~11 degrees)
+const FAN_ARC_HEIGHT: float = 25.0  # How much cards arc up in the middle
+const FAN_OVERLAP: float = 0.60  # How much cards overlap (0.6 = 60% overlap)
 
 # UI References - Ring selector (kept for fallback, but hidden by default)
 @onready var ring_selector: PanelContainer = $RingSelector
@@ -92,9 +99,9 @@ var _loading_settings: bool = false
 func _ready() -> void:
 	_connect_signals()
 	_create_intent_bar()
-	_create_weapon_icons_panel()
 	_create_deck_viewer_overlay()
 	_create_dev_panel()
+	_create_v2_debug_stat_panel()
 	_setup_animation_manager()
 	_start_combat()
 	_hide_settings_overlay()
@@ -112,38 +119,51 @@ func _setup_card_debug_overlay() -> void:
 	pass
 
 
-func _create_weapon_icons_panel() -> void:
-	"""Create the visual weapon icons panel near the battlefield."""
-	weapon_icons_panel = HBoxContainer.new()
-	weapon_icons_panel.name = "WeaponIconsPanel"
-	weapon_icons_panel.add_theme_constant_override("separation", 8)
-	weapon_icons_panel.alignment = BoxContainer.ALIGNMENT_CENTER
-	
-	# Position it above the player stats panel
-	weapon_icons_panel.anchors_preset = Control.PRESET_BOTTOM_LEFT
-	weapon_icons_panel.offset_left = 20
-	weapon_icons_panel.offset_bottom = -260
-	weapon_icons_panel.offset_top = -310
-	weapon_icons_panel.offset_right = 250
-	
-	add_child(weapon_icons_panel)
-	
-	# Add a label
-	var title_label: Label = Label.new()
-	title_label.text = "⚡"
-	title_label.add_theme_font_size_override("font_size", 18)
-	title_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3, 0.8))
-	title_label.visible = false  # Hidden until weapons are active
-	title_label.name = "TitleLabel"
-	weapon_icons_panel.add_child(title_label)
 
 
 var _last_highlighted_ring: int = -2  # Use -2 so first check always triggers
 var _highlight_all_mode: bool = false  # Track if we're in "highlight all" mode
 
+func _card_affects_battlefield(card_def) -> bool:
+	"""Check if a card affects the battlefield (enemies/rings) vs self-only effects."""
+	# Cards that don't affect the battlefield:
+	# - Self-targeting cards (armor, heal, buffs)
+	# - Pure utility cards (draw, energy gain)
+	
+	# Check target type first
+	if card_def.target_type == "self":
+		return false
+	
+	# Check effect types that don't target enemies
+	var non_battlefield_effects: Array[String] = [
+		"gain_armor",
+		"heal",
+		"buff",
+		"draw",
+		"draw_cards",
+		"energy_and_draw",
+		"gambit",
+		"armor_and_heal"
+	]
+	
+	if card_def.effect_type in non_battlefield_effects:
+		return false
+	
+	return true
+
 func _process(_delta: float) -> void:
 	# While dragging a card, highlight the appropriate rings
 	if dragging_card_def != null and battlefield_arena:
+		# First check: does this card even affect the battlefield?
+		if not _card_affects_battlefield(dragging_card_def):
+			# Cards that don't affect battlefield (self-target, draw, armor, etc.)
+			# should NOT highlight the battlefield at all
+			if _highlight_all_mode or _last_highlighted_ring >= 0:
+				_highlight_all_mode = false
+				_last_highlighted_ring = -1
+				battlefield_arena.highlight_all_rings(false)
+			return
+		
 		var mouse_pos: Vector2 = get_global_mouse_position()
 		var ring_under_cursor: int = battlefield_arena.get_ring_at_position(mouse_pos)
 		
@@ -568,20 +588,46 @@ func _update_hand() -> void:
 	# Clear existing cards - kill any active tweens first
 	for child: Node in card_hand.get_children():
 		if "active_tween" in child and child.active_tween and child.active_tween.is_valid():
-			var child_card_name: String = "unknown"
-			if "card_def" in child and child.card_def:
-				child_card_name = child.card_def.card_name
-			print("[CombatScreen DEBUG] Killing tween on card before hand update - card: ", child_card_name)
 			child.active_tween.kill()
 			child.active_tween = null
+		if "hover_tween" in child and child.hover_tween and child.hover_tween.is_valid():
+			child.hover_tween.kill()
+			child.hover_tween = null
 		
 		child.queue_free()
 	
 	if not CombatManager.deck_manager:
 		return
 	
+	var hand_size: int = CombatManager.deck_manager.hand.size()
+	if hand_size == 0:
+		return
+	
+	# Calculate fan layout positions - center cards on the SCREEN, not just the container
+	var viewport_width: float = get_viewport().get_visible_rect().size.x
+	var screen_center_x: float = viewport_width / 2.0
+	
+	# Convert screen center to local CardHand coordinates
+	var card_hand_global_x: float = card_hand.global_position.x
+	var local_center_x: float = screen_center_x - card_hand_global_x
+	
+	# Calculate card spacing based on number of cards
+	var card_spacing: float = FAN_CARD_WIDTH * FAN_OVERLAP
+	var total_width: float = (hand_size - 1) * card_spacing + FAN_CARD_WIDTH
+	
+	# Clamp to available width
+	var max_width: float = card_hand.size.x - 100.0  # Leave margin on sides
+	if total_width > max_width:
+		card_spacing = (max_width - FAN_CARD_WIDTH) / maxf(hand_size - 1, 1)
+		total_width = (hand_size - 1) * card_spacing + FAN_CARD_WIDTH
+	
+	var start_x: float = local_center_x - total_width / 2.0
+	
+	# Base Y position - cards sit lower in hand area, bottom of cards can be hidden
+	var base_y: float = 80.0  # Distance from top of card_hand container (cards sit lower)
+	
 	# Create card UI for each card in hand
-	for i: int in range(CombatManager.deck_manager.hand.size()):
+	for i: int in range(hand_size):
 		var card_entry: Dictionary = CombatManager.deck_manager.hand[i]
 		var card_def = CardDatabase.get_card(card_entry.card_id)  # CardDefinition
 		
@@ -593,6 +639,26 @@ func _update_hand() -> void:
 			card_ui.card_hovered.connect(_on_card_hovered)
 			card_ui.card_drag_started.connect(_on_card_drag_started)
 			card_ui.card_drag_ended.connect(_on_card_drag_ended)
+			
+			# Calculate fan position for this card
+			var card_x: float = start_x + i * card_spacing
+			
+			# Calculate normalized position (-1 to 1, where 0 is center)
+			var normalized_pos: float = 0.0
+			if hand_size > 1:
+				normalized_pos = (float(i) / float(hand_size - 1)) * 2.0 - 1.0
+			
+			# Calculate arc offset (cards in center are slightly higher)
+			var arc_offset: float = normalized_pos * normalized_pos * FAN_ARC_HEIGHT
+			var card_y: float = base_y + arc_offset
+			
+			# Calculate rotation (more rotation at edges)
+			# Positive normalized_pos (right side) should rotate clockwise (positive)
+			# Negative normalized_pos (left side) should rotate counter-clockwise (negative)
+			var card_rotation: float = normalized_pos * FAN_MAX_ROTATION
+			
+			# Apply fan position
+			card_ui.set_fan_position(i, hand_size, Vector2(card_x, card_y), card_rotation)
 
 
 func _update_deck_info() -> void:
@@ -675,21 +741,44 @@ func _on_scrap_changed(amount: int) -> void:
 	scrap_label.text = str(amount)
 
 
-func _on_card_played(_card, _tier: int) -> void:
-	# Update weapons display when a card is played (might be a weapon)
+func _on_card_played(card, tier: int) -> void:
+	# Check if this is a persistent weapon that should be deployed to the combat lane
+	if card and card.effect_type == "weapon_persistent":
+		# Get the source position from the hand (for fly animation)
+		var source_pos: Vector2 = Vector2.ZERO
+		if card_hand and card_hand.get_child_count() > 0:
+			# Use the center of the hand area as source
+			var hand_rect: Rect2 = card_hand.get_global_rect()
+			source_pos = hand_rect.position + hand_rect.size / 2
+		
+		# Find the weapon data from CombatManager to get trigger duration
+		var triggers: int = -1
+		for weapon: Dictionary in CombatManager.active_weapons:
+			if weapon.card_def.card_id == card.card_id:
+				triggers = weapon.triggers_remaining
+				break
+		
+		# Deploy to combat lane
+		if combat_lane:
+			combat_lane.deploy_weapon(card, tier, triggers, source_pos)
+	
+	# Update weapons text list display
 	_update_weapons_display()
 
 
-func _on_weapon_triggered(card_name: String, _damage: int) -> void:
+func _on_weapon_triggered(card_name: String, damage: int) -> void:
 	"""Called when a persistent weapon fires."""
-	_flash_weapon_icon(card_name)
+	# The CombatLane handles this via its own signal connection
+	# But we can also trigger it here for redundancy
+	if combat_lane:
+		combat_lane.fire_weapon(card_name, damage)
 
 
 # Ring phase indicator reference
 var ring_phase_indicator: Label = null
 
 
-func _on_ring_phase_started(ring: int, ring_name: String) -> void:
+func _on_ring_phase_started(ring: int, _ring_name: String) -> void:
 	"""Called when a specific ring starts processing during enemy turn."""
 	# Update the battlefield to highlight the active ring
 	if battlefield_arena and ring >= 0:
@@ -763,8 +852,7 @@ func _show_simple_ring_indicator(ring_name: String) -> void:
 
 
 func _update_weapons_display() -> void:
-	"""Update the list of active persistent weapons with icon display."""
-	# Update text list (legacy)
+	"""Update the list of active persistent weapons in sidebar (text display)."""
 	if weapons_list:
 		for child in weapons_list.get_children():
 			child.queue_free()
@@ -786,97 +874,6 @@ func _update_weapons_display() -> void:
 				weapon_label.add_theme_font_size_override("font_size", 11)
 				weapon_label.add_theme_color_override("font_color", Color(0.9, 0.75, 0.4, 1.0))
 				weapons_list.add_child(weapon_label)
-	
-	# Update icon display (new visual system)
-	_update_weapon_icons()
-
-
-func _update_weapon_icons() -> void:
-	"""Update the visual weapon icon display."""
-	if not weapon_icons_panel:
-		return
-	
-	# Clear existing icons (but keep title label)
-	for icon: Control in active_weapon_icons:
-		if is_instance_valid(icon):
-			icon.queue_free()
-	active_weapon_icons.clear()
-	
-	# Get title label
-	var title_label: Label = weapon_icons_panel.get_node_or_null("TitleLabel")
-	
-	# Hide if no weapons
-	if CombatManager.active_weapons.size() == 0:
-		if title_label:
-			title_label.visible = false
-		return
-	
-	if title_label:
-		title_label.visible = true
-	
-	# Create icon for each weapon
-	for weapon: Dictionary in CombatManager.active_weapons:
-		var card_def = weapon.card_def
-		var tier: int = weapon.tier
-		var damage: int = card_def.get_scaled_value("damage", tier)
-		
-		var icon: PanelContainer = _create_weapon_icon(card_def.card_name, damage)
-		weapon_icons_panel.add_child(icon)
-		active_weapon_icons.append(icon)
-
-
-func _create_weapon_icon(weapon_name: String, damage: int) -> PanelContainer:
-	"""Create a visual icon for an active weapon."""
-	var icon: PanelContainer = PanelContainer.new()
-	icon.custom_minimum_size = Vector2(50, 50)
-	icon.set_meta("weapon_name", weapon_name)
-	
-	# Style
-	var style: StyleBoxFlat = StyleBoxFlat.new()
-	style.bg_color = Color(0.15, 0.12, 0.08, 0.95)
-	style.border_color = Color(1.0, 0.75, 0.3, 0.9)
-	style.set_border_width_all(2)
-	style.set_corner_radius_all(8)
-	style.set_content_margin_all(4)
-	icon.add_theme_stylebox_override("panel", style)
-	
-	# Container
-	var vbox: VBoxContainer = VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 0)
-	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	icon.add_child(vbox)
-	
-	# Weapon emoji
-	var icon_label: Label = Label.new()
-	icon_label.text = "🔫"
-	icon_label.add_theme_font_size_override("font_size", 18)
-	icon_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(icon_label)
-	
-	# Damage value
-	var damage_label: Label = Label.new()
-	damage_label.text = str(damage)
-	damage_label.add_theme_font_size_override("font_size", 12)
-	damage_label.add_theme_color_override("font_color", Color(1.0, 0.4, 0.4))
-	damage_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(damage_label)
-	
-	# Tooltip
-	icon.tooltip_text = weapon_name + " - Fires for " + str(damage) + " damage each turn"
-	
-	return icon
-
-
-func _flash_weapon_icon(weapon_name: String) -> void:
-	"""Flash a weapon icon when it fires."""
-	for icon: Control in active_weapon_icons:
-		if is_instance_valid(icon) and icon.get_meta("weapon_name", "") == weapon_name:
-			var tween: Tween = icon.create_tween()
-			tween.tween_property(icon, "scale", Vector2(1.3, 1.3), 0.1)
-			tween.parallel().tween_property(icon, "modulate", Color(1.5, 1.2, 0.5, 1.0), 0.1)
-			tween.tween_property(icon, "scale", Vector2.ONE, 0.15)
-			tween.parallel().tween_property(icon, "modulate", Color.WHITE, 0.15)
-			break
 
 
 func _on_wave_ended(success: bool) -> void:
@@ -1009,24 +1006,7 @@ func _on_card_drag_ended(card_def, tier: int, hand_index: int, drop_position: Ve
 	CombatManager.play_card(hand_index, target_ring)
 	print("[CombatScreen DEBUG] CombatManager.play_card completed")
 	
-	print("[CombatScreen DEBUG] ========== CALLING _update_hand ==========")
 	_update_hand()
-	print("[CombatScreen DEBUG] _update_hand completed")
-	
-	# Check if card_ui still exists after _update_hand
-	if is_instance_valid(card_ui):
-		print("[CombatScreen DEBUG] WARNING - card_ui still valid after _update_hand!")
-		print("[CombatScreen DEBUG]   -> Position: ", card_ui.global_position, " | Local: ", card_ui.position)
-		var parent_name: String = "null"
-		if card_ui.get_parent():
-			parent_name = card_ui.get_parent().name
-		print("[CombatScreen DEBUG]   -> Parent: ", parent_name)
-		print("[CombatScreen DEBUG]   -> is_being_played: ", card_ui.is_being_played if "is_being_played" in card_ui else "N/A")
-		if "active_tween" in card_ui and card_ui.active_tween:
-			print("[CombatScreen DEBUG]   -> Has active_tween: ", card_ui.active_tween.is_valid())
-	else:
-		print("[CombatScreen DEBUG] card_ui properly cleaned up after _update_hand")
-	
 	_update_threat_preview()
 	_refresh_enemy_displays()
 	
@@ -1037,39 +1017,15 @@ func _on_card_drag_ended(card_def, tier: int, hand_index: int, drop_position: Ve
 func _play_card_fly_animation(card_ui: Control, target_pos: Vector2, effect_type: String) -> void:
 	"""Animate the card flying from hand to target position."""
 	if not is_instance_valid(card_ui):
-		print("[CombatScreen DEBUG] Card fly animation - card_ui invalid")
 		return
 	
 	# Kill any existing tweens on the card first
 	if "active_tween" in card_ui and card_ui.active_tween and card_ui.active_tween.is_valid():
-		print("[CombatScreen DEBUG] Killing existing tween on card before fly animation")
 		card_ui.active_tween.kill()
 		card_ui.active_tween = null
 	
 	# Reparent card to root so it can fly freely (use call_deferred to avoid "busy" error)
 	var original_parent: Node = card_ui.get_parent()
-	
-	var _card_name: String = "unknown"
-	if "card_def" in card_ui and card_ui.card_def:
-		_card_name = card_ui.card_def.card_name
-	
-	print("[CombatScreen DEBUG] ========== STARTING CARD FLY ANIMATION ==========")
-	print("[CombatScreen DEBUG] Card: ", _card_name)
-	print("[CombatScreen DEBUG] Card initial global pos: ", card_ui.global_position)
-	print("[CombatScreen DEBUG] Card initial local pos: ", card_ui.position)
-	print("[CombatScreen DEBUG] Card initial scale: ", card_ui.scale)
-	var card_parent_name: String = "null"
-	if card_ui.get_parent():
-		card_parent_name = card_ui.get_parent().name
-	print("[CombatScreen DEBUG] Card parent: ", card_parent_name)
-	print("[CombatScreen DEBUG] Card is_being_played: ", card_ui.is_being_played if "is_being_played" in card_ui else "N/A")
-	print("[CombatScreen DEBUG] Card is_dragging: ", card_ui.is_dragging if "is_dragging" in card_ui else "N/A")
-	var orig_parent_name: String = "null"
-	if original_parent:
-		orig_parent_name = original_parent.name
-	print("[CombatScreen DEBUG] Original parent: ", orig_parent_name)
-	print("[CombatScreen DEBUG] Target position: ", target_pos)
-	print("[CombatScreen DEBUG] Effect type: ", effect_type)
 	
 	# Capture current global position RIGHT BEFORE reparenting (in case card moved during drag)
 	var current_global_pos: Vector2 = card_ui.global_position
@@ -1081,7 +1037,6 @@ func _play_card_fly_animation(card_ui: Control, target_pos: Vector2, effect_type
 		await get_tree().process_frame
 	
 	if not is_instance_valid(card_ui):
-		print("[CombatScreen DEBUG] Card fly animation - card_ui invalid after reparent")
 		return
 	
 	# Restore global position after reparenting
@@ -1102,18 +1057,12 @@ func _play_card_fly_animation(card_ui: Control, target_pos: Vector2, effect_type
 		card_ui.global_position = current_global_pos
 	card_ui.z_index = 100
 	
-	var new_parent_name: String = "null"
-	if card_ui.get_parent():
-		new_parent_name = card_ui.get_parent().name
-	print("[CombatScreen DEBUG] After reparent - global pos: ", card_ui.global_position, " | local pos: ", card_ui.position,
-		  " | new parent: ", new_parent_name)
-	
 	# Determine destination based on effect type
 	var destination: Vector2 = target_pos
 	if effect_type == "weapon_persistent":
-		# Fly to weapon panel area
-		if weapon_icons_panel:
-			destination = weapon_icons_panel.global_position + Vector2(50, 25)
+		# Fly to combat lane area
+		if combat_lane:
+			destination = combat_lane.global_position + Vector2(combat_lane.size.x / 2, combat_lane.size.y / 2)
 	elif effect_type == "gain_armor":
 		# Fly to player stats area
 		if armor_section:
@@ -1122,8 +1071,6 @@ func _play_card_fly_animation(card_ui: Control, target_pos: Vector2, effect_type
 		# Fly to HP area
 		if hp_label:
 			destination = hp_label.global_position
-	
-	print("[CombatScreen DEBUG] Card fly destination: ", destination, " | effect_type: ", effect_type)
 	
 	# Store tween reference on card_ui for tracking
 	if "active_tween" in card_ui:
@@ -1142,71 +1089,27 @@ func _play_card_fly_animation(card_ui: Control, target_pos: Vector2, effect_type
 	if "active_tween" in card_ui:
 		card_ui.active_tween = tween
 	
-	# Store tween in scene metadata for callback access
-	get_tree().current_scene.set_meta("last_card_tween", tween)
-	tween.set_meta("card_name", _card_name)
-	
-	# Track position during animation (debug)
-	var debug_timer: Timer = Timer.new()
-	debug_timer.wait_time = 0.05
-	debug_timer.set_meta("card_ui", card_ui)
-	debug_timer.set_meta("tween", tween)
-	debug_timer.set_meta("card_name", _card_name)
-	debug_timer.set_meta("frame_count", 0)
-	debug_timer.timeout.connect(_on_card_fly_debug_tick.bind(debug_timer))
-	add_child(debug_timer)
-	debug_timer.start()
-	
-	# Monitor tween completion
-	tween.finished.connect(_on_card_fly_tween_finished)
-	
 	await tween.finished
-	
-	debug_timer.queue_free()
-	
-	print("[CombatScreen DEBUG] ========== CARD FLY ANIMATION FINISHED ==========")
-	print("[CombatScreen DEBUG] Card: ", _card_name, " | card_ui valid: ", is_instance_valid(card_ui))
-	if is_instance_valid(card_ui):
-		print("[CombatScreen DEBUG] Final global pos: ", card_ui.global_position)
-		print("[CombatScreen DEBUG] Final local pos: ", card_ui.position)
-		print("[CombatScreen DEBUG] Final scale: ", card_ui.scale)
-		print("[CombatScreen DEBUG] Final modulate: ", card_ui.modulate)
-		var final_parent_name: String = "null"
-		if card_ui.get_parent():
-			final_parent_name = card_ui.get_parent().name
-		print("[CombatScreen DEBUG] Parent: ", final_parent_name)
-		print("[CombatScreen DEBUG] Has active_tween: ", card_ui.active_tween != null if "active_tween" in card_ui else "N/A")
-		if "active_tween" in card_ui and card_ui.active_tween:
-			print("[CombatScreen DEBUG] Active tween valid: ", card_ui.active_tween.is_valid())
-		print("[CombatScreen DEBUG] is_being_played: ", card_ui.is_being_played if "is_being_played" in card_ui else "N/A")
-		print("[CombatScreen DEBUG] is_dragging: ", card_ui.is_dragging if "is_dragging" in card_ui else "N/A")
 	
 	# Clean up
 	if is_instance_valid(card_ui):
-		print("[CombatScreen DEBUG] Queueing card_ui for deletion...")
 		card_ui.queue_free()
-		# Check if it's still valid after queue_free
-		await get_tree().process_frame
-		print("[CombatScreen DEBUG] After queue_free + 1 frame - card_ui valid: ", is_instance_valid(card_ui))
-		if is_instance_valid(card_ui):
-			print("[CombatScreen DEBUG] WARNING - Card still valid after queue_free! Position: ", card_ui.global_position)
 	
 	# Brief pause for visual effect
 	await get_tree().create_timer(0.1).timeout
-	print("[CombatScreen DEBUG] ========== CARD FLY ANIMATION CLEANUP COMPLETE ==========")
 
 
 func _is_outside_hand_area(global_pos: Vector2) -> bool:
-	"""Check if a position is outside the hand/card area (BottomSection)."""
-	if not bottom_section:
+	"""Check if a position is outside the hand/card area (CardHand container)."""
+	if not card_hand:
 		return true
 	
-	# Get the global rect of the bottom section (where cards are)
-	var hand_rect: Rect2 = bottom_section.get_global_rect()
+	# Get the global rect of the card hand area
+	var hand_rect: Rect2 = card_hand.get_global_rect()
 	
 	# Add some margin - card needs to be dragged a bit above the hand area
 	# Use the top of the card hand as the threshold
-	var threshold_y: float = hand_rect.position.y + 50  # 50px into the section is the threshold
+	var threshold_y: float = hand_rect.position.y + 50  # 50px into the hand area is the threshold
 	
 	# Card is "outside" if it's above the threshold
 	return global_pos.y < threshold_y
@@ -1676,6 +1579,35 @@ func _create_dev_panel() -> void:
 	add_child(dev_panel)
 
 
+func _create_v2_debug_stat_panel() -> void:
+	"""Create the V2 debug stat panel (toggle with F3)."""
+	var debug_panel = DebugStatPanelClass.new()
+	debug_panel.name = "V2DebugStatPanel"
+	
+	# Anchor to bottom-right corner
+	# All anchors at 1.0 means positions are relative to parent's bottom-right
+	debug_panel.anchor_left = 1.0
+	debug_panel.anchor_right = 1.0
+	debug_panel.anchor_top = 1.0
+	debug_panel.anchor_bottom = 1.0
+	
+	# Offsets define the edges relative to the anchor point (bottom-right)
+	# Panel width = 280, height = 400 (from custom_minimum_size)
+	# We want: right edge 10px from right, bottom edge 390px from bottom
+	var panel_width: float = 280.0
+	var panel_height: float = 400.0
+	var margin_right: float = 10.0
+	var margin_bottom: float = 390.0  # Above the 380px hand area
+	
+	debug_panel.offset_right = -margin_right
+	debug_panel.offset_left = -margin_right - panel_width
+	debug_panel.offset_bottom = -margin_bottom
+	debug_panel.offset_top = -margin_bottom - panel_height
+	
+	add_child(debug_panel)
+	print("[CombatScreen] V2 Debug Stat Panel created (press F3 to toggle)")
+
+
 func _dev_force_win() -> void:
 	"""Force win the current wave by killing all enemies."""
 	print("[DEV] Force Win triggered")
@@ -1707,37 +1639,3 @@ func _dev_add_scrap() -> void:
 	"""Add 1000 scrap to the player."""
 	print("[DEV] Add Scrap triggered")
 	RunManager.add_scrap(1000)
-
-
-func _on_card_fly_debug_tick(timer: Timer) -> void:
-	"""Debug callback for card fly animation tracking."""
-	var card_ui: Control = timer.get_meta("card_ui", null)
-	var tween: Tween = timer.get_meta("tween", null)
-	var _card_name_debug: String = timer.get_meta("card_name", "unknown")
-	var frame_count: int = timer.get_meta("frame_count", 0)
-	frame_count += 1
-	timer.set_meta("frame_count", frame_count)
-	
-	if is_instance_valid(card_ui):
-		var debug_parent_name: String = "null"
-		if card_ui.get_parent():
-			debug_parent_name = card_ui.get_parent().name
-		print("[CombatScreen DEBUG] Card flying [frame ", frame_count, "] - global pos: ", card_ui.global_position, 
-			  " | local pos: ", card_ui.position, " | scale: ", card_ui.scale, 
-			  " | modulate.a: ", card_ui.modulate.a, " | parent: ", debug_parent_name)
-		# Check if tween is still valid
-		if tween and tween.is_valid():
-			print("[CombatScreen DEBUG]   -> Tween is valid and running")
-		else:
-			print("[CombatScreen DEBUG]   -> WARNING: Tween is invalid or finished!")
-	else:
-		timer.queue_free()
-
-
-func _on_card_fly_tween_finished() -> void:
-	"""Debug callback when card fly tween finishes."""
-	var tween: Tween = null
-	if get_tree().current_scene.has_meta("last_card_tween"):
-		tween = get_tree().current_scene.get_meta("last_card_tween", null)
-	var card_name: String = "unknown" if not tween else tween.get_meta("card_name", "unknown")
-	print("[CombatScreen DEBUG] Tween finished callback triggered - card: ", card_name)

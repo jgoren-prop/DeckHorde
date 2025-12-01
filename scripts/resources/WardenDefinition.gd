@@ -1,30 +1,28 @@
 extends Resource
 class_name WardenDefinition
 ## WardenDefinition - Data resource for Warden (character) definitions
+## V2: Uses stat_modifiers for Brotato-style stat scaling
 
 @export var warden_id: String = ""
 @export var warden_name: String = ""
 @export_multiline var description: String = ""
 @export_multiline var passive_description: String = ""
-@export_multiline var drawback_description: String = ""
 
-# Base stats
-@export var max_hp: int = 60
+# Base stats (V2 defaults)
+@export var max_hp: int = 70
 @export var base_armor: int = 0
-@export var damage_multiplier: float = 1.0
 @export var base_energy: int = 3
 @export var hand_size: int = 5
 
-# Tag bonuses (e.g., "gun" -> 0.15 means +15% damage with Gun cards)
-@export var tag_damage_bonuses: Dictionary = {}
+# V2: Stat modifiers applied to PlayerStats (ADDITIVE)
+# Format: {"stat_name": modifier_value}
+# Example: {"gun_damage_percent": 20.0} adds +20% gun damage
+# See PlayerStats.gd for available stat names
+@export var stat_modifiers: Dictionary = {}
 
-# Passive ability identifiers
+# Passive ability identifier (temporary - will be replaced by V2 passive system)
+# Currently only used for: "cheat_death" (Glass Warden)
 @export var passive_id: String = ""
-@export var passive_params: Dictionary = {}
-
-# Drawback identifiers
-@export var drawback_id: String = ""
-@export var drawback_params: Dictionary = {}
 
 # Starting deck - Array of {card_id: String, tier: int, count: int}
 @export var starting_deck: Array[Dictionary] = []

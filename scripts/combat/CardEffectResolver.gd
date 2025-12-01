@@ -5,17 +5,16 @@ class_name CardEffectResolver
 const BattlefieldStateScript = preload("res://scripts/combat/BattlefieldState.gd")
 
 
-static func _apply_warden_tag_bonus(base_damage: int, tags: Array, target_ring: int = -1) -> int:
-	"""Apply warden tag damage bonuses (e.g., Ash Warden +15% gun damage to Close/Melee)."""
-	var damage: int = base_damage
+static func _apply_damage_multipliers(base_damage: int, card_def, target_ring: int = -1) -> int:
+	"""Apply V2 damage multipliers based on card tags and target ring.
+	Uses ADDITIVE stacking from PlayerStats.
+	"""
+	# Get the combined multiplier from RunManager (additive tag + ring bonuses)
+	var mult: float = RunManager.get_damage_multiplier_for_card(card_def, target_ring)
+	var damage: int = int(float(base_damage) * mult)
 	
-	for tag in tags:
-		var bonus: float = RunManager.get_warden_tag_bonus(tag)
-		if bonus > 0.0:
-			# Ash Warden passive: bonus only applies to Close (1) and Melee (0) rings
-			if target_ring < 0 or target_ring <= 1:  # -1 means random target, apply bonus
-				damage = int(float(damage) * (1.0 + bonus))
-				print("[CardEffectResolver] Warden tag bonus applied: +", bonus * 100.0, "% to ", tag)
+	if mult != 1.0:
+		print("[CardEffectResolver] V2 damage multiplier applied: ", mult, "x (", base_damage, " -> ", damage, ")")
 	
 	return damage
 
@@ -44,6 +43,8 @@ static func resolve(card_def, tier: int, target_ring: int, combat: Node) -> void
 			_resolve_damage_and_armor(card_def, tier, target_ring, combat)
 		"armor_and_lifesteal":
 			_resolve_armor_and_lifesteal(card_def, tier, combat)
+		"armor_and_heal":
+			_resolve_armor_and_heal(card_def, tier)
 		"draw_cards":
 			_resolve_draw_cards(card_def, tier, combat)
 		"push_enemies":
@@ -72,6 +73,9 @@ static func resolve_weapon_effect(card_def, tier: int, combat: Node) -> void:  #
 	var artifact_effects: Dictionary = ArtifactManager.trigger_artifacts("on_card_play", {"card_tags": card_def.tags})
 	damage += artifact_effects.bonus_damage
 	
+	# V2: Apply damage multipliers (use -1 for random target ring)
+	damage = _apply_damage_multipliers(damage, card_def, -1)
+	
 	# Build ring mask from target_rings
 	var ring_mask: int = 0
 	for ring: int in card_def.target_rings:
@@ -89,8 +93,8 @@ static func _resolve_instant_damage(card_def, tier: int, target_ring: int, comba
 	var artifact_effects: Dictionary = ArtifactManager.trigger_artifacts("on_card_play", {"card_tags": card_def.tags})
 	damage += artifact_effects.bonus_damage
 	
-	# Check for Ash Warden passive: gun cards deal +15% damage to Close/Melee
-	damage = _apply_warden_tag_bonus(damage, card_def.tags, target_ring)
+	# V2: Apply damage multipliers based on card tags and target ring
+	damage = _apply_damage_multipliers(damage, card_def, target_ring)
 	
 	match card_def.target_type:
 		"ring":
@@ -140,11 +144,15 @@ static func _resolve_buff(card_def, tier: int) -> void:  # card_def: CardDefinit
 	
 	match card_def.buff_type:
 		"gun_damage":
-			# This would be tracked in a buff system
-			# For now, we'll handle this differently via artifacts/modifiers
+			# V2: Apply gun damage buff via PlayerStats
+			RunManager.player_stats.gun_damage_percent += float(buff_value)
+			RunManager.stats_changed.emit()
 			print("[CardEffectResolver] Applied gun_damage buff: +", buff_value, "%")
 		"damage":
-			RunManager.damage_multiplier += buff_value / 100.0
+			# V2: Apply generic damage buff via PlayerStats
+			RunManager.player_stats.generic_damage_percent += float(buff_value)
+			RunManager.stats_changed.emit()
+			print("[CardEffectResolver] Applied generic damage buff: +", buff_value, "%")
 		_:
 			push_warning("[CardEffectResolver] Unknown buff type: " + card_def.buff_type)
 
@@ -153,9 +161,13 @@ static func _resolve_apply_hex(card_def, tier: int, target_ring: int, combat: No
 	"""Apply hex to enemies in a ring."""
 	var hex_damage: int = card_def.get_scaled_value("hex_damage", tier)
 	
-	# Apply hex multiplier from artifacts (Void Heart)
-	var hex_mult: float = ArtifactManager.get_hex_multiplier()
-	hex_damage = int(float(hex_damage) * hex_mult)
+	# V2: Apply hex multiplier from PlayerStats
+	var stats_mult: float = RunManager.get_hex_damage_multiplier()
+	hex_damage = int(float(hex_damage) * stats_mult)
+	
+	# Also apply artifact hex multiplier (Void Heart) - stacks multiplicatively
+	var artifact_mult: float = ArtifactManager.get_hex_multiplier()
+	hex_damage = int(float(hex_damage) * artifact_mult)
 	
 	var rings_to_hex: Array[int] = []
 	if card_def.requires_target:
@@ -176,9 +188,13 @@ static func _resolve_apply_hex_multi(card_def, tier: int, combat: Node) -> void:
 	var hex_damage: int = card_def.get_scaled_value("hex_damage", tier)
 	var target_count: int = card_def.get_scaled_value("target_count", tier)
 	
-	# Apply hex multiplier from artifacts (Void Heart)
-	var hex_mult: float = ArtifactManager.get_hex_multiplier()
-	hex_damage = int(float(hex_damage) * hex_mult)
+	# V2: Apply hex multiplier from PlayerStats
+	var stats_mult: float = RunManager.get_hex_damage_multiplier()
+	hex_damage = int(float(hex_damage) * stats_mult)
+	
+	# Also apply artifact hex multiplier (Void Heart) - stacks multiplicatively
+	var artifact_mult: float = ArtifactManager.get_hex_multiplier()
+	hex_damage = int(float(hex_damage) * artifact_mult)
 	
 	var all_enemies: Array = combat.battlefield.get_all_enemies()
 	all_enemies.shuffle()
@@ -206,6 +222,14 @@ static func _resolve_ring_barrier(card_def, tier: int, target_ring: int, combat:
 	var damage: int = card_def.get_scaled_value("damage", tier)
 	var duration: int = card_def.get_scaled_value("duration", tier)
 	
+	# V2: Apply barrier damage multiplier
+	var damage_mult: float = RunManager.get_barrier_damage_multiplier()
+	damage = int(float(damage) * damage_mult)
+	
+	# V2: Apply barrier strength multiplier to duration (HP/crossings)
+	var strength_mult: float = RunManager.get_barrier_strength_multiplier()
+	duration = int(float(duration) * strength_mult)
+	
 	combat.battlefield.add_ring_barrier(target_ring, damage, duration)
 	
 	# Emit signal for visual feedback
@@ -221,11 +245,14 @@ static func _resolve_damage_and_heal(card_def, tier: int, combat: Node) -> void:
 	var artifact_effects: Dictionary = ArtifactManager.trigger_artifacts("on_card_play", {"card_tags": card_def.tags})
 	damage += artifact_effects.bonus_damage
 	
+	# V2: Apply damage multipliers
+	damage = _apply_damage_multipliers(damage, card_def, -1)
+	
 	# Deal damage to random enemy
 	var ring_mask: int = 0b1111  # All rings
 	combat.deal_damage_to_random_enemy(ring_mask, damage)
 	
-	# Heal player
+	# Heal player (heal multiplier applied in RunManager.heal)
 	RunManager.heal(heal_amount)
 
 
@@ -260,6 +287,16 @@ static func _resolve_armor_and_lifesteal(card_def, tier: int, _combat: Node) -> 
 	print("[CardEffectResolver] Lifesteal on kill: ", lifesteal, " (not fully implemented)")
 
 
+static func _resolve_armor_and_heal(card_def, tier: int) -> void:  # card_def: CardDefinition
+	"""Gain armor and heal the player."""
+	var armor_amount: int = card_def.get_scaled_value("armor_amount", tier)
+	var heal_amount: int = card_def.get_scaled_value("heal_amount", tier)
+	
+	RunManager.add_armor(armor_amount)
+	RunManager.heal(heal_amount)
+	print("[CardEffectResolver] Armor and heal: +", armor_amount, " armor, +", heal_amount, " HP")
+
+
 static func _resolve_draw_cards(card_def, _tier: int, combat: Node) -> void:  # card_def: CardDefinition
 	"""Draw additional cards."""
 	var count: int = card_def.cards_to_draw
@@ -280,15 +317,23 @@ static func _resolve_push_enemies(card_def, _tier: int, target_ring: int, combat
 	else:
 		rings_to_push.assign(card_def.target_rings)
 	
+	# IMPORTANT: Collect all enemies to push FIRST, then push them.
+	# This prevents enemies from being pushed multiple times when iterating through rings
+	# (e.g., enemy in MELEE gets pushed to CLOSE, then pushed again to MID)
+	var enemies_to_push: Array = []
 	for ring: int in rings_to_push:
 		var enemies: Array = combat.battlefield.get_enemies_in_ring(ring)
-		for enemy in enemies:  # enemy: EnemyInstance
-			var old_ring: int = enemy.ring
-			var new_ring: int = mini(BattlefieldStateScript.Ring.FAR, old_ring + push_amount)
-			if new_ring != old_ring:
-				combat.battlefield.move_enemy(enemy, new_ring)
-				# Emit CombatManager signal so BattlefieldArena updates visuals
-				CombatManager.enemy_moved.emit(enemy, old_ring, new_ring)
+		for enemy in enemies:
+			enemies_to_push.append(enemy)
+	
+	# Now push all collected enemies
+	for enemy in enemies_to_push:  # enemy: EnemyInstance
+		var old_ring: int = enemy.ring
+		var new_ring: int = mini(BattlefieldStateScript.Ring.FAR, old_ring + push_amount)
+		if new_ring != old_ring:
+			combat.battlefield.move_enemy(enemy, new_ring)
+			# Emit CombatManager signal so BattlefieldArena updates visuals
+			CombatManager.enemy_moved.emit(enemy, old_ring, new_ring)
 
 
 static func _resolve_damage_and_draw(card_def, tier: int, combat: Node) -> void:  # card_def: CardDefinition
@@ -301,6 +346,9 @@ static func _resolve_damage_and_draw(card_def, tier: int, combat: Node) -> void:
 	# Check for Ember Charm artifact bonus (gun cards deal +2 damage)
 	var artifact_effects: Dictionary = ArtifactManager.trigger_artifacts("on_card_play", {"card_tags": card_def.tags})
 	damage += artifact_effects.bonus_damage
+	
+	# V2: Apply damage multipliers
+	damage = _apply_damage_multipliers(damage, card_def, -1)
 	
 	# Build ring mask from target_rings
 	var ring_mask: int = 0
@@ -325,6 +373,9 @@ static func _resolve_scatter_damage(card_def, tier: int, combat: Node) -> void: 
 	# Check for Ember Charm artifact bonus (gun cards deal +2 damage)
 	var artifact_effects: Dictionary = ArtifactManager.trigger_artifacts("on_card_play", {"card_tags": card_def.tags})
 	damage += artifact_effects.bonus_damage
+	
+	# V2: Apply damage multipliers
+	damage = _apply_damage_multipliers(damage, card_def, -1)
 	
 	# Build ring mask from target_rings
 	var ring_mask: int = 0
@@ -376,9 +427,16 @@ static func _resolve_damage_and_hex(card_def, tier: int, combat: Node) -> void: 
 	var damage: int = card_def.get_scaled_value("damage", tier)
 	var hex_damage: int = card_def.get_scaled_value("hex_damage", tier)
 	
-	# Apply hex multiplier from artifacts (Void Heart)
-	var hex_mult: float = ArtifactManager.get_hex_multiplier()
-	hex_damage = int(float(hex_damage) * hex_mult)
+	# V2: Apply damage multipliers
+	damage = _apply_damage_multipliers(damage, card_def, -1)
+	
+	# V2: Apply hex multiplier from PlayerStats
+	var stats_mult: float = RunManager.get_hex_damage_multiplier()
+	hex_damage = int(float(hex_damage) * stats_mult)
+	
+	# Also apply artifact hex multiplier (Void Heart)
+	var artifact_mult: float = ArtifactManager.get_hex_multiplier()
+	hex_damage = int(float(hex_damage) * artifact_mult)
 	
 	# Find a valid target in target_rings
 	var candidates: Array = []

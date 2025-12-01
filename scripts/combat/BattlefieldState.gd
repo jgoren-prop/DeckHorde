@@ -56,12 +56,16 @@ func remove_enemy(enemy) -> void:  # enemy: EnemyInstance
 	enemy_removed.emit(enemy)
 
 
-func move_enemy(enemy, new_ring: int) -> void:  # enemy: EnemyInstance
-	"""Move an enemy to a new ring."""
+func move_enemy(enemy, new_ring: int) -> Dictionary:  # enemy: EnemyInstance
+	"""Move an enemy to a new ring. Returns info about barrier damage dealt."""
 	var old_ring: int = enemy.ring
+	var result: Dictionary = {
+		"barrier_damage": 0,
+		"killed_by_barrier": false
+	}
 	
 	if old_ring == new_ring:
-		return
+		return result
 	
 	# Remove from old ring
 	if old_ring >= 0 and old_ring < rings.size():
@@ -72,10 +76,12 @@ func move_enemy(enemy, new_ring: int) -> void:  # enemy: EnemyInstance
 		for check_ring: int in range(new_ring, old_ring):
 			if ring_barriers.has(check_ring):
 				var barrier: Dictionary = ring_barriers[check_ring]
+				result.barrier_damage += barrier.damage
 				enemy.current_hp -= barrier.damage
 				if enemy.current_hp <= 0:
+					result.killed_by_barrier = true
 					enemy_removed.emit(enemy)
-					return
+					return result
 	
 	# Add to new ring
 	enemy.ring = new_ring
@@ -83,6 +89,7 @@ func move_enemy(enemy, new_ring: int) -> void:  # enemy: EnemyInstance
 		rings[new_ring].append(enemy)
 	
 	enemy_moved.emit(enemy, old_ring, new_ring)
+	return result
 
 
 func get_enemies_in_ring(ring: int) -> Array:  # Array[EnemyInstance]

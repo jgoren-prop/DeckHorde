@@ -1,12 +1,17 @@
 extends Node
 ## RunManager - Current run state
-## MINIMAL STUB for testing - will be expanded later
+## V2: Now uses PlayerStats for Brotato-style stat scaling
+
+# V2: Preload dependencies to ensure they're available at autoload time
+const PlayerStatsClass = preload("res://scripts/resources/PlayerStats.gd")
+const TagConstantsClass = preload("res://scripts/constants/TagConstants.gd")
 
 signal hp_changed(current: int, max_hp: int)
 signal health_changed(current: int, max_hp: int)  # Alias for hp_changed
 signal armor_changed(amount: int)
 signal scrap_changed(amount: int)
 signal wave_changed(wave: int)
+signal stats_changed()  # V2: Emitted when player stats change
 
 # Constants
 const MAX_WAVES: int = 12
@@ -18,15 +23,13 @@ var danger_level: int = 1
 var enemies_killed: int = 0
 var essence_earned: int = 0
 
-# Player stats
-var current_hp: int = 60
-var max_hp: int = 60
+# V2: Player stats resource (replaces individual stat vars)
+var player_stats = PlayerStatsClass.new()
+
+# Player state (runtime values, not base stats)
+var current_hp: int = 70
 var armor: int = 0
 var scrap: int = 0
-
-# Energy
-var base_energy: int = 3
-var max_energy: int = 3
 
 # Deck (array of {card_id: String, tier: int})
 var deck: Array = []
@@ -34,37 +37,181 @@ var deck: Array = []
 # Current warden (set via set_warden)
 var current_warden = null
 
-# Damage multiplier
-var damage_multiplier: float = 1.0
+# V2 Warden passive state (will be replaced by proper V2 passive system in Phase 7+)
+# For now, keeping cheat_death for Glass Warden compatibility
+var cheat_death_available: bool = true
 
-# Warden passive state
-var cheat_death_available: bool = true  # Glass Warden: survive fatal hit once
+# =============================================================================
+# V2 STAT ACCESSORS (delegate to PlayerStats)
+# =============================================================================
+
+## Get max HP from player stats
+var max_hp: int:
+	get:
+		return player_stats.max_hp
+	set(value):
+		player_stats.max_hp = value
+
+## Get base energy per turn from player stats
+var base_energy: int:
+	get:
+		return player_stats.energy_per_turn
+	set(value):
+		player_stats.energy_per_turn = value
+
+## Get max energy (same as base for now, no carryover)
+var max_energy: int:
+	get:
+		return player_stats.energy_per_turn
+	set(value):
+		player_stats.energy_per_turn = value
+
+## Get cards drawn per turn
+var draw_per_turn: int:
+	get:
+		return player_stats.draw_per_turn
+
+## Get max hand size
+var hand_size_max: int:
+	get:
+		return player_stats.hand_size_max
 
 
 func _ready() -> void:
-	print("[RunManager] Initialized")
+	print("[RunManager] V2 Initialized with PlayerStats")
 
 
 func reset_run() -> void:
 	current_wave = 1
-	current_hp = max_hp
+	player_stats.reset_to_defaults()
+	current_hp = player_stats.max_hp
 	armor = 0
 	scrap = 0
 	deck.clear()
-	damage_multiplier = 1.0
 	enemies_killed = 0
 	essence_earned = 0
+	cheat_death_available = true
+	stats_changed.emit()
 
 
 func set_warden(warden) -> void:
+	"""Set the current warden and apply their stat modifiers.
+	V2: Wardens must be WardenDefinition resources with stat_modifiers.
+	"""
 	current_warden = warden
-	if warden:
-		max_hp = warden.max_hp
-		current_hp = max_hp
+	
+	# Reset to defaults first
+	player_stats.reset_to_defaults()
+	cheat_death_available = true
+	
+	if warden and warden is WardenDefinition:
+		# Apply warden's base stats
+		player_stats.max_hp = warden.max_hp
+		player_stats.energy_per_turn = warden.base_energy
+		if warden.hand_size > 0:
+			player_stats.draw_per_turn = warden.hand_size
+		
+		# V2: Apply stat modifiers from warden (additive bonuses)
+		if warden.stat_modifiers.size() > 0:
+			player_stats.apply_modifiers(warden.stat_modifiers)
+		
+		current_hp = player_stats.max_hp
 		armor = warden.base_armor
-		base_energy = warden.base_energy
-		max_energy = base_energy
-		damage_multiplier = warden.damage_multiplier
+		
+		# V2 Passive check: Glass Warden cheat_death (temporary until V2 passive system)
+		if warden.passive_id == "cheat_death":
+			cheat_death_available = true
+	
+	stats_changed.emit()
+
+
+# =============================================================================
+# V2 STAT MULTIPLIER GETTERS
+# =============================================================================
+
+func get_gun_damage_multiplier() -> float:
+	"""Get gun damage multiplier from player stats."""
+	return player_stats.get_gun_damage_multiplier()
+
+
+func get_hex_damage_multiplier() -> float:
+	"""Get hex damage multiplier from player stats."""
+	return player_stats.get_hex_damage_multiplier()
+
+
+func get_barrier_damage_multiplier() -> float:
+	"""Get barrier damage multiplier from player stats."""
+	return player_stats.get_barrier_damage_multiplier()
+
+
+func get_generic_damage_multiplier() -> float:
+	"""Get generic damage multiplier from player stats."""
+	return player_stats.get_generic_damage_multiplier()
+
+
+func get_armor_gain_multiplier() -> float:
+	"""Get armor gain multiplier from player stats."""
+	return player_stats.get_armor_gain_multiplier()
+
+
+func get_heal_power_multiplier() -> float:
+	"""Get heal power multiplier from player stats."""
+	return player_stats.get_heal_power_multiplier()
+
+
+func get_barrier_strength_multiplier() -> float:
+	"""Get barrier strength multiplier from player stats."""
+	return player_stats.get_barrier_strength_multiplier()
+
+
+func get_scrap_gain_multiplier() -> float:
+	"""Get scrap gain multiplier from player stats."""
+	return player_stats.get_scrap_gain_multiplier()
+
+
+func get_ring_damage_multiplier(ring: int) -> float:
+	"""Get damage multiplier for a specific ring."""
+	return player_stats.get_ring_damage_multiplier(ring)
+
+
+func get_damage_multiplier_for_card(card_def, target_ring: int = -1) -> float:
+	"""Get the total damage multiplier for a card based on its tags and target ring.
+	
+	Uses ADDITIVE stacking:
+	- Base = 100%
+	- Gun at 120% adds +20%
+	- Ring at 115% adds +15%
+	- Total = 100% + 20% + 15% = 135% = 1.35x
+	"""
+	# Start with base 100%
+	var total_percent: float = 100.0
+	
+	# Add type-specific bonus (stat - 100 = bonus percentage)
+	if card_def.has_tag(TagConstantsClass.TAG_GUN):
+		total_percent += player_stats.gun_damage_percent - 100.0
+	elif card_def.has_tag(TagConstantsClass.TAG_HEX):
+		total_percent += player_stats.hex_damage_percent - 100.0
+	elif card_def.has_tag(TagConstantsClass.TAG_BARRIER):
+		total_percent += player_stats.barrier_damage_percent - 100.0
+	else:
+		total_percent += player_stats.generic_damage_percent - 100.0
+	
+	# Add ring-specific bonus if we know the target
+	if target_ring >= 0 and target_ring <= 3:
+		var ring_percent: float = 100.0
+		match target_ring:
+			0:
+				ring_percent = player_stats.damage_vs_melee_percent
+			1:
+				ring_percent = player_stats.damage_vs_close_percent
+			2:
+				ring_percent = player_stats.damage_vs_mid_percent
+			3:
+				ring_percent = player_stats.damage_vs_far_percent
+		total_percent += ring_percent - 100.0
+	
+	# Convert to multiplier (135% -> 1.35)
+	return total_percent / 100.0
 
 
 func take_damage(amount: int) -> void:
@@ -81,8 +228,9 @@ func take_damage(amount: int) -> void:
 	# Remaining damage hits HP
 	var new_hp: int = current_hp - remaining_damage
 	
-	# Check Glass Warden passive: survive fatal hit at 1 HP
-	if new_hp <= 0 and cheat_death_available and _has_warden_passive("cheat_death"):
+	# V2: Glass Warden passive - survive fatal hit at 1 HP
+	# (Will be replaced by proper V2 passive system in Phase 7+)
+	if new_hp <= 0 and cheat_death_available and _has_cheat_death_passive():
 		new_hp = 1
 		cheat_death_available = false
 		print("[RunManager] Glass Warden passive: Cheated death! HP set to 1")
@@ -95,19 +243,25 @@ func take_damage(amount: int) -> void:
 
 
 func add_armor(amount: int) -> void:
-	armor += amount
+	# V2: Apply armor gain multiplier
+	var scaled_amount: int = int(float(amount) * get_armor_gain_multiplier())
+	armor += scaled_amount
 	armor_changed.emit(armor)
 	AudioManager.play_armor_gain()
 
 
 func heal(amount: int) -> void:
-	current_hp = min(max_hp, current_hp + amount)
+	# V2: Apply heal power multiplier
+	var scaled_amount: int = int(float(amount) * get_heal_power_multiplier())
+	current_hp = min(max_hp, current_hp + scaled_amount)
 	hp_changed.emit(current_hp, max_hp)
 	AudioManager.play_heal()
 
 
 func add_scrap(amount: int) -> void:
-	scrap += amount
+	# V2: Apply scrap gain multiplier
+	var scaled_amount: int = int(float(amount) * get_scrap_gain_multiplier())
+	scrap += scaled_amount
 	scrap_changed.emit(scrap)
 
 
@@ -158,25 +312,19 @@ func remove_card_from_deck(index: int) -> void:
 		print("[RunManager] Removed card from deck: ", removed.card_id)
 
 
-func _has_warden_passive(passive_id: String) -> bool:
-	"""Check if the current warden has a specific passive."""
+func _has_cheat_death_passive() -> bool:
+	"""V2: Check if current warden has cheat_death passive.
+	Temporary implementation until V2 passive system in Phase 7+.
+	"""
 	if current_warden == null:
 		return false
-	if current_warden is Dictionary:
-		return current_warden.get("passive_id", "") == passive_id
+	if current_warden is WardenDefinition:
+		return current_warden.passive_id == "cheat_death"
 	return false
-
-
-func get_warden_tag_bonus(tag: String) -> float:
-	"""Get the damage bonus for a specific card tag (e.g., 'gun' -> 0.15)."""
-	if current_warden == null:
-		return 0.0
-	if current_warden is Dictionary:
-		var bonuses: Dictionary = current_warden.get("tag_damage_bonuses", {})
-		return bonuses.get(tag, 0.0)
-	return 0.0
 
 
 func reset_wave_state() -> void:
 	"""Reset per-wave state (call at wave start)."""
-	cheat_death_available = true
+	# Reset cheat_death if warden has the passive
+	if _has_cheat_death_passive():
+		cheat_death_available = true

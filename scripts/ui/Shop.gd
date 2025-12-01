@@ -17,6 +17,9 @@ var deck_viewer_overlay: CanvasLayer = null
 var deck_viewer_grid: GridContainer = null
 var deck_viewer_title: Label = null
 
+# Stats panel (always visible in workshop)
+var stats_panel: PanelContainer = null
+
 # Merge popup (optional - created dynamically if needed)
 var merge_popup: PanelContainer = null
 var merge_card_name: Label = null
@@ -25,24 +28,25 @@ var merge_confirm_btn: Button = null
 
 var card_ui_scene: PackedScene = preload("res://scenes/ui/CardUI.tscn")
 
-var shop_cards: Array[CardDefinition] = []
+var shop_cards: Array = []  # Array of CardDefinition (can't type due to preload issues)
 var shop_artifacts: Array = []  # Array of artifact data dictionaries
 
-var remove_cost: int = 50
-var heal_cost: int = 30
-var reroll_cost: int = 10
-var reroll_count: int = 0
+# V2: Service costs calculated by ShopGenerator
+var remove_cost: int = 10
+var heal_cost: int = 10
+var reroll_cost: int = 3
 
 var pending_merge_card_id: String = ""
 var pending_merge_tier: int = 0
 
-const CARD_BASE_PRICE: int = 40
-const ARTIFACT_BASE_PRICE: int = 80
+# V2: Use ShopGenerator for pricing
+const CARD_BASE_PRICE: int = 30  # Fallback only
 
 
 func _ready() -> void:
 	_create_deck_viewer_overlay()
 	_create_dev_panel()
+	_create_stats_panel()
 	_refresh_shop()
 	_update_ui()
 	_check_merges()
@@ -56,25 +60,25 @@ func _ready() -> void:
 
 
 func _refresh_shop() -> void:
-	# Generate shop cards
-	shop_cards = CardDatabase.get_shop_cards(3, RunManager.current_wave)
+	# V2: Use ShopGenerator for biased card/artifact generation
+	var wave: int = RunManager.current_wave
 	
-	# Generate artifacts from ArtifactManager
-	shop_artifacts = _get_shop_artifacts(2)
+	# Generate biased shop cards (4 slots in V2)
+	shop_cards = ShopGenerator.generate_shop_cards(wave)
+	
+	# Generate biased artifacts (3 slots in V2)
+	shop_artifacts = ShopGenerator.generate_shop_artifacts(wave)
+	
+	# Update service costs based on wave
+	heal_cost = ShopGenerator.get_heal_cost(wave)
+	remove_cost = ShopGenerator.get_remove_card_cost(wave)
+	reroll_cost = ShopGenerator.get_reroll_cost(wave)
 	
 	_populate_card_slots()
 	_populate_artifact_slots()
 
 
-func _get_shop_artifacts(count: int) -> Array:
-	"""Get random artifacts for the shop."""
-	var available: Array = ArtifactManager.get_available_artifacts()
-	available.shuffle()
-	
-	var result: Array = []
-	for i: int in range(mini(count, available.size())):
-		result.append(available[i])
-	return result
+# V2: Artifact generation moved to ShopGenerator for family biasing
 
 
 func _populate_card_slots() -> void:
@@ -85,7 +89,7 @@ func _populate_card_slots() -> void:
 	# Create card slots
 	for i: int in range(shop_cards.size()):
 		var card = shop_cards[i]  # CardDefinition
-		var slot: PanelContainer = _create_shop_card_slot(card, i)
+		var slot: VBoxContainer = _create_shop_card_slot(card, i)
 		card_slots.add_child(slot)
 	
 	# Show "Sold Out" if empty
@@ -97,43 +101,37 @@ func _populate_card_slots() -> void:
 		card_slots.add_child(sold_out)
 
 
-func _create_shop_card_slot(card, index: int) -> PanelContainer:  # card: CardDefinition
-	var panel: PanelContainer = PanelContainer.new()
-	panel.custom_minimum_size = Vector2(140, 220)
-	
-	var style: StyleBoxFlat = StyleBoxFlat.new()
-	style.bg_color = Color(0.15, 0.12, 0.2)
-	style.set_corner_radius_all(6)
-	panel.add_theme_stylebox_override("panel", style)
-	
+func _create_shop_card_slot(card, index: int) -> VBoxContainer:  # card: CardDefinition
+	# Use VBoxContainer to hold card + price (no wrapper panel)
 	var vbox: VBoxContainer = VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 5)
-	panel.add_child(vbox)
+	vbox.add_theme_constant_override("separation", 8)
+	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
 	
-	# Card preview (simplified)
+	# Card - use same size as combat (225x338 from CardUI.tscn)
 	var card_ui: Control = card_ui_scene.instantiate()
 	card_ui.check_playability = false  # Don't dim cards in shop
 	card_ui.setup(card, 1, index)
 	card_ui.card_clicked.connect(_on_shop_card_clicked)
-	card_ui.custom_minimum_size = Vector2(130, 180)
+	# Don't override minimum size - let it use its natural size from the scene
 	vbox.add_child(card_ui)
 	
-	# Price
+	# Price label below card
 	var price: int = _calculate_card_price(card)
 	var price_label: Label = Label.new()
 	price_label.text = "%d ⚙️" % price
 	price_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	price_label.add_theme_font_size_override("font_size", 18)
 	if RunManager.scrap >= price:
 		price_label.add_theme_color_override("font_color", Color(1, 0.9, 0.5))
 	else:
 		price_label.add_theme_color_override("font_color", Color(0.6, 0.4, 0.4))
 	vbox.add_child(price_label)
 	
-	panel.set_meta("card", card)
-	panel.set_meta("price", price)
-	panel.set_meta("index", index)
+	vbox.set_meta("card", card)
+	vbox.set_meta("price", price)
+	vbox.set_meta("index", index)
 	
-	return panel
+	return vbox
 
 
 func _populate_artifact_slots() -> void:
@@ -309,10 +307,8 @@ func _create_merge_slot(merge_data: Dictionary) -> PanelContainer:
 
 
 func _calculate_card_price(card) -> int:  # card: CardDefinition
-	var base: int = CARD_BASE_PRICE
-	base += card.rarity * 20
-	base += RunManager.current_wave * 5
-	return base
+	# V2: Use ShopGenerator for consistent pricing
+	return ShopGenerator.get_card_price(card, RunManager.current_wave)
 
 
 func _update_ui() -> void:
@@ -450,7 +446,7 @@ func _show_deck_for_removal() -> void:
 func _on_remove_card_selected(card_def, _tier: int, index: int) -> void:  # card_def: CardDefinition
 	if RunManager.spend_scrap(remove_cost):
 		RunManager.remove_card_from_deck(index)
-		remove_cost += 25  # Increase cost each time
+		_update_ui()
 		print("[Shop] Removed card: ", card_def.card_name)
 		_check_merges()
 	
@@ -463,20 +459,22 @@ func _on_deck_view_close() -> void:
 
 func _on_heal_pressed() -> void:
 	if RunManager.spend_scrap(heal_cost):
-		RunManager.heal(10)
-		heal_cost += 15  # Increase cost
-		print("[Shop] Healed 10 HP")
+		# V2: Heal 30% of missing HP
+		var missing_hp: int = RunManager.player_stats.max_hp - RunManager.current_hp
+		var heal_amount: int = maxi(1, int(missing_hp * 0.3))
+		RunManager.heal(heal_amount)
+		_update_ui()
+		print("[Shop] Healed %d HP (30%% of missing)" % heal_amount)
 	else:
 		_show_not_enough_scrap()
 
 
 func _on_reroll_pressed() -> void:
 	if RunManager.spend_scrap(reroll_cost):
-		reroll_count += 1
-		reroll_cost = 10 + reroll_count * 10
 		_refresh_shop()
 		_check_merges()
-		print("[Shop] Rerolled shop")
+		_update_ui()
+		print("[Shop] Rerolled shop (cost: %d)" % reroll_cost)
 	else:
 		_show_not_enough_scrap()
 
@@ -709,3 +707,173 @@ func _dev_full_heal() -> void:
 	var heal_amount: int = RunManager.max_hp - RunManager.current_hp
 	if heal_amount > 0:
 		RunManager.heal(heal_amount)
+
+
+# === Stats Panel Functions ===
+
+func _create_stats_panel() -> void:
+	"""Create the full stats panel on the left side of the workshop."""
+	stats_panel = PanelContainer.new()
+	stats_panel.name = "StatsPanel"
+	
+	# Position on left side
+	stats_panel.anchor_left = 0.0
+	stats_panel.anchor_right = 0.0
+	stats_panel.anchor_top = 0.0
+	stats_panel.anchor_bottom = 0.0
+	stats_panel.offset_left = 10
+	stats_panel.offset_top = 10
+	stats_panel.offset_right = 260
+	stats_panel.offset_bottom = 470
+	
+	# Style the panel
+	var style: StyleBoxFlat = StyleBoxFlat.new()
+	style.bg_color = Color(0.05, 0.05, 0.1, 0.95)
+	style.border_width_left = 2
+	style.border_width_top = 2
+	style.border_width_right = 2
+	style.border_width_bottom = 2
+	style.border_color = Color(0.3, 0.5, 0.7, 0.9)
+	style.corner_radius_top_left = 8
+	style.corner_radius_top_right = 8
+	style.corner_radius_bottom_right = 8
+	style.corner_radius_bottom_left = 8
+	style.content_margin_left = 10.0
+	style.content_margin_right = 10.0
+	style.content_margin_top = 10.0
+	style.content_margin_bottom = 10.0
+	stats_panel.add_theme_stylebox_override("panel", style)
+	
+	# Content container
+	var vbox: VBoxContainer = VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 4)
+	stats_panel.add_child(vbox)
+	
+	# Title
+	var title: Label = Label.new()
+	title.text = "📊 BUILD STATS"
+	title.add_theme_color_override("font_color", Color(0.4, 0.7, 1.0))
+	title.add_theme_font_size_override("font_size", 16)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(title)
+	
+	# Separator
+	var sep: HSeparator = HSeparator.new()
+	vbox.add_child(sep)
+	
+	# Stats display (RichTextLabel for BBCode)
+	var stats_label: RichTextLabel = RichTextLabel.new()
+	stats_label.name = "StatsLabel"
+	stats_label.bbcode_enabled = true
+	stats_label.fit_content = true
+	stats_label.scroll_active = false
+	stats_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	stats_label.add_theme_font_size_override("normal_font_size", 12)
+	vbox.add_child(stats_label)
+	
+	add_child(stats_panel)
+	
+	# Connect to stats changes for live updates
+	if RunManager:
+		if RunManager.has_signal("stats_changed"):
+			RunManager.stats_changed.connect(_update_stats_panel)
+		if RunManager.has_signal("hp_changed"):
+			RunManager.hp_changed.connect(_on_stats_hp_changed)
+		if RunManager.has_signal("armor_changed"):
+			RunManager.armor_changed.connect(_on_stats_armor_changed)
+	
+	# Initial update
+	_update_stats_panel()
+
+
+func _on_stats_hp_changed(_current: int, _max_hp: int) -> void:
+	_update_stats_panel()
+
+
+func _on_stats_armor_changed(_amount: int) -> void:
+	_update_stats_panel()
+
+
+func _update_stats_panel() -> void:
+	"""Update the stats panel with current player stats."""
+	if not stats_panel:
+		return
+	
+	var stats_label: RichTextLabel = stats_panel.find_child("StatsLabel", true, false) as RichTextLabel
+	if not stats_label:
+		return
+	
+	var stats = RunManager.player_stats
+	if not stats:
+		stats_label.text = "[color=#ff6666]No stats available[/color]"
+		return
+	
+	var text: String = ""
+	
+	# Runtime state
+	text += "[color=#ffcc66]━━ RUNTIME ━━[/color]\n"
+	text += "HP: [color=#ff6666]%d/%d[/color]\n" % [RunManager.current_hp, stats.max_hp]
+	text += "Armor: [color=#66ccff]%d[/color]\n" % RunManager.armor
+	text += "Scrap: [color=#ffcc33]%d[/color]\n" % RunManager.scrap
+	text += "Wave: [color=#ffaa33]%d[/color]\n" % RunManager.current_wave
+	
+	# Warden info
+	if RunManager.current_warden:
+		var warden_name: String = "Unknown"
+		if RunManager.current_warden is WardenDefinition:
+			warden_name = RunManager.current_warden.warden_name
+		text += "Warden: [color=#66ff66]%s[/color]\n" % warden_name
+	text += "\n"
+	
+	# Offense stats
+	text += "[color=#ff6666]━━ OFFENSE ━━[/color]\n"
+	text += "Gun Damage: [color=#%s]%.0f%%[/color]\n" % [_get_stat_color(stats.gun_damage_percent), stats.gun_damage_percent]
+	text += "Hex Damage: [color=#%s]%.0f%%[/color]\n" % [_get_stat_color(stats.hex_damage_percent), stats.hex_damage_percent]
+	text += "Barrier Damage: [color=#%s]%.0f%%[/color]\n" % [_get_stat_color(stats.barrier_damage_percent), stats.barrier_damage_percent]
+	text += "Generic Damage: [color=#%s]%.0f%%[/color]\n" % [_get_stat_color(stats.generic_damage_percent), stats.generic_damage_percent]
+	text += "\n"
+	
+	# Defense stats
+	text += "[color=#66ccff]━━ DEFENSE ━━[/color]\n"
+	text += "Armor Gain: [color=#%s]%.0f%%[/color]\n" % [_get_stat_color(stats.armor_gain_percent), stats.armor_gain_percent]
+	text += "Heal Power: [color=#%s]%.0f%%[/color]\n" % [_get_stat_color(stats.heal_power_percent), stats.heal_power_percent]
+	text += "Barrier Strength: [color=#%s]%.0f%%[/color]\n" % [_get_stat_color(stats.barrier_strength_percent), stats.barrier_strength_percent]
+	text += "\n"
+	
+	# Economy stats
+	text += "[color=#ffcc33]━━ ECONOMY ━━[/color]\n"
+	text += "Energy/Turn: [color=#ffff66]%d[/color]\n" % stats.energy_per_turn
+	text += "Draw/Turn: [color=#66aaff]%d[/color]\n" % stats.draw_per_turn
+	text += "Hand Size: [color=#aaaaaa]%d[/color]\n" % stats.hand_size_max
+	text += "Scrap Gain: [color=#%s]%.0f%%[/color]\n" % [_get_stat_color(stats.scrap_gain_percent), stats.scrap_gain_percent]
+	text += "Shop Prices: [color=#%s]%.0f%%[/color]\n" % [_get_inverse_stat_color(stats.shop_price_percent), stats.shop_price_percent]
+	text += "\n"
+	
+	# Ring damage
+	text += "[color=#aa66ff]━━ RING DMG ━━[/color]\n"
+	text += "vs Melee: [color=#%s]%.0f%%[/color]\n" % [_get_stat_color(stats.damage_vs_melee_percent), stats.damage_vs_melee_percent]
+	text += "vs Close: [color=#%s]%.0f%%[/color]\n" % [_get_stat_color(stats.damage_vs_close_percent), stats.damage_vs_close_percent]
+	text += "vs Mid: [color=#%s]%.0f%%[/color]\n" % [_get_stat_color(stats.damage_vs_mid_percent), stats.damage_vs_mid_percent]
+	text += "vs Far: [color=#%s]%.0f%%[/color]\n" % [_get_stat_color(stats.damage_vs_far_percent), stats.damage_vs_far_percent]
+	
+	stats_label.text = text
+
+
+func _get_stat_color(value: float) -> String:
+	"""Get color hex based on whether value is above, below, or at 100%."""
+	if value > 100.0:
+		return "66ff66"  # Green for bonus
+	elif value < 100.0:
+		return "ff6666"  # Red for penalty
+	else:
+		return "aaaaaa"  # Gray for neutral
+
+
+func _get_inverse_stat_color(value: float) -> String:
+	"""Get color hex for inverse stats (lower is better, like shop prices)."""
+	if value < 100.0:
+		return "66ff66"  # Green for bonus (cheaper)
+	elif value > 100.0:
+		return "ff6666"  # Red for penalty (more expensive)
+	else:
+		return "aaaaaa"  # Gray for neutral
