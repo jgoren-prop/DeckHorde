@@ -91,6 +91,7 @@ var pending_card_def = null  # CardDefinition
 # Drag-drop state
 var dragging_card: Control = null
 var dragging_card_def = null  # CardDefinition - track what card is being dragged
+var _last_weapon_card_position: Vector2 = Vector2.ZERO  # Store card's visual position for weapon deployment
 
 # Settings loading flag
 var _loading_settings: bool = false
@@ -111,7 +112,11 @@ func _ready() -> void:
 func _setup_animation_manager() -> void:
 	"""Initialize the CombatAnimationManager with UI references."""
 	if CombatAnimationManager:
-		CombatAnimationManager.set_references(battlefield_arena, self)
+		CombatAnimationManager.set_references(battlefield_arena, self, combat_lane)
+	
+	# Also set combat_lane reference on BattlefieldArena for weapon projectile origins
+	if battlefield_arena:
+		battlefield_arena.combat_lane = combat_lane
 
 
 func _setup_card_debug_overlay() -> void:
@@ -124,6 +129,7 @@ func _setup_card_debug_overlay() -> void:
 
 var _last_highlighted_ring: int = -2  # Use -2 so first check always triggers
 var _highlight_all_mode: bool = false  # Track if we're in "highlight all" mode
+var _combat_lane_highlighted: bool = false  # Track if combat lane is highlighted for weapon drop
 
 func _card_affects_battlefield(card_def) -> bool:
 	"""Check if a card affects the battlefield (enemies/rings) vs self-only effects."""
@@ -155,6 +161,27 @@ func _card_affects_battlefield(card_def) -> bool:
 func _process(_delta: float) -> void:
 	# While dragging a card, highlight the appropriate rings
 	if dragging_card_def != null and battlefield_arena:
+		var mouse_pos: Vector2 = get_global_mouse_position()
+		
+		# Persistent weapons can ONLY be dropped on combat lane (not battlefield)
+		if dragging_card_def.effect_type == "weapon_persistent":
+			# Clear any battlefield highlighting
+			if _highlight_all_mode or _last_highlighted_ring >= 0:
+				_highlight_all_mode = false
+				_last_highlighted_ring = -1
+				battlefield_arena.highlight_all_rings(false)
+			
+			# Only highlight combat lane for weapons
+			if combat_lane:
+				var is_over_lane: bool = _is_over_combat_lane(mouse_pos)
+				if is_over_lane and not _combat_lane_highlighted:
+					_combat_lane_highlighted = true
+					_highlight_combat_lane(true)
+				elif not is_over_lane and _combat_lane_highlighted:
+					_combat_lane_highlighted = false
+					_highlight_combat_lane(false)
+			return
+		
 		# First check: does this card even affect the battlefield?
 		if not _card_affects_battlefield(dragging_card_def):
 			# Cards that don't affect battlefield (self-target, draw, armor, etc.)
@@ -165,7 +192,6 @@ func _process(_delta: float) -> void:
 				battlefield_arena.highlight_all_rings(false)
 			return
 		
-		var mouse_pos: Vector2 = get_global_mouse_position()
 		var ring_under_cursor: int = battlefield_arena.get_ring_at_position(mouse_pos)
 		
 		# Check if this card targets all enemies or all rings
@@ -748,12 +774,9 @@ func _on_scrap_changed(amount: int) -> void:
 func _on_card_played(card, tier: int) -> void:
 	# Check if this is a persistent weapon that should be deployed to the combat lane
 	if card and card.effect_type == "weapon_persistent":
-		# Get the source position from the hand (for fly animation)
-		var source_pos: Vector2 = Vector2.ZERO
-		if card_hand and card_hand.get_child_count() > 0:
-			# Use the center of the hand area as source
-			var hand_rect: Rect2 = card_hand.get_global_rect()
-			source_pos = hand_rect.position + hand_rect.size / 2
+		# Get the card's visual position that was stored when the card was dropped
+		# This is the ACTUAL position where the card appeared on screen when released
+		var card_visual_pos: Vector2 = _last_weapon_card_position
 		
 		# Find the weapon data from CombatManager to get trigger duration
 		var triggers: int = -1
@@ -762,20 +785,19 @@ func _on_card_played(card, tier: int) -> void:
 				triggers = weapon.triggers_remaining
 				break
 		
-		# Deploy to combat lane
+		# Deploy to combat lane - animates from card's visual position to lane center
 		if combat_lane:
-			combat_lane.deploy_weapon(card, tier, triggers, source_pos)
+			combat_lane.deploy_weapon(card, tier, triggers, card_visual_pos)
 	
 	# Update weapons text list display
 	_update_weapons_display()
 
 
-func _on_weapon_triggered(card_name: String, damage: int) -> void:
+func _on_weapon_triggered(_card_name: String, _damage: int, _weapon_index: int) -> void:
 	"""Called when a persistent weapon fires."""
-	# The CombatLane handles this via its own signal connection
-	# But we can also trigger it here for redundancy
-	if combat_lane:
-		combat_lane.fire_weapon(card_name, damage)
+	# CombatLane handles the visual effects via its own signal connection
+	# No action needed here - this handler exists for potential future use
+	pass
 
 
 # Ring phase indicator reference
@@ -910,8 +932,9 @@ func _on_card_clicked(card_def, tier: int, _hand_index: int) -> void:  # card_de
 		_show_cannot_play_hint()
 		return
 	
-	# Show drag hint for all cards
-	_show_drag_hint()
+	# Show drag hint for all cards (different message for weapons)
+	var is_weapon: bool = card_def.effect_type == "weapon_persistent"
+	_show_drag_hint(is_weapon)
 
 
 func _on_card_hovered(card_def, tier: int, is_hovering: bool) -> void:  # card_def: CardDefinition
@@ -940,8 +963,10 @@ func _on_card_drag_ended(card_def, tier: int, hand_index: int, drop_position: Ve
 	dragging_card_def = null
 	_last_highlighted_ring = -1
 	_highlight_all_mode = false
+	_combat_lane_highlighted = false
 	if battlefield_arena:
 		battlefield_arena.highlight_all_rings(false)
+	_highlight_combat_lane(false)  # Clear combat lane highlight
 	
 	if CombatManager.current_phase != CombatManager.CombatPhase.PLAYER_PHASE:
 		pending_card_index = -1
@@ -962,23 +987,43 @@ func _on_card_drag_ended(card_def, tier: int, hand_index: int, drop_position: Ve
 	
 	var target_ring: int = -1
 	
-	# All cards must be dropped on a valid ring on the battlefield
-	if battlefield_arena:
-		target_ring = battlefield_arena.get_ring_at_position(drop_position)
+	# Get the card UI to capture its actual visual position
+	var card_ui_temp: Control = null
+	if hand_index < card_hand.get_child_count():
+		card_ui_temp = card_hand.get_child(hand_index)
 	
-	if target_ring < 0:
-		# Dropped outside valid ring area - cancel for all cards
-		pending_card_index = -1
-		pending_card_def = null
-		return
-	
-	# For targeting cards: additionally check if the ring is valid for this specific card
-	if card_def.requires_target:
-		if card_def.target_rings.size() > 0 and target_ring not in card_def.target_rings:
-			# Invalid ring for this card
+	# Persistent weapons MUST be dropped on the combat lane (not battlefield)
+	if card_def.effect_type == "weapon_persistent":
+		if _is_over_combat_lane(drop_position):
+			target_ring = -1  # Weapons don't need a ring target
+			# Store the card's ACTUAL visual position (not mouse position) for weapon deployment
+			if card_ui_temp:
+				_last_weapon_card_position = card_ui_temp.global_position
+			else:
+				_last_weapon_card_position = drop_position  # Fallback to mouse position
+		else:
+			# Weapon dropped outside combat lane - reject
 			pending_card_index = -1
 			pending_card_def = null
 			return
+	else:
+		# All other cards must be dropped on a valid ring on the battlefield
+		if battlefield_arena:
+			target_ring = battlefield_arena.get_ring_at_position(drop_position)
+		
+		if target_ring < 0:
+			# Dropped outside valid ring area - cancel for all cards
+			pending_card_index = -1
+			pending_card_def = null
+			return
+		
+		# For targeting cards: additionally check if the ring is valid for this specific card
+		if card_def.requires_target:
+			if card_def.target_rings.size() > 0 and target_ring not in card_def.target_rings:
+				# Invalid ring for this card
+				pending_card_index = -1
+				pending_card_def = null
+				return
 	
 	# Get the card UI for animation before playing
 	var card_ui: Control = null
@@ -1018,8 +1063,10 @@ func _on_card_drag_ended(card_def, tier: int, hand_index: int, drop_position: Ve
 	pending_card_def = null
 
 
-func _play_card_fly_animation(card_ui: Control, target_pos: Vector2, effect_type: String) -> void:
-	"""Animate the card flying from hand to target position."""
+func _play_card_fly_animation(card_ui: Control, _drop_position: Vector2, _effect_type: String) -> void:
+	"""Animate the card after being played.
+	ALL cards: Fade in place from EXACT current position. No movement, no scale change, no reparenting.
+	"""
 	if not is_instance_valid(card_ui):
 		return
 	
@@ -1027,67 +1074,18 @@ func _play_card_fly_animation(card_ui: Control, target_pos: Vector2, effect_type
 	if "active_tween" in card_ui and card_ui.active_tween and card_ui.active_tween.is_valid():
 		card_ui.active_tween.kill()
 		card_ui.active_tween = null
+	if "hover_tween" in card_ui and card_ui.hover_tween and card_ui.hover_tween.is_valid():
+		card_ui.hover_tween.kill()
+		card_ui.hover_tween = null
 	
-	# Reparent card to root so it can fly freely (use call_deferred to avoid "busy" error)
-	var original_parent: Node = card_ui.get_parent()
-	
-	# Capture current global position RIGHT BEFORE reparenting (in case card moved during drag)
-	var current_global_pos: Vector2 = card_ui.global_position
-	
-	if original_parent:
-		original_parent.remove_child.call_deferred(card_ui)
-		add_child.call_deferred(card_ui)
-		# Wait a frame for the reparenting to complete
-		await get_tree().process_frame
-	
-	if not is_instance_valid(card_ui):
-		return
-	
-	# Restore global position after reparenting
-	# When reparenting, we need to set position (local) not global_position
-	# Calculate local position relative to new parent using the CURRENT global position
-	var new_parent: Node = card_ui.get_parent()
-	if new_parent and new_parent is Control:
-		var parent_global: Vector2 = new_parent.global_position
-		var local_pos: Vector2 = current_global_pos - parent_global
-		card_ui.position = local_pos
-		# Verify the position is correct
-		var actual_global: Vector2 = card_ui.global_position
-		if actual_global.distance_to(current_global_pos) > 1.0:
-			# Position mismatch - force it
-			card_ui.global_position = current_global_pos
-	else:
-		# Fallback to global_position if parent is not a Control
-		card_ui.global_position = current_global_pos
+	# DO NOT reparent - this causes position shifts due to pivot_offset and coordinate space changes
+	# Just raise z_index to ensure card is visible above siblings during fade
 	card_ui.z_index = 100
 	
-	# Determine destination based on effect type
-	var destination: Vector2 = target_pos
-	if effect_type == "weapon_persistent":
-		# Fly to combat lane area
-		if combat_lane:
-			destination = combat_lane.global_position + Vector2(combat_lane.size.x / 2, combat_lane.size.y / 2)
-	elif effect_type == "gain_armor":
-		# Fly to player stats area
-		if armor_section:
-			destination = armor_section.global_position + Vector2(30, 15)
-	elif effect_type == "heal":
-		# Fly to HP area
-		if hp_label:
-			destination = hp_label.global_position
-	
-	# Store tween reference on card_ui for tracking
-	if "active_tween" in card_ui:
-		card_ui.active_tween = null
-	
-	# Animate card flying and shrinking
+	# Simply fade out from EXACTLY where the card is right now
+	# No movement, no scale change, no position changes - JUST FADE
 	var tween: Tween = card_ui.create_tween()
-	tween.set_ease(Tween.EASE_OUT)
-	tween.set_trans(Tween.TRANS_QUAD)
-	tween.set_parallel(true)
-	tween.tween_property(card_ui, "global_position", destination, 0.3)
-	tween.tween_property(card_ui, "scale", Vector2(0.3, 0.3), 0.3)
-	tween.tween_property(card_ui, "modulate:a", 0.0, 0.25).set_delay(0.15)
+	tween.tween_property(card_ui, "modulate:a", 0.0, 0.2)
 	
 	# Store tween reference
 	if "active_tween" in card_ui:
@@ -1095,12 +1093,9 @@ func _play_card_fly_animation(card_ui: Control, target_pos: Vector2, effect_type
 	
 	await tween.finished
 	
-	# Clean up
+	# Clean up - remove the card
 	if is_instance_valid(card_ui):
 		card_ui.queue_free()
-	
-	# Brief pause for visual effect
-	await get_tree().create_timer(0.1).timeout
 
 
 func _is_outside_hand_area(global_pos: Vector2) -> bool:
@@ -1119,16 +1114,37 @@ func _is_outside_hand_area(global_pos: Vector2) -> bool:
 	return global_pos.y < threshold_y
 
 
-func _show_drag_hint() -> void:
+func _is_over_combat_lane(global_pos: Vector2) -> bool:
+	"""Check if a position is over the combat lane (for dropping persistent weapons)."""
+	if not combat_lane:
+		return false
+	
+	var lane_rect: Rect2 = combat_lane.get_global_rect()
+	return lane_rect.has_point(global_pos)
+
+
+func _highlight_combat_lane(highlight: bool) -> void:
+	"""Highlight or unhighlight the combat lane for weapon drop targeting."""
+	if not combat_lane:
+		return
+	
+	if combat_lane.has_method("set_drop_highlight"):
+		combat_lane.set_drop_highlight(highlight)
+
+
+func _show_drag_hint(is_weapon: bool = false) -> void:
 	"""Show a brief hint that this card should be dragged."""
 	var hint: Label = Label.new()
-	hint.text = "Drag card onto battlefield to play"
+	if is_weapon:
+		hint.text = "Drag weapon onto combat lane to deploy"
+	else:
+		hint.text = "Drag card onto battlefield to play"
 	hint.add_theme_font_size_override("font_size", 18)
 	hint.add_theme_color_override("font_color", Color(1.0, 0.9, 0.4, 1.0))
 	hint.add_theme_color_override("font_outline_color", Color(0, 0, 0, 1))
 	hint.add_theme_constant_override("outline_size", 3)
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hint.position = Vector2(get_viewport_rect().size.x / 2 - 130, get_viewport_rect().size.y - 300)
+	hint.position = Vector2(get_viewport_rect().size.x / 2 - 150, get_viewport_rect().size.y - 300)
 	add_child(hint)
 	
 	var tween: Tween = create_tween()

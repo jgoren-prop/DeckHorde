@@ -60,7 +60,43 @@ This document provides essential information for AI agents working on this Godot
 - Communicate between UI nodes using signals instead of deep `$` node paths.
 - Use Godot’s container/layout system when possible; otherwise manage absolute positioning deliberately.
 
-## Testing & Runtime Checks
+### Debugging Visual/Animation Bugs
+
+When fixing visual feedback bugs (animations, projectiles, highlights):
+1. **Trace the complete signal flow** - Find ALL signal handlers, not just the obvious one
+2. **Search for ALL related code** - Use `grep` for related terms (e.g., "projectile", "fire", "highlight")
+3. **Check for name-based lookups** - When multiple identical items exist (same card name, same enemy type), name-based lookups will return the first match. Consider if index/ID-based lookup is needed.
+4. **List all visual effects** - Before coding, identify ALL visual changes that should happen (projectile origin, card pulse, damage floater, etc.)
+
+### Automated Testing Requirements
+
+**NEVER ask the user to manually test.** Always write automated tests:
+
+1. **For visual/UI features:**
+   - Create a test scene in `scenes/tests/` with a test script in `scripts/tests/`
+   - Set up required nodes programmatically (don't rely on full game state)
+   - Trigger the behavior being tested
+   - Use `print("[TEST] ...")` statements to output state for verification
+   - Verify expected values (visibility, position, scale, alpha, etc.)
+   - Call `get_tree().quit(0)` on pass, `get_tree().quit(1)` on fail
+
+2. **Run tests using MCP tools:**
+   - `mcp_godot_run_with_debug` with the test scene
+   - `mcp_godot_get_debug_output` to capture results
+   - `mcp_godot_stop_project` to clean up
+
+3. **Test verification pattern:**
+   ```gdscript
+   print("[TEST] Value check: ", actual_value)
+   var passed: bool = actual_value == expected_value
+   print("[TEST] RESULT: ", "PASSED ✓" if passed else "FAILED ✗")
+   get_tree().quit(0 if passed else 1)
+   ```
+
+4. **Wait for async operations:**
+   - Use `await get_tree().process_frame` to wait for nodes to initialize
+   - Use `await get_tree().create_timer(X).timeout` when testing animations/tweens
+   - Example: wait 0.5-1.0 seconds after triggering a morph animation before verifying final state
 
 ### Use MCP Godot Tools (Preferred Method)
 

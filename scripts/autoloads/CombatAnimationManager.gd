@@ -24,6 +24,7 @@ var current_animation_node: Control = null
 # References (set by CombatScreen)
 var battlefield_arena: Control = null
 var combat_screen: Control = null
+var combat_lane: Control = null  # Reference to CombatLane for weapon attack origins
 
 # Active effects tracking
 var active_barriers: Dictionary = {}  # ring -> {damage: int, duration: int, visual: Control}
@@ -34,10 +35,11 @@ func _ready() -> void:
 	print("[CombatAnimationManager] Initialized")
 
 
-func set_references(arena: Control, screen: Control) -> void:
+func set_references(arena: Control, screen: Control, lane: Control = null) -> void:
 	"""Set references to the UI components."""
 	battlefield_arena = arena
 	combat_screen = screen
+	combat_lane = lane
 
 
 ## ============== ANIMATION QUEUE SYSTEM ==============
@@ -509,22 +511,31 @@ func _create_projectile(projectile_type: String) -> Control:
 ## ============== WEAPON TRIGGER EFFECTS ==============
 
 func show_weapon_trigger(card_def, tier: int, target_enemy = null) -> void:
-	"""Show a persistent weapon triggering - projectile from center to target."""
+	"""Show a persistent weapon triggering - projectile from weapon card in combat lane to target."""
 	if not battlefield_arena:
 		return
 	
 	var _damage: int = card_def.get_scaled_value("damage", tier)
 	var weapon_name: String = card_def.card_name
 	
-	# Get center position (warden)
-	var from_pos: Vector2 = battlefield_arena.center + battlefield_arena.global_position
+	# Get the position of the weapon card in the combat lane
+	# Falls back to battlefield center if combat lane isn't available
+	var from_pos: Vector2
+	if combat_lane and combat_lane.has_method("get_weapon_center_position"):
+		from_pos = combat_lane.get_weapon_center_position(weapon_name)
+		if from_pos == Vector2.ZERO:
+			# Fallback to battlefield center if weapon not found
+			from_pos = battlefield_arena.center + battlefield_arena.global_position
+	else:
+		# Fallback to battlefield center (warden position)
+		from_pos = battlefield_arena.center + battlefield_arena.global_position
 	
-	# Show weapon name
+	# Show weapon name above the weapon card
 	_show_weapon_fire_label(weapon_name, from_pos)
 	
 	await get_tree().create_timer(0.1).timeout
 	
-	# If we have a target, show projectile
+	# If we have a target, show projectile from the weapon card
 	if target_enemy:
 		var target_pos: Vector2 = _get_enemy_global_position(target_enemy)
 		await show_projectile(from_pos, target_pos, "bullet")

@@ -115,13 +115,16 @@ color = Color(0.03, 0.02, 0.05, 1)
 
 [node name="CombatLane" type="Control" parent="."]
 layout_mode = 1
+anchors_preset = 12
 anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
 offset_left = 150.0
-offset_top = -569.0
+offset_top = -607.0
 offset_right = -150.0
-offset_bottom = -327.0
+offset_bottom = -291.0
+grow_horizontal = 2
+grow_vertical = 0
 script = ExtResource("3_lane")
 
 [node name="BattlefieldArena" parent="." instance=ExtResource("2_arena")]
@@ -139,6 +142,7 @@ offset_left = 415.0
 offset_top = 60.0
 offset_right = 580.0
 offset_bottom = 270.0
+grow_horizontal = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_playerstats")
 
 [node name="StatsVBox" type="VBoxContainer" parent="PlayerStatsPanel"]
@@ -213,6 +217,7 @@ offset_left = -580.0
 offset_top = 60.0
 offset_right = -415.0
 offset_bottom = 420.0
+grow_horizontal = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_threat")
 
 [node name="ThreatContent" type="VBoxContainer" parent="ThreatPreview"]

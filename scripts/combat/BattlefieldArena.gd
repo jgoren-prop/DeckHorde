@@ -92,6 +92,9 @@ var _barrier_pulse_time: float = 0.0  # For pulsing barrier rings
 var _pending_attack_indicator: Dictionary = {}  # Tracks which enemy is being targeted
 var _active_weapon_reticles: Array[Control] = []  # Track all weapon reticles for cleanup
 
+# Reference to CombatLane for weapon attack origins
+var combat_lane: Control = null
+
 # Tween tracking to prevent animation conflicts (spazzing)
 var _enemy_position_tweens: Dictionary = {}  # instance_id -> Tween
 var _stack_position_tweens: Dictionary = {}  # stack_key -> Tween
@@ -303,9 +306,6 @@ func _draw() -> void:
 	for i: int in range(RING_PROPORTIONS.size() - 1, -1, -1):
 		var radius: float = max_radius * RING_PROPORTIONS[i]
 		_draw_ring(i, radius)
-	
-	# Draw warden at center
-	_draw_warden()
 
 
 func _draw_warden() -> void:
@@ -4469,10 +4469,33 @@ func _fire_projectile_to_position(to_pos: Vector2, projectile_color: Color = Col
 
 
 func _fire_fast_projectile_to_position(to_pos: Vector2, projectile_color: Color = Color(1.0, 0.9, 0.3)) -> void:
-	"""Fire a FAST projectile from the warden (center) to a specific position."""
+	"""Fire a FAST projectile from the source (weapon card or warden center) to a specific position."""
 	_recalculate_layout()
 	
+	# Determine projectile origin: use weapon card position if a weapon is firing, otherwise center
 	var from_pos: Vector2 = center
+	var weapon_index: int = CombatManager.current_firing_weapon_index
+	
+	if weapon_index >= 0 and combat_lane:
+		# Check if this weapon has a pistol visual - if so, animate it first
+		var target_global_pos: Vector2 = to_pos + global_position  # Convert to global for pistol aiming
+		if combat_lane.has_method("animate_pistol_fire_at_index"):
+			await combat_lane.animate_pistol_fire_at_index(weapon_index, target_global_pos)
+		
+		# Get projectile origin from pistol barrel if available, otherwise card center
+		if combat_lane.has_method("get_pistol_barrel_position"):
+			var barrel_pos: Vector2 = combat_lane.get_pistol_barrel_position(weapon_index)
+			if barrel_pos != Vector2.ZERO:
+				# Convert to local position
+				from_pos = barrel_pos - global_position
+			elif combat_lane.has_method("get_weapon_position_by_index"):
+				var weapon_pos: Vector2 = combat_lane.get_weapon_position_by_index(weapon_index)
+				if weapon_pos != Vector2.ZERO:
+					from_pos = weapon_pos - global_position
+		elif combat_lane.has_method("get_weapon_position_by_index"):
+			var weapon_pos: Vector2 = combat_lane.get_weapon_position_by_index(weapon_index)
+			if weapon_pos != Vector2.ZERO:
+				from_pos = weapon_pos - global_position
 	
 	# Create projectile (slightly larger for visibility at speed)
 	var projectile: ColorRect = ColorRect.new()

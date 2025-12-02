@@ -20,7 +20,7 @@ signal _enemies_spawned_together(enemies: Array, ring: int, enemy_id: String)  #
 signal damage_dealt_to_enemies(amount: int, ring: int)
 signal player_damaged(amount: int, source: String)
 signal wave_ended(success: bool)
-signal weapon_triggered(card_name: String, damage: int)  # Persistent weapon fired
+signal weapon_triggered(card_name: String, damage: int, weapon_index: int)  # Persistent weapon fired
 signal enemy_ability_triggered(enemy, ability: String, value: int)  # Special ability fired
 signal enemy_targeted(enemy)  # Enemy is about to be attacked (for visual indicator)
 signal enemy_hexed(enemy, hex_amount: int)  # Enemy received hex (for visual indicator)
@@ -48,6 +48,7 @@ var battlefield = null  # BattlefieldState
 var deck_manager = null  # DeckManager
 var current_wave_def = null
 var active_weapons: Array = []
+var current_firing_weapon_index: int = -1  # Track which weapon INDEX is currently firing for projectile origin
 
 
 func _ready() -> void:
@@ -140,9 +141,13 @@ func _trigger_persistent_weapons() -> void:
 		
 		print("[CombatManager] Triggering persistent weapon: ", card_def.card_name)
 		
-		# Emit signal for visual feedback (flash icon)
+		# Track which weapon INDEX is firing (for BattlefieldArena to get projectile origin)
+		# The index in active_weapons matches the index in CombatLane.deployed_weapons
+		current_firing_weapon_index = i
+		
+		# Emit signal for visual feedback (flash icon) - include index for correct card targeting
 		var damage: int = card_def.get_scaled_value("damage", tier)
-		weapon_triggered.emit(card_def.card_name, damage)
+		weapon_triggered.emit(card_def.card_name, damage, i)
 		
 		# Small delay for visual clarity between weapons (Slay the Spire style)
 		await get_tree().create_timer(0.15).timeout
@@ -150,6 +155,13 @@ func _trigger_persistent_weapons() -> void:
 		# Use the CardResolver to trigger the weapon effect
 		# Note: resolve_weapon_effect -> deal_damage_to_random_enemy handles enemy_targeted emit
 		CardResolver.resolve_weapon_effect(card_def, tier, self)
+		
+		# Wait for projectile animation to complete before clearing weapon index
+		# (The projectile fires asynchronously via signal handlers that may have awaits)
+		await get_tree().create_timer(0.5).timeout
+		
+		# Clear weapon tracking after firing animation completes
+		current_firing_weapon_index = -1
 		
 		# Decrement triggers remaining if not infinite (-1)
 		if weapon.triggers_remaining > 0:
