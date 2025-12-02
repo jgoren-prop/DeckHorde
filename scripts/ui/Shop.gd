@@ -20,6 +20,9 @@ var deck_viewer_title: Label = null
 # Stats panel (always visible in workshop)
 var stats_panel: PanelContainer = null
 
+# Tag tracker panel
+var tag_tracker_panel: PanelContainer = null
+
 # Merge popup (optional - created dynamically if needed)
 var merge_popup: PanelContainer = null
 var merge_card_name: Label = null
@@ -47,6 +50,7 @@ func _ready() -> void:
 	_create_deck_viewer_overlay()
 	_create_dev_panel()
 	_create_stats_panel()
+	_create_tag_tracker_panel()
 	_refresh_shop()
 	_update_ui()
 	_check_merges()
@@ -340,6 +344,7 @@ func _on_shop_card_clicked(card_def, _tier: int, index: int) -> void:  # card_de
 		shop_cards.remove_at(index)
 		_populate_card_slots()
 		_check_merges()  # Check if new card enables merge
+		_update_tag_tracker()  # Update tag counts
 	else:
 		print("[Shop] Not enough scrap!")
 		_show_not_enough_scrap()
@@ -367,6 +372,7 @@ func _on_merge_pressed(card_id: String, tier: int) -> void:
 	if MergeManager.execute_merge(card_id, tier):
 		AudioManager.play_merge_complete()
 		_check_merges()  # Refresh merge options
+		_update_tag_tracker()  # Update tag counts (deck changed)
 		_show_merge_success(card_id, tier + 1)
 
 
@@ -449,6 +455,7 @@ func _on_remove_card_selected(card_def, _tier: int, index: int) -> void:  # card
 		_update_ui()
 		print("[Shop] Removed card: ", card_def.card_name)
 		_check_merges()
+		_update_tag_tracker()  # Update tag counts
 	
 	deck_view_panel.visible = false
 
@@ -877,3 +884,170 @@ func _get_inverse_stat_color(value: float) -> String:
 		return "ff6666"  # Red for penalty (more expensive)
 	else:
 		return "aaaaaa"  # Gray for neutral
+
+
+# === Tag Tracker Panel Functions ===
+
+func _create_tag_tracker_panel() -> void:
+	"""Create a panel showing tag counts from player's deck."""
+	tag_tracker_panel = PanelContainer.new()
+	tag_tracker_panel.name = "TagTrackerPanel"
+	
+	# Position on right side of stats panel
+	tag_tracker_panel.anchor_left = 0.0
+	tag_tracker_panel.anchor_right = 0.0
+	tag_tracker_panel.anchor_top = 0.0
+	tag_tracker_panel.anchor_bottom = 0.0
+	tag_tracker_panel.offset_left = 270  # Right of stats panel (260 + 10 gap)
+	tag_tracker_panel.offset_top = 10
+	tag_tracker_panel.offset_right = 470
+	tag_tracker_panel.offset_bottom = 400
+	
+	# Style the panel
+	var style: StyleBoxFlat = StyleBoxFlat.new()
+	style.bg_color = Color(0.08, 0.05, 0.12, 0.95)
+	style.border_width_left = 2
+	style.border_width_top = 2
+	style.border_width_right = 2
+	style.border_width_bottom = 2
+	style.border_color = Color(0.6, 0.4, 0.8, 0.9)
+	style.corner_radius_top_left = 8
+	style.corner_radius_top_right = 8
+	style.corner_radius_bottom_right = 8
+	style.corner_radius_bottom_left = 8
+	style.content_margin_left = 10.0
+	style.content_margin_right = 10.0
+	style.content_margin_top = 10.0
+	style.content_margin_bottom = 10.0
+	tag_tracker_panel.add_theme_stylebox_override("panel", style)
+	
+	# Content container
+	var vbox: VBoxContainer = VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 4)
+	tag_tracker_panel.add_child(vbox)
+	
+	# Title
+	var title: Label = Label.new()
+	title.text = "🏷️ TAG COUNTS"
+	title.add_theme_color_override("font_color", Color(0.8, 0.6, 1.0))
+	title.add_theme_font_size_override("font_size", 16)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(title)
+	
+	# Separator
+	var sep: HSeparator = HSeparator.new()
+	vbox.add_child(sep)
+	
+	# Tag display (RichTextLabel for BBCode)
+	var tag_label: RichTextLabel = RichTextLabel.new()
+	tag_label.name = "TagLabel"
+	tag_label.bbcode_enabled = true
+	tag_label.fit_content = true
+	tag_label.scroll_active = false
+	tag_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	tag_label.add_theme_font_size_override("normal_font_size", 12)
+	vbox.add_child(tag_label)
+	
+	add_child(tag_tracker_panel)
+	
+	# Initial update
+	_update_tag_tracker()
+
+
+func _update_tag_tracker() -> void:
+	"""Update the tag tracker panel with current deck tag counts."""
+	if not tag_tracker_panel:
+		return
+	
+	var tag_label: RichTextLabel = tag_tracker_panel.find_child("TagLabel", true, false) as RichTextLabel
+	if not tag_label:
+		return
+	
+	# Count tags from deck
+	var tag_counts: Dictionary = {}
+	
+	for entry: Dictionary in RunManager.deck:
+		var card_def = CardDatabase.get_card(entry.card_id)
+		if card_def:
+			for tag: Variant in card_def.tags:
+				if tag is String:
+					if not tag_counts.has(tag):
+						tag_counts[tag] = 0
+					tag_counts[tag] += 1
+	
+	# Build display text
+	var text: String = ""
+	
+	# Core type tags
+	text += "[color=#ff9966]━━ CORE TYPES ━━[/color]\n"
+	for core_tag: String in TagConstants.CORE_TYPES:
+		var count: int = tag_counts.get(core_tag, 0)
+		var display_name: String = TagConstants.get_core_type_display_name(core_tag)
+		var color: String = _get_tag_count_color(count)
+		var icon: String = _get_tag_icon(core_tag)
+		text += "%s %s: [color=#%s]%d[/color]\n" % [icon, display_name, color, count]
+	
+	text += "\n"
+	
+	# Family tags
+	text += "[color=#aa66ff]━━ FAMILIES ━━[/color]\n"
+	for family_tag: String in TagConstants.FAMILY_TAGS:
+		var count: int = tag_counts.get(family_tag, 0)
+		var display_name: String = TagConstants.get_family_display_name(family_tag)
+		var color: String = _get_tag_count_color(count)
+		var icon: String = _get_family_tag_icon(family_tag)
+		text += "%s %s: [color=#%s]%d[/color]\n" % [icon, display_name, color, count]
+	
+	tag_label.text = text
+
+
+func _get_tag_count_color(count: int) -> String:
+	"""Get color hex based on tag count."""
+	if count == 0:
+		return "666666"  # Gray for none
+	elif count <= 2:
+		return "aaaaaa"  # Light gray for few
+	elif count <= 5:
+		return "66ccff"  # Blue for moderate
+	elif count <= 8:
+		return "66ff66"  # Green for good
+	else:
+		return "ffcc33"  # Gold for many
+
+
+func _get_tag_icon(tag: String) -> String:
+	"""Get an icon for a core type tag."""
+	match tag:
+		TagConstants.TAG_GUN:
+			return "🔫"
+		TagConstants.TAG_HEX:
+			return "🔮"
+		TagConstants.TAG_BARRIER:
+			return "🛡️"
+		TagConstants.TAG_DEFENSE:
+			return "🛡️"
+		TagConstants.TAG_SKILL:
+			return "⚡"
+		TagConstants.TAG_ENGINE:
+			return "⚙️"
+		_:
+			return "•"
+
+
+func _get_family_tag_icon(tag: String) -> String:
+	"""Get an icon for a family tag."""
+	match tag:
+		TagConstants.TAG_LIFEDRAIN:
+			return "🩸"
+		TagConstants.TAG_HEX_RITUAL:
+			return "🌑"
+		TagConstants.TAG_FORTRESS:
+			return "🏰"
+		TagConstants.TAG_BARRIER_TRAP:
+			return "💥"
+		TagConstants.TAG_VOLATILE:
+			return "💀"
+		TagConstants.TAG_ENGINE_CORE:
+			return "🔋"
+		_:
+			return "•"

@@ -1,5 +1,10 @@
 # Riftwardens - Development Progress
 
+### Today
+- Brainstormed board-centric card ideas and damage-type tag directions; moved notes to `brainstorm.md` ("Board Synergy Brainstorm (2024-03-13)").
+- Added tag infusion idea: attach damage tags to existing weapons (e.g., pierce on Rusty Pistol to hit two in a stack).
+- Drafted a board-synergy starter deck proposal in DESIGN.md (not implemented yet) including Overclock and Tag Infusion: Piercing.
+
 ## Current Status: V2 Buildcraft System - Phase 6 Balance Testing 🔄
 
 ### V2 System Status

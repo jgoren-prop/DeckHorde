@@ -10,6 +10,9 @@ extends Control
 @onready var effects_container: Control = $EffectsContainer
 @onready var damage_numbers: Control = $DamageNumbers
 
+# Reference to sibling CombatLane (obtained via parent)
+var combat_lane: Control = null
+
 # Ring configuration - proportions of the available space (made larger)
 const RING_PROPORTIONS: Array[float] = [0.18, 0.42, 0.68, 0.95]  # MELEE, CLOSE, MID, FAR
 # Subtle grayscale fills - let threat borders be the primary visual indicator
@@ -92,9 +95,6 @@ var _barrier_pulse_time: float = 0.0  # For pulsing barrier rings
 var _pending_attack_indicator: Dictionary = {}  # Tracks which enemy is being targeted
 var _active_weapon_reticles: Array[Control] = []  # Track all weapon reticles for cleanup
 
-# Reference to CombatLane for weapon attack origins
-var combat_lane: Control = null
-
 # Tween tracking to prevent animation conflicts (spazzing)
 var _enemy_position_tweens: Dictionary = {}  # instance_id -> Tween
 var _stack_position_tweens: Dictionary = {}  # stack_key -> Tween
@@ -148,6 +148,9 @@ var _weapons_phase_stacks: Array[String] = []  # Stacks targeted during weapons 
 
 func _ready() -> void:
 	_connect_signals()
+	# Get reference to sibling CombatLane via parent
+	if get_parent():
+		combat_lane = get_parent().get_node_or_null("CombatLane")
 	# Ensure overlay containers don't block mouse events on enemies
 	if rings_container:
 		rings_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -2027,13 +2030,22 @@ func _create_stack_visual(ring: int, enemy_id: String, enemies: Array, stack_key
 	count_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	count_badge.add_child(count_label)
 	
-	# Aggregate damage indicator
+	# Aggregate damage indicator with dark background for legibility
 	var damage_label: Label = Label.new()
 	damage_label.name = "DamageLabel"
 	damage_label.position = Vector2(0.0, height * 0.38)
 	damage_label.size = Vector2(width, 20.0)
 	damage_label.add_theme_font_size_override("font_size", 12)
-	damage_label.add_theme_color_override("font_color", Color(1.0, 0.4, 0.4, 1.0))
+	damage_label.add_theme_color_override("font_color", Color(1.0, 0.5, 0.5, 1.0))
+	# Add dark background for legibility
+	var dmg_bg_style: StyleBoxFlat = StyleBoxFlat.new()
+	dmg_bg_style.bg_color = Color(0.0, 0.0, 0.0, 0.6)
+	dmg_bg_style.set_corner_radius_all(3)
+	dmg_bg_style.content_margin_left = 4
+	dmg_bg_style.content_margin_right = 4
+	dmg_bg_style.content_margin_top = 1
+	dmg_bg_style.content_margin_bottom = 1
+	damage_label.add_theme_stylebox_override("normal", dmg_bg_style)
 	damage_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	damage_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	if enemy_def:
@@ -3271,7 +3283,7 @@ func _create_enemy_type_card(enemy_def) -> PanelContainer:
 	var dmg_label: Label = Label.new()
 	dmg_label.text = "⚔️ " + str(dmg)
 	dmg_label.add_theme_font_size_override("font_size", 14)
-	dmg_label.add_theme_color_override("font_color", Color(1.0, 0.4, 0.4))
+	dmg_label.add_theme_color_override("font_color", Color(1.0, 0.5, 0.5))
 	dmg_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	stats_row.add_child(dmg_label)
 	
@@ -3434,12 +3446,19 @@ func _create_enemy_instance_mini_card(enemy) -> PanelContainer:
 	hp_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(hp_label)
 	
-	# Damage display
+	# Damage display with dark background
 	var dmg: int = enemy_def.get_scaled_damage(RunManager.current_wave)
 	var dmg_label: Label = Label.new()
 	dmg_label.text = "⚔️" + str(dmg)
 	dmg_label.add_theme_font_size_override("font_size", 11)
-	dmg_label.add_theme_color_override("font_color", Color(1.0, 0.4, 0.4))
+	dmg_label.add_theme_color_override("font_color", Color(1.0, 0.5, 0.5))
+	# Add dark background for legibility
+	var mini_dmg_bg: StyleBoxFlat = StyleBoxFlat.new()
+	mini_dmg_bg.bg_color = Color(0.0, 0.0, 0.0, 0.5)
+	mini_dmg_bg.set_corner_radius_all(2)
+	mini_dmg_bg.content_margin_left = 2
+	mini_dmg_bg.content_margin_right = 2
+	dmg_label.add_theme_stylebox_override("normal", mini_dmg_bg)
 	dmg_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	dmg_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(dmg_label)

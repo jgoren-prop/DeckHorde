@@ -27,9 +27,9 @@ func _ready() -> void:
 
 
 func _setup_ui() -> void:
-	# Set up the panel style - fixed size to prevent overflow
-	custom_minimum_size = Vector2(280, 400)
-	size = Vector2(280, 400)  # Fixed size
+	# Set up the panel style - tall enough to fit all stats without scrollbar
+	custom_minimum_size = Vector2(280, 580)
+	size = Vector2(280, 580)
 	
 	var style: StyleBoxFlat = StyleBoxFlat.new()
 	style.bg_color = Color(0.05, 0.05, 0.1, 0.95)

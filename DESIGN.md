@@ -365,7 +365,22 @@ Per wave, when you open the shop:
 - **Energy/Turn**: 3
 - **Draw/Turn**: 5
 - **Passive**: None (neutral baseline)
-- **Starting Deck**: Rusty Pistol ×2, Minor Hex, Minor Barrier, Guard Stance ×2, Precision Strike ×2, Shove ×2
+- **Starting Deck (current implementation)**: Rusty Pistol ×2, Minor Hex, Minor Barrier, Guard Stance ×2, Precision Strike ×2, Shove ×2
+
+#### Starter Deck (board-synergy proposal, not implemented yet)
+- Goal: put the lane to work immediately, then amplify it with tempo and tag infusion.
+- Proposed 10 cards:
+	- Rusty Pistol ×2 (gun, persistent) – baseline auto-clear and tag targets
+	- Storm Carbine ×1 (gun, persistent, close/mid) – pushes lane presence without overshooting damage
+	- Ammo Cache ×1 (skill, instant, engine_core, gun) – fuels cheap gun curve and early rerolls
+	- Minor Hex ×1 (hex, instant) – single-target setup for beam/hex synergies
+	- Minor Barrier ×1 (barrier, instant) – early ring control and fortress hooks
+	- Guard Stance ×1 (defense, instant, fortress) – stabilizer
+	- Precision Strike ×1 (gun, instant, single_target) – stack breaker, works with future tags
+	- Shove ×1 (skill, instant, ring_control, volatile) – movement control and barrier trigger
+	- **Overclock (new card)** ×1 – skill, instant, engine_core: "All deployed guns fire immediately for 75% damage; draw 1." (board tempo lever)
+	- **Tag Infusion: Piercing (new card/service)** ×1 – skill, instant: "Add `piercing` tag to a chosen gun. Piercing shots continue through a stack to hit a second enemy (overflow applies)." (turns Rusty Pistol into two-hit in stacks)
+- Early shop priorities: another persistent gun (Twin Pistols/Choirbreaker/Infernal Pistol), one barrier enabler (Ring Ward or Barrier Sigil), and a second ammo/tempo piece (Ammo Cache or Ritual Cartridge) to keep lane-filling fast.
 
 ### Ash Warden
 
