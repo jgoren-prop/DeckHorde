@@ -42,4 +42,3 @@ func _on_new_run_pressed() -> void:
 
 func _on_main_menu_pressed() -> void:
 	GameManager.return_to_main_menu()
-

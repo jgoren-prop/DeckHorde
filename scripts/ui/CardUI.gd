@@ -43,6 +43,9 @@ var hand_index: int = -1
 # When false, card always displays at full brightness (for shop/deck viewer)
 var check_playability: bool = true
 
+# When false, card does not scale/lift on hover (for deployed weapons that use external preview)
+var enable_hover_scale: bool = true
+
 # Fan layout support
 var fan_index: int = 0  # Position in the fan (0 = leftmost)
 var fan_total: int = 1  # Total cards in fan
@@ -607,6 +610,13 @@ func _on_mouse_entered() -> void:
 	if is_dragging:
 		return
 	
+	# Emit hover signal regardless (for external preview systems)
+	card_hovered.emit(card_def, tier, true)
+	
+	# Skip scale/lift effect if disabled (e.g., deployed weapons use external preview)
+	if not enable_hover_scale:
+		return
+	
 	# Kill any existing hover tween
 	if hover_tween and hover_tween.is_valid():
 		hover_tween.kill()
@@ -631,12 +641,17 @@ func _on_mouse_entered() -> void:
 	
 	# Bring to front
 	z_index = 50
-	
-	card_hovered.emit(card_def, tier, true)
 
 
 func _on_mouse_exited() -> void:
 	if is_dragging:
+		return
+	
+	# Emit hover signal regardless (for external preview systems)
+	card_hovered.emit(card_def, tier, false)
+	
+	# Skip scale/lift reset if disabled (e.g., deployed weapons use external preview)
+	if not enable_hover_scale:
 		return
 	
 	# Kill any existing hover tween
@@ -658,8 +673,6 @@ func _on_mouse_exited() -> void:
 	hover_tween.finished.connect(func(): hover_tween = null)
 	
 	z_index = fan_index  # Use fan index for z-ordering
-	
-	card_hovered.emit(card_def, tier, false)
 
 
 func set_fan_position(index: int, total: int, pos: Vector2, rot: float) -> void:

@@ -171,4 +171,3 @@ func _on_quit_pressed() -> void:
 	AudioManager.play_button_click()
 	print("[Settings] Quit game pressed")
 	get_tree().quit()
-

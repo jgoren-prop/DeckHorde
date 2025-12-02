@@ -103,8 +103,9 @@ func _ready() -> void:
 	_create_dev_panel()
 	_create_v2_debug_stat_panel()
 	_setup_animation_manager()
-	_start_combat()
 	_hide_settings_overlay()
+	# Defer combat start to ensure UI layout is computed first
+	call_deferred("_start_combat")
 
 
 func _setup_animation_manager() -> void:
@@ -603,28 +604,31 @@ func _update_hand() -> void:
 	if hand_size == 0:
 		return
 	
-	# Calculate fan layout positions - center cards on the SCREEN, not just the container
-	var viewport_width: float = get_viewport().get_visible_rect().size.x
-	var screen_center_x: float = viewport_width / 2.0
+	# Ensure layout is computed before calculating positions
+	# If card_hand size is not yet valid (< 100px), wait for a frame
+	if card_hand.size.x < 100.0:
+		await get_tree().process_frame
 	
-	# Convert screen center to local CardHand coordinates
-	var card_hand_global_x: float = card_hand.global_position.x
-	var local_center_x: float = screen_center_x - card_hand_global_x
+	# Calculate fan layout positions - center cards within the CardHand container
+	# The CardHand container is designed to be centered on screen via the HBoxContainer layout
+	# So centering within CardHand = centering on screen
+	var local_center_x: float = card_hand.size.x / 2.0
 	
 	# Calculate card spacing based on number of cards
 	var card_spacing: float = FAN_CARD_WIDTH * FAN_OVERLAP
 	var total_width: float = (hand_size - 1) * card_spacing + FAN_CARD_WIDTH
 	
-	# Clamp to available width
-	var max_width: float = card_hand.size.x - 100.0  # Leave margin on sides
-	if total_width > max_width:
+	# Clamp to available width (leave margins on both sides)
+	var margin: float = 80.0
+	var max_width: float = card_hand.size.x - margin * 2.0
+	if total_width > max_width and hand_size > 1:
 		card_spacing = (max_width - FAN_CARD_WIDTH) / maxf(hand_size - 1, 1)
 		total_width = (hand_size - 1) * card_spacing + FAN_CARD_WIDTH
 	
 	var start_x: float = local_center_x - total_width / 2.0
 	
-	# Base Y position - cards sit lower in hand area, bottom of cards can be hidden
-	var base_y: float = 80.0  # Distance from top of card_hand container (cards sit lower)
+	# Base Y position - cards sit slightly below top of hand area
+	var base_y: float = 60.0  # Distance from top of card_hand container
 	
 	# Create card UI for each card in hand
 	for i: int in range(hand_size):

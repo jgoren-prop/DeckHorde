@@ -61,6 +61,8 @@ static func resolve(card_def, tier: int, target_ring: int, combat: Node) -> void
 			_resolve_damage_and_hex(card_def, tier, combat)
 		"shield_bash":
 			_resolve_shield_bash(card_def, tier, combat)
+		"targeted_group_damage":
+			_resolve_targeted_group_damage(card_def, tier, combat)
 		_:
 			push_warning("[CardEffectResolver] Unknown effect type: " + card_def.effect_type)
 
@@ -502,3 +504,77 @@ static func _resolve_shield_bash(card_def, _tier: int, combat: Node) -> void:  #
 		combat._handle_enemy_death(target, result.hex_triggered)
 	
 	combat.damage_dealt_to_enemies.emit(total_damage, target.ring)
+
+
+static func _resolve_targeted_group_damage(card_def, tier: int, combat: Node) -> void:  # card_def: CardDefinition
+	"""Deal damage to a targeted enemy and all enemies in its group/stack.
+	If the enemy is not in a group, only hits that single enemy."""
+	var damage: int = card_def.get_scaled_value("damage", tier)
+	
+	# Check for Ember Charm artifact bonus (gun cards deal +2 damage)
+	var artifact_effects: Dictionary = ArtifactManager.trigger_artifacts("on_card_play", {"card_tags": card_def.tags})
+	damage += artifact_effects.bonus_damage
+	
+	# V2: Apply damage multipliers
+	damage = _apply_damage_multipliers(damage, card_def, -1)
+	
+	# Find candidates in target_rings
+	var candidates: Array = []
+	for ring: int in card_def.target_rings:
+		candidates.append_array(combat.battlefield.get_enemies_in_ring(ring))
+	
+	if candidates.size() == 0:
+		print("[CardEffectResolver] No valid targets for Precision Strike")
+		return
+	
+	# Debug: Print all candidates and their group_ids
+	print("[CardEffectResolver] Precision Strike - Found ", candidates.size(), " candidates:")
+	for c in candidates:
+		print("  - ", c.enemy_id, " (instance_id=", c.instance_id, ", group_id='", c.group_id, "', ring=", c.ring, ")")
+	
+	# Pick random target
+	var target = candidates[randi() % candidates.size()]
+	print("[CardEffectResolver] Selected target: ", target.enemy_id, " (group_id='", target.group_id, "')")
+	
+	# Emit targeting signal for visual (expand stack if needed)
+	combat.enemy_targeted.emit(target)
+	await combat.get_tree().create_timer(0.3).timeout
+	
+	# Find all enemies in the same group (if target has a group)
+	var targets_to_hit: Array = []
+	if not target.group_id.is_empty():
+		# Hit all enemies in the same group
+		var all_enemies: Array = combat.battlefield.get_all_enemies()
+		for enemy in all_enemies:
+			if enemy.group_id == target.group_id:
+				targets_to_hit.append(enemy)
+		print("[CardEffectResolver] Precision Strike hitting group '", target.group_id, "' with ", targets_to_hit.size(), " enemies")
+	else:
+		# Single enemy, not in a group
+		targets_to_hit.append(target)
+		print("[CardEffectResolver] Precision Strike hitting single enemy (no group_id)")
+	
+	# Deal damage to all targets in the group
+	var total_damage_dealt: int = 0
+	var enemies_to_kill: Array = []
+	
+	for enemy in targets_to_hit:
+		# Use take_damage to handle hex triggering
+		var result: Dictionary = enemy.take_damage(damage)
+		var total_dmg: int = result.total_damage
+		total_damage_dealt += total_dmg
+		
+		# Emit damage signal for visual feedback (with hex_triggered info)
+		combat.enemy_damaged.emit(enemy, total_dmg, result.hex_triggered)
+		
+		if result.hex_triggered:
+			print("[CardEffectResolver] Hex triggered on ", enemy.enemy_id, "! ", damage, " + ", result.hex_bonus, " = ", total_dmg)
+		
+		if enemy.current_hp <= 0:
+			enemies_to_kill.append({"enemy": enemy, "hex_triggered": result.hex_triggered})
+	
+	# Handle deaths after all damage is dealt
+	for kill_data: Dictionary in enemies_to_kill:
+		combat._handle_enemy_death(kill_data.enemy, kill_data.hex_triggered)
+	
+	combat.damage_dealt_to_enemies.emit(total_damage_dealt, target.ring)

@@ -118,31 +118,30 @@
 
 ## Recently Completed (V2 Implementation)
 
-### Combat Lane System ✅ COMPLETE
-- ✅ **CombatLane.gd** - New UI component for persistent weapon display
+- ### Combat Lane System ✅ COMPLETE
+- ✅ **CombatLane.gd** - UI component for persistent weapon display
   - Positioned between battlefield and card hand
-  - Displays weapons as scaled-down (55%) CardUI instances
+  - Cards auto-scale to fill ~80% of the lane height (recomputed on resize)
+  - Lane frame always visible; label shows slot usage (0/7 → 7/7)
   - Maximum 7 weapons deployed at once
 
 - ✅ **Deploy Animation**:
   - Cards fly from hand to lane with shrink effect
-  - Bounce/glow effect when card lands in lane
+  - Bounce effect when card lands in lane (no glow border)
   
 - ✅ **Fire Effects**:
-  - Weapon cards pulse when triggering
+  - Weapon cards pulse when triggering (no persistent highlight)
   - Damage floater (-X⚔) rises from fired weapon
-  - Lane has subtle glow during weapons phase
   
 - ✅ **Integration**:
   - Connected to CombatManager.weapon_triggered signal
   - Weapons auto-deploy when persistent card played
-  - Lane visibility toggles based on deployed count
+  - Hovering a deployed weapon spawns a separate canvas-layer preview without altering base card scale
   
 - ✅ **Unit Tests**:
   - Deploy/remove weapon tests
   - Fire animation tests
   - Capacity limit tests
-  - Visibility toggle tests
 
 ### V2 Phase 5: Shop & Reward Rework ✅ COMPLETE
 - ✅ **ShopGenerator.gd** - New autoload for V2 shop generation
@@ -183,7 +182,7 @@
 
 ### V2 Phase 2: Veteran Warden ✅ COMPLETE
 - ✅ **Veteran** - V2 baseline warden (HP 70, Energy 3, all stats neutral)
-- ✅ **10-card Starter Deck**: Rusty Pistol×2, Minor Hex, Minor Barrier, Guard Stance×2, Quick Draw×2, Shove×2
+- ✅ **10-card Starter Deck**: Rusty Pistol×2, Minor Hex, Minor Barrier, Guard Stance×2, Precision Strike×2, Shove×2
 
 ### V2 Phase 1: Tag & Stat Model ✅ COMPLETE
 - ✅ **TagConstants.gd** - Canonical tag names

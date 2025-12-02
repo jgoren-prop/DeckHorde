@@ -863,9 +863,16 @@ func _play_death_animation_mini_panel(mini_panel: Panel, enemy: Variant) -> void
 
 func _transform_to_destroyed_state(visual_obj: Variant, _enemy: Variant) -> void:
 	"""Transform an enemy visual into its destroyed appearance."""
+	# Safely check if the variant contains a valid object
+	if visual_obj == null:
+		return
+	if typeof(visual_obj) != TYPE_OBJECT:
+		return
+	if not is_instance_valid(visual_obj):
+		return
 	# Cast from Variant to avoid tween callback type conversion issues
 	var visual: Panel = visual_obj as Panel
-	if not is_instance_valid(visual):
+	if visual == null:
 		return
 	
 	# Update the style to look destroyed (darker, desaturated, cracked border)
@@ -909,9 +916,17 @@ func _transform_to_destroyed_state(visual_obj: Variant, _enemy: Variant) -> void
 
 func _transform_mini_panel_to_destroyed(mini_panel_obj: Variant, _enemy: Variant) -> void:
 	"""Transform a mini-panel into its destroyed appearance."""
+	# Safely check if the variant contains a valid object
+	# typeof() check prevents errors when accessing freed object references
+	if mini_panel_obj == null:
+		return
+	if typeof(mini_panel_obj) != TYPE_OBJECT:
+		return
+	if not is_instance_valid(mini_panel_obj):
+		return
 	# Cast from Variant to avoid tween callback type conversion issues
 	var mini_panel: Panel = mini_panel_obj as Panel
-	if not is_instance_valid(mini_panel):
+	if mini_panel == null:
 		return
 	
 	# Update style to destroyed look

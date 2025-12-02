@@ -255,7 +255,7 @@ Trade damage for sustain. Constantly healing and converting sustain into armor/d
 
 | Card | Cost | Tags | Effect |
 |------|------|------|--------|
-| Quick Draw | 0 | skill, instant, engine_core | Draw 1 card |
+| Precision Strike | 1 | gun, instant, single_target | Deal 7 damage to target enemy. If stacked, hits all enemies in the stack |
 | Guard Stance | 1 | defense, instant, fortress | Gain 4 armor |
 | Shove | 1 | skill, instant, ring_control, volatile | Push 1 enemy back 1 ring. Barrier hit = 2 damage |
 | Ritual Cartridge | 1 | skill, instant, engine_core, gun, hex_ritual | Next gun and hex card cost 1 less |
@@ -365,7 +365,7 @@ Per wave, when you open the shop:
 - **Energy/Turn**: 3
 - **Draw/Turn**: 5
 - **Passive**: None (neutral baseline)
-- **Starting Deck**: Rusty Pistol ×2, Minor Hex, Minor Barrier, Guard Stance ×2, Quick Draw ×2, Shove ×2
+- **Starting Deck**: Rusty Pistol ×2, Minor Hex, Minor Barrier, Guard Stance ×2, Precision Strike ×2, Shove ×2
 
 ### Ash Warden
 
@@ -524,7 +524,7 @@ A Hearthstone-style "board" for deployed persistent weapons, positioned between 
 ├─────────────────────────────────────────────────────┤
 │  ⚡ DEPLOYED WEAPONS (3/7)                          │
 │  ┌──────┐  ┌──────┐  ┌──────┐                       │
-│  │ 🔫   │  │ 🔫   │  │ 🔫   │  (scaled CardUI 55%) │
+│  │ 🔫   │  │ 🔫   │  │ 🔫   │  (fills ~80% of lane) │
 │  │Rusty │  │Pistol│  │Turret│                       │
 │  │ ⚔3  │  │ ⚔4  │  │ ⚔3  │                       │
 │  └──────┘  └──────┘  └──────┘                       │
@@ -539,11 +539,12 @@ A Hearthstone-style "board" for deployed persistent weapons, positioned between 
 | Feature | Description |
 |---------|-------------|
 | Deployment Animation | Cards fly from hand to lane with shrink effect |
-| Weapon Fire Effect | Cards pulse and glow when triggering |
+| Weapon Fire Effect | Cards pulse briefly when triggering (no glow borders) |
 | Damage Floater | "-X⚔" rises from card when damage dealt |
 | Capacity Limit | Maximum 7 weapons deployed at once |
-| Auto-visibility | Lane hides when empty, shows when weapons present |
-| Active Glow | Deployed cards have golden glow border |
+| Card Scale | Cards auto-resize to ~80% of lane height whenever the lane resizes |
+| Lane Visibility | Lane frame always visible; label indicates empty/full |
+| Hover Preview | Hover spawns full-size preview card above lane without altering base card scale |
 
 ### Timing
 
@@ -553,8 +554,8 @@ A Hearthstone-style "board" for deployed persistent weapons, positioned between 
 
 ### Implementation
 
-- `scripts/ui/CombatLane.gd` - Main lane controller
-- Scaled `CardUI.tscn` instances (55% size)
+- `scripts/ui/CombatLane.gd` - Main lane controller (dynamic card scaling + preview logic)
+- Scaled `CardUI.tscn` instances sized to ~80% of lane height (computed from control size)
 - Connected to `CombatManager.weapon_triggered` signal
 - Cards stored in `deployed_weapons: Array[Dictionary]`
 

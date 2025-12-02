@@ -1,103 +1,97 @@
 [gd_scene load_steps=12 format=3 uid="uid://dq1xrk8nv2p4f"]
 
-[ext_resource type="Script" path="res://scripts/ui/CombatScreen.gd" id="1_combat"]
+[ext_resource type="Script" uid="uid://bhsrjliu5rmtk" path="res://scripts/ui/CombatScreen.gd" id="1_combat"]
 [ext_resource type="PackedScene" uid="uid://cbe1qr0xnyd0m" path="res://scenes/BattlefieldArena.tscn" id="2_arena"]
-[ext_resource type="Script" path="res://scripts/ui/CombatLane.gd" id="3_lane"]
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_topbar"]
-bg_color = Color(0.08, 0.06, 0.12, 0.9)
-border_width_bottom = 2
-border_color = Color(0.3, 0.25, 0.4, 1)
-content_margin_left = 10.0
-content_margin_top = 6.0
-content_margin_right = 10.0
-content_margin_bottom = 6.0
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_threat"]
-bg_color = Color(0.1, 0.05, 0.05, 0.9)
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 2
-border_color = Color(0.5, 0.2, 0.2, 0.8)
-corner_radius_left_top = 8
-corner_radius_top_right = 8
-corner_radius_bottom_right = 8
-corner_radius_bottom_left = 8
-content_margin_left = 10.0
-content_margin_top = 8.0
-content_margin_right = 10.0
-content_margin_bottom = 8.0
-
-[sub_resource type="StyleBoxLine" id="StyleBoxLine_sep"]
-color = Color(0.4, 0.2, 0.2, 0.5)
-thickness = 1
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_bottombar"]
-bg_color = Color(0.08, 0.06, 0.12, 0.95)
-border_width_top = 2
-border_color = Color(0.3, 0.25, 0.4, 1)
-content_margin_left = 10.0
-content_margin_top = 10.0
-content_margin_right = 10.0
-content_margin_bottom = 10.0
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_selector"]
-bg_color = Color(0.12, 0.1, 0.18, 0.98)
-border_width_left = 3
-border_width_top = 3
-border_width_right = 3
-border_width_bottom = 3
-border_color = Color(0.6, 0.5, 0.2, 1)
-corner_radius_left_top = 12
-corner_radius_top_right = 12
-corner_radius_bottom_right = 12
-corner_radius_bottom_left = 12
-content_margin_left = 15.0
-content_margin_top = 12.0
-content_margin_right = 15.0
-content_margin_bottom = 12.0
+[ext_resource type="Script" uid="uid://be4dxdgx01wxs" path="res://scripts/ui/CombatLane.gd" id="3_lane"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_playerstats"]
+content_margin_left = 16.0
+content_margin_top = 12.0
+content_margin_right = 16.0
+content_margin_bottom = 12.0
 bg_color = Color(0.06, 0.04, 0.1, 0.85)
 border_width_left = 3
 border_width_top = 3
 border_width_right = 3
 border_width_bottom = 3
 border_color = Color(0.5, 0.4, 0.2, 0.9)
-corner_radius_left_top = 12
 corner_radius_top_right = 12
 corner_radius_bottom_right = 12
 corner_radius_bottom_left = 12
-content_margin_left = 16.0
-content_margin_top = 12.0
-content_margin_right = 16.0
-content_margin_bottom = 12.0
 shadow_color = Color(0, 0, 0, 0.4)
 shadow_size = 4
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hpbar_bg"]
 bg_color = Color(0.15, 0.08, 0.08, 1)
-corner_radius_left_top = 4
 corner_radius_top_right = 4
 corner_radius_bottom_right = 4
 corner_radius_bottom_left = 4
 
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_threat"]
+content_margin_left = 10.0
+content_margin_top = 8.0
+content_margin_right = 10.0
+content_margin_bottom = 8.0
+bg_color = Color(0.1, 0.05, 0.05, 0.9)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.5, 0.2, 0.2, 0.8)
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxLine" id="StyleBoxLine_sep"]
+color = Color(0.4, 0.2, 0.2, 0.5)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_topbar"]
+content_margin_left = 10.0
+content_margin_top = 6.0
+content_margin_right = 10.0
+content_margin_bottom = 6.0
+bg_color = Color(0.08, 0.06, 0.12, 0.9)
+border_width_bottom = 2
+border_color = Color(0.3, 0.25, 0.4, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_bottombar"]
+content_margin_left = 10.0
+content_margin_top = 10.0
+content_margin_right = 10.0
+content_margin_bottom = 10.0
+bg_color = Color(0.08, 0.06, 0.12, 0.95)
+border_width_top = 2
+border_color = Color(0.3, 0.25, 0.4, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_selector"]
+content_margin_left = 15.0
+content_margin_top = 12.0
+content_margin_right = 15.0
+content_margin_bottom = 12.0
+bg_color = Color(0.12, 0.1, 0.18, 0.98)
+border_width_left = 3
+border_width_top = 3
+border_width_right = 3
+border_width_bottom = 3
+border_color = Color(0.6, 0.5, 0.2, 1)
+corner_radius_top_right = 12
+corner_radius_bottom_right = 12
+corner_radius_bottom_left = 12
+
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_glossary"]
+content_margin_left = 20.0
+content_margin_top = 15.0
+content_margin_right = 20.0
+content_margin_bottom = 15.0
 bg_color = Color(0.08, 0.08, 0.12, 0.98)
 border_width_left = 3
 border_width_top = 3
 border_width_right = 3
 border_width_bottom = 3
 border_color = Color(0.4, 0.5, 0.7, 1)
-corner_radius_left_top = 16
 corner_radius_top_right = 16
 corner_radius_bottom_right = 16
 corner_radius_bottom_left = 16
-content_margin_left = 20.0
-content_margin_top = 15.0
-content_margin_right = 20.0
-content_margin_bottom = 15.0
 shadow_color = Color(0, 0, 0, 0.5)
 shadow_size = 8
 
@@ -119,34 +113,28 @@ grow_horizontal = 2
 grow_vertical = 2
 color = Color(0.03, 0.02, 0.05, 1)
 
-[node name="BattlefieldArena" parent="." instance=ExtResource("2_arena")]
-layout_mode = 1
-anchors_preset = -1
-anchor_left = 0.0
-anchor_top = 0.0
-anchor_right = 1.0
-anchor_bottom = 0.5
-offset_left = 0.0
-offset_top = 50.0
-offset_right = 0.0
-offset_bottom = 0.0
-
 [node name="CombatLane" type="Control" parent="."]
 layout_mode = 1
-anchors_preset = -1
 anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
 offset_left = 150.0
-offset_top = -460.0
+offset_top = -569.0
 offset_right = -150.0
-offset_bottom = -320.0
+offset_bottom = -327.0
 script = ExtResource("3_lane")
+
+[node name="BattlefieldArena" parent="." instance=ExtResource("2_arena")]
+layout_mode = 1
+anchors_preset = -1
+anchor_bottom = 0.4
+offset_top = 50.0
 
 [node name="PlayerStatsPanel" type="PanelContainer" parent="."]
 layout_mode = 1
-anchors_preset = 0
+anchors_preset = 5
 anchor_left = 0.5
+anchor_right = 0.5
 offset_left = 415.0
 offset_top = 60.0
 offset_right = 580.0
@@ -218,8 +206,9 @@ theme_override_constants/separation = 2
 
 [node name="ThreatPreview" type="PanelContainer" parent="."]
 layout_mode = 1
-anchors_preset = 0
+anchors_preset = 5
 anchor_left = 0.5
+anchor_right = 0.5
 offset_left = -580.0
 offset_top = 60.0
 offset_right = -415.0
@@ -390,7 +379,7 @@ anchors_preset = 12
 anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_top = -220.0
+offset_top = -298.0
 grow_horizontal = 2
 grow_vertical = 0
 theme_override_constants/separation = 0
@@ -542,6 +531,7 @@ text = "Cancel"
 
 [node name="SettingsOverlay" type="CanvasLayer" parent="."]
 layer = 50
+visible = false
 
 [node name="Dimmer" type="ColorRect" parent="SettingsOverlay"]
 anchors_preset = 15
@@ -707,8 +697,8 @@ layout_mode = 2
 
 [node name="ButtonRow" type="HBoxContainer" parent="SettingsOverlay/SettingsPanel/MarginContainer/VBox"]
 layout_mode = 2
-alignment = 1
 theme_override_constants/separation = 15
+alignment = 1
 
 [node name="ResumeButton" type="Button" parent="SettingsOverlay/SettingsPanel/MarginContainer/VBox/ButtonRow"]
 custom_minimum_size = Vector2(130, 45)
@@ -723,8 +713,8 @@ theme_override_font_sizes/font_size = 16
 text = "Quit Run"
 
 [node name="GlossaryOverlay" type="CanvasLayer" parent="."]
-visible = false
 layer = 50
+visible = false
 
 [node name="Dimmer" type="ColorRect" parent="GlossaryOverlay"]
 anchors_preset = 15
@@ -785,7 +775,6 @@ theme_override_constants/separation = 20
 
 [connection signal="pressed" from="TopBar/HBox/GlossaryButton" to="." method="_on_glossary_pressed"]
 [connection signal="pressed" from="TopBar/HBox/SettingsButton" to="." method="_on_settings_pressed"]
-[connection signal="pressed" from="GlossaryOverlay/GlossaryPanel/VBox/Header/CloseButton" to="." method="_on_glossary_close_pressed"]
 [connection signal="pressed" from="BottomSection/LeftSidebar/VBox/DeckInfo/DeckButton" to="." method="_on_deck_view_pressed"]
 [connection signal="pressed" from="BottomSection/LeftSidebar/VBox/EndTurnButton" to="." method="_on_end_turn_pressed"]
 [connection signal="pressed" from="RingSelector/VBox/Buttons/MeleeButton" to="." method="_on_ring_selected" binds= [0]]
@@ -801,3 +790,4 @@ theme_override_constants/separation = 20
 [connection signal="toggled" from="SettingsOverlay/SettingsPanel/MarginContainer/VBox/DamageNumbersRow/DamageNumbersCheck" to="." method="_on_damage_numbers_toggled"]
 [connection signal="pressed" from="SettingsOverlay/SettingsPanel/MarginContainer/VBox/ButtonRow/ResumeButton" to="." method="_on_settings_resume_pressed"]
 [connection signal="pressed" from="SettingsOverlay/SettingsPanel/MarginContainer/VBox/ButtonRow/QuitButton" to="." method="_on_settings_quit_pressed"]
+[connection signal="pressed" from="GlossaryOverlay/GlossaryPanel/VBox/Header/CloseButton" to="." method="_on_glossary_close_pressed"]

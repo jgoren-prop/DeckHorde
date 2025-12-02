@@ -99,19 +99,21 @@ func _create_v2_starter_cards() -> void:
 	guard_stance.rarity = 0
 	_register_card(guard_stance)
 	
-	# Quick Draw - free card draw
-	var quick_draw := CardDef.new()
-	quick_draw.card_id = "quick_draw"
-	quick_draw.card_name = "Quick Draw"
-	quick_draw.description = "Draw 1 card."
-	quick_draw.card_type = "skill"
-	quick_draw.effect_type = "draw_cards"
-	quick_draw.tags = ["skill", "instant", "engine_core"]
-	quick_draw.base_cost = 0
-	quick_draw.cards_to_draw = 1
-	quick_draw.target_type = "self"
-	quick_draw.rarity = 0
-	_register_card(quick_draw)
+	# Precision Strike - targeted attack to an enemy group/stack
+	var precision_strike := CardDef.new()
+	precision_strike.card_id = "precision_strike"
+	precision_strike.card_name = "Precision Strike"
+	precision_strike.description = "Deal {damage} damage to a targeted enemy. If stacked, hits all enemies in the stack."
+	precision_strike.card_type = "weapon"
+	precision_strike.effect_type = "targeted_group_damage"
+	precision_strike.tags = ["gun", "instant", "single_target"]
+	precision_strike.base_cost = 1
+	precision_strike.base_damage = 7
+	precision_strike.target_type = "random_enemy"
+	precision_strike.target_rings = [0, 1, 2, 3]  # ALL rings
+	precision_strike.requires_target = false  # Picks random then hits group
+	precision_strike.rarity = 0
+	_register_card(precision_strike)
 	
 	# Shove - push enemy back
 	var shove := CardDef.new()

@@ -56,7 +56,7 @@ func _create_default_wardens() -> Array[WardenDefinition]:
 		{"card_id": "choirbreaker_shotgun", "tier": 1, "count": 2},
 		{"card_id": "glass_ward", "tier": 1, "count": 2},
 		{"card_id": "scatter_volley", "tier": 1, "count": 2},
-		{"card_id": "quick_draw", "tier": 1, "count": 1}
+		{"card_id": "precision_strike", "tier": 1, "count": 1}
 	]
 	result.append(ash)
 	
@@ -133,12 +133,12 @@ func _create_default_wardens() -> Array[WardenDefinition]:
 	veteran.is_unlocked_by_default = true  # V2 baseline, always available
 	# V2 Starter Deck: 10 flexible cards with 2 PERSISTENT WEAPONS for ramp-up fun!
 	veteran.starting_deck = [
-		{"card_id": "rusty_pistol", "tier": 1, "count": 2},      # 2x persistent gun (ALL rings)
-		{"card_id": "minor_hex", "tier": 1, "count": 1},         # 1x hex
-		{"card_id": "minor_barrier", "tier": 1, "count": 1},     # 1x barrier
-		{"card_id": "guard_stance", "tier": 1, "count": 2},      # 2x defense
-		{"card_id": "quick_draw", "tier": 1, "count": 2},        # 2x draw
-		{"card_id": "shove", "tier": 1, "count": 2}              # 2x push
+		{"card_id": "rusty_pistol", "tier": 1, "count": 2},        # 2x persistent gun (ALL rings)
+		{"card_id": "minor_hex", "tier": 1, "count": 1},           # 1x hex
+		{"card_id": "minor_barrier", "tier": 1, "count": 1},       # 1x barrier
+		{"card_id": "guard_stance", "tier": 1, "count": 2},        # 2x defense
+		{"card_id": "precision_strike", "tier": 1, "count": 2},    # 2x targeted group attack
+		{"card_id": "shove", "tier": 1, "count": 2}                # 2x push
 	]
 	result.append(veteran)
 	
