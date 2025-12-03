@@ -68,7 +68,7 @@ Includes the 10-card starter above (marked [Starter]). Costs and effects are bal
 | 4 | Minor Hex [Starter] | 1 | hex, instant, hex_ritual | Apply 3 hex to a random enemy. |
 | 5 | Minor Barrier [Starter] | 1 | barrier, instant, ring_control, barrier_trap | Place barrier: 3 damage when crossed, 1 use. |
 | 6 | Guard Stance [Starter] | 1 | defense, instant, fortress | Gain 4 armor. |
-| 7 | Precision Strike [Starter] | 1 | gun, instant, single_target | Deal 7 damage; if target in stack, also hits the stack. |
+| 7 | Precision Strike [Starter] | 1 | gun, instant, aoe | Deal 2 damage to all enemies in a group. |
 | 8 | Shove [Starter] | 1 | skill, instant, ring_control, volatile | Push 1 enemy back 1 ring; barrier hit deals 2. |
 | 9 | Overclock [Starter] | 1 | skill, instant, engine_core | All deployed guns fire immediately for 75% damage; draw 1. |
 | 10 | Tag Infusion: Piercing [Starter] | 1 | skill, instant | Add `piercing` to a chosen gun: its shots continue through a stack to hit a second enemy; overflow applies. |
@@ -112,3 +112,104 @@ Includes the 10-card starter above (marked [Starter]). Costs and effects are bal
 | 48 | Chain Reactor | 2 | engine, persistent, beam, explosive | First time you play a gun each turn, deal 2 beam damage to two enemies. If either dies, deal 2 explosive splash to its ring. |
 | 49 | Glass Shards | 1 | gun, instant, piercing, volatile | Deal 6 damage; lose 2 armor. If target dies, gain 1 energy next turn. |
 | 50 | Null Field | 1 | defense, instant, fortress | Gain 5 armor. This turn, enemies in Melee deal -2 damage; if you control a barrier, also slow Melee enemies. |
+
+---
+
+## New Artifacts (synergy with new card mechanics)
+
+The existing 26 artifacts (listed in DESIGN.md) focus on the original build families and stat scaling. These new artifacts hook into the **damage-type tags**, **deployed gun/engine synergies**, **kill chains**, and **cross-tag combos** introduced above. Together with the originals, this creates ~48 artifacts for rich Brotato-style buildcraft.
+
+### Damage-Type Tag Artifacts (8)
+
+| Artifact | Rarity | Stackable | Effect |
+|----------|--------|-----------|--------|
+| Blast Shielding | Common | ✓ | Explosive damage +15% |
+| Piercing Scope | Common | ✓ | Piercing attacks deal +2 overflow damage |
+| Arc Coil | Common | ✓ | Beam attacks chain to +1 additional target |
+| Static Buildup | Uncommon | ✗ | Shock attacks have +20% chance to apply Slow |
+| Corrosive Residue | Uncommon | ✗ | Corrosive attacks shred 1 additional armor |
+| Unstable Payload | Uncommon | ✓ | Explosive splash damage +50%. Max HP -3 |
+| Rifling Upgrade | Uncommon | ✓ | Piercing attacks ignore 1 armor per hit |
+| Chain Lightning Module | Rare | ✗ | Beam attacks deal +1 damage per enemy already hit in the chain |
+
+### Deployed Gun/Engine Artifacts (7)
+
+| Artifact | Rarity | Stackable | Effect |
+|----------|--------|-----------|--------|
+| Turret Oil | Common | ✓ | Deployed guns and engines deal +10% damage |
+| Firing Solution | Uncommon | ✗ | Deployed guns deal +1 damage per other gun on the board (max +3) |
+| Ammo Belts | Common | ✓ | Guns with limited ammo have +1 max ammo |
+| Quick Draw | Uncommon | ✗ | First gun you play each turn costs 1 less |
+| Autoloader | Rare | ✗ | When a gun runs out of ammo, 30% chance to fully reload it |
+| Engine Sync | Uncommon | ✗ | When you play an engine, all deployed guns fire once at 50% damage |
+| Lane Commander | Rare | ✗ | Start of turn: if 4+ cards deployed in lane, gain 1 energy |
+
+### Kill Chain / On-Kill Artifacts (6)
+
+| Artifact | Rarity | Stackable | Effect |
+|----------|--------|-----------|--------|
+| Hunter's Quota | Common | ✓ | On kill: gain 1 scrap |
+| Rampage Core | Uncommon | ✗ | On kill: next gun this turn deals +2 damage (stacks up to 3 kills) |
+| Salvage Frame | Uncommon | ✓ | On kill: 15% chance to draw a card |
+| Execution Protocol | Rare | ✗ | Kill 4+ enemies in a single turn: gain 1 energy next turn |
+| Overkill Catalyst | Uncommon | ✗ | On kill with overkill: deal overkill amount to a random enemy in the same ring |
+| Blood Harvest | Uncommon | ✗ | On kill: heal 1 HP. Max HP -5 |
+
+### Cross-Tag Synergy Artifacts (6)
+
+These reward mixing damage types and build families, Brotato-style.
+
+| Artifact | Rarity | Stackable | Effect |
+|----------|--------|-----------|--------|
+| Detonation Matrix | Rare | ✗ | Explosive damage to barriers restores 1 barrier use instead of consuming it |
+| Hex Conductor | Rare | ✗ | Beam attacks spread hex to chained targets instead of consuming hex |
+| Tesla Casing | Uncommon | ✗ | Shotgun attacks with shock apply Slow to all targets hit |
+| Overflow Transfusion | Rare | ✗ | Piercing overflow damage heals you for 50% of overflow dealt |
+| Corrosive Resonance | Uncommon | ✗ | Corrosive armor shred on hexed enemies is doubled |
+| Volatile Reactor | Rare | ✗ | When you take self-damage, deal that damage to a random enemy in Melee/Close |
+
+### Tempo / Overclock Artifacts (5)
+
+| Artifact | Rarity | Stackable | Effect |
+|----------|--------|-----------|--------|
+| Overclock Capacitor | Uncommon | ✗ | First Overclock you play each turn costs 0 |
+| Burst Amplifier | Common | ✓ | "Fire immediately" effects deal +2 damage |
+| Coolant System | Uncommon | ✗ | After playing 3 skill cards in a turn, draw 1 card |
+| Rapid Deployment | Common | ✓ | Persistent guns deploy with +1 damage for their first firing |
+| Infusion Anchor | Uncommon | ✗ | Tag Infusion cards also grant +1 permanent damage to the infused gun |
+
+---
+
+### Artifact Design Notes
+
+**Existing artifacts to keep unchanged:**
+All 26 original artifacts (Sharpened Rounds, Hex Lens, Leech Core, Occult Focus, Trap Engineer, etc.) work fine with the new cards. They provide baseline stat scaling and build-family hooks.
+
+**New stats needed in PlayerStats:**
+- `explosive_damage_percent` (default 100)
+- `piercing_damage_percent` (default 100)
+- `beam_damage_percent` (default 100)
+- `shock_damage_percent` (default 100)
+- `corrosive_damage_percent` (default 100)
+- `deployed_gun_damage_percent` (default 100)
+- `engine_damage_percent` (default 100)
+
+**New trigger types needed in ArtifactDefinition:**
+- `on_explosive_hit`
+- `on_piercing_overflow`
+- `on_beam_chain`
+- `on_shock_hit`
+- `on_corrosive_hit`
+- `on_gun_deploy`
+- `on_gun_fire`
+- `on_gun_out_of_ammo`
+- `on_engine_trigger`
+- `on_self_damage`
+- `on_overkill`
+
+**Priority order for implementation:**
+1. Damage-type tag artifacts (enable the new tags)
+2. Deployed gun artifacts (enable board-centric play)
+3. Kill chain artifacts (reward clearing efficiently)
+4. Cross-tag artifacts (reward hybrid builds)
+5. Tempo artifacts (reward Overclock/skill chains)

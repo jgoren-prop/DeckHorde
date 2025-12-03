@@ -53,6 +53,52 @@ const FAMILY_TAGS: Array[String] = [
 ]
 
 # =============================================================================
+# V2 DAMAGE-TYPE TAGS (0-1 per card)
+# =============================================================================
+# These define how damage behaves for synergies and artifact scaling.
+# Example artifacts: "+15% explosive damage", "Beam attacks chain +1 target"
+
+const TAG_EXPLOSIVE: String = "explosive"   # Splash damage to adjacent rings
+const TAG_PIERCING: String = "piercing"     # Overkill flows to next target
+const TAG_BEAM: String = "beam"             # Chain damage through targets
+const TAG_SHOCK: String = "shock"           # Slow/stun chance on hit
+const TAG_CORROSIVE: String = "corrosive"   # Armor shred, doubled on hexed
+
+const DAMAGE_TYPE_TAGS: Array[String] = [
+	TAG_EXPLOSIVE,
+	TAG_PIERCING,
+	TAG_BEAM,
+	TAG_SHOCK,
+	TAG_CORROSIVE,
+]
+
+# =============================================================================
+# V2 MECHANICAL TAGS (0-2 per card)
+# =============================================================================
+# These define card mechanics for targeting and artifact interactions.
+# Example artifacts: "Guns with ammo +1 max", "Reload cards cost 1 less"
+
+const TAG_AMMO: String = "ammo"             # Has limited ammo charges
+const TAG_RELOAD: String = "reload"         # Can restore ammo to guns
+const TAG_SWARM_CLEAR: String = "swarm_clear"   # Effective against multiple enemies
+const TAG_SINGLE_TARGET: String = "single_target" # Focuses one enemy
+const TAG_SNIPER: String = "sniper"         # Prefers Far/Mid ring targets
+const TAG_SHOTGUN: String = "shotgun"       # Multi-hit or Close/Melee focus
+const TAG_AOE: String = "aoe"               # Area of effect
+const TAG_RING_CONTROL: String = "ring_control" # Pushes/moves enemies between rings
+
+const MECHANICAL_TAGS: Array[String] = [
+	TAG_AMMO,
+	TAG_RELOAD,
+	TAG_SWARM_CLEAR,
+	TAG_SINGLE_TARGET,
+	TAG_SNIPER,
+	TAG_SHOTGUN,
+	TAG_AOE,
+	TAG_RING_CONTROL,
+]
+
+# =============================================================================
 # ALL TAGS (for validation)
 # =============================================================================
 
@@ -61,6 +107,10 @@ const ALL_TAGS: Array[String] = [
 	"gun", "hex", "barrier", "defense", "skill", "engine",
 	# Family tags (6)
 	"lifedrain", "hex_ritual", "fortress", "barrier_trap", "volatile", "engine_core",
+	# V2 Damage-type tags (5)
+	"explosive", "piercing", "beam", "shock", "corrosive",
+	# V2 Mechanical tags (8)
+	"ammo", "reload", "swarm_clear", "single_target", "sniper", "shotgun", "aoe", "ring_control",
 ]
 
 
@@ -83,11 +133,38 @@ static func is_family_tag(tag: String) -> bool:
 	return tag in FAMILY_TAGS
 
 
+static func is_damage_type_tag(tag: String) -> bool:
+	"""Check if a tag is a V2 damage-type tag."""
+	return tag in DAMAGE_TYPE_TAGS
+
+
+static func is_mechanical_tag(tag: String) -> bool:
+	"""Check if a tag is a V2 mechanical tag."""
+	return tag in MECHANICAL_TAGS
+
+
 static func get_family_tags_from_list(tags: Array) -> Array[String]:
 	"""Extract only the family tags from a list of tags."""
 	var result: Array[String] = []
 	for tag: Variant in tags:
 		if tag is String and is_family_tag(tag):
+			result.append(tag)
+	return result
+
+
+static func get_damage_type_from_list(tags: Array) -> String:
+	"""Get the damage-type tag from a list of tags. Returns empty string if none found."""
+	for tag: Variant in tags:
+		if tag is String and is_damage_type_tag(tag):
+			return tag
+	return ""
+
+
+static func get_mechanical_tags_from_list(tags: Array) -> Array[String]:
+	"""Extract only the mechanical tags from a list of tags."""
+	var result: Array[String] = []
+	for tag: Variant in tags:
+		if tag is String and is_mechanical_tag(tag):
 			result.append(tag)
 	return result
 
@@ -143,5 +220,45 @@ static func get_core_type_display_name(tag: String) -> String:
 			return "Skill"
 		TAG_ENGINE:
 			return "Engine"
+		_:
+			return tag.capitalize()
+
+
+static func get_damage_type_display_name(tag: String) -> String:
+	"""Get a human-readable display name for a damage-type tag."""
+	match tag:
+		TAG_EXPLOSIVE:
+			return "Explosive"
+		TAG_PIERCING:
+			return "Piercing"
+		TAG_BEAM:
+			return "Beam"
+		TAG_SHOCK:
+			return "Shock"
+		TAG_CORROSIVE:
+			return "Corrosive"
+		_:
+			return tag.capitalize()
+
+
+static func get_mechanical_tag_display_name(tag: String) -> String:
+	"""Get a human-readable display name for a mechanical tag."""
+	match tag:
+		TAG_AMMO:
+			return "Ammo"
+		TAG_RELOAD:
+			return "Reload"
+		TAG_SWARM_CLEAR:
+			return "Swarm Clear"
+		TAG_SINGLE_TARGET:
+			return "Single Target"
+		TAG_SNIPER:
+			return "Sniper"
+		TAG_SHOTGUN:
+			return "Shotgun"
+		TAG_AOE:
+			return "AoE"
+		TAG_RING_CONTROL:
+			return "Ring Control"
 		_:
 			return tag.capitalize()

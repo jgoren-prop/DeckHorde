@@ -25,6 +25,12 @@ func _create_v2_artifacts() -> void:
 	_create_hex_ritual_artifacts()
 	_create_barrier_fortress_artifacts()
 	_create_volatile_artifacts()
+	# V2 Brainstorm artifacts
+	_create_damage_type_artifacts()
+	_create_deployed_gun_artifacts()
+	_create_kill_chain_artifacts()
+	_create_cross_tag_artifacts()
+	_create_tempo_artifacts()
 
 
 # =============================================================================
@@ -461,6 +467,535 @@ func _create_volatile_artifacts() -> void:
 	overloader.icon = "💥"
 	overloader.icon_color = Color(1.0, 0.5, 0.2)
 	_register_artifact(overloader)
+
+
+# =============================================================================
+# V2 DAMAGE-TYPE TAG ARTIFACTS (8)
+# =============================================================================
+
+func _create_damage_type_artifacts() -> void:
+	"""Artifacts that boost damage-type tags (explosive, piercing, beam, shock, corrosive)."""
+	
+	# Blast Shielding - explosive damage boost
+	var blast := ArtifactDef.new()
+	blast.artifact_id = "blast_shielding"
+	blast.artifact_name = "Blast Shielding"
+	blast.description = "Explosive damage +15%."
+	blast.rarity = 1
+	blast.base_cost = 40
+	blast.stackable = true
+	blast.stat_modifiers = {"explosive_damage_percent": 15.0}
+	blast.trigger_type = "passive"
+	blast.icon = "💥"
+	blast.icon_color = Color(1.0, 0.5, 0.1)
+	_register_artifact(blast)
+	
+	# Piercing Scope - piercing overflow boost
+	var piercing_scope := ArtifactDef.new()
+	piercing_scope.artifact_id = "piercing_scope"
+	piercing_scope.artifact_name = "Piercing Scope"
+	piercing_scope.description = "Piercing attacks deal +2 overflow damage."
+	piercing_scope.rarity = 1
+	piercing_scope.base_cost = 40
+	piercing_scope.stackable = true
+	piercing_scope.trigger_type = "on_piercing_overflow"
+	piercing_scope.effect_type = "bonus_overflow"
+	piercing_scope.effect_value = 2
+	piercing_scope.icon = "🎯"
+	piercing_scope.icon_color = Color(0.3, 0.6, 0.9)
+	_register_artifact(piercing_scope)
+	
+	# Arc Coil - beam chain boost
+	var arc_coil := ArtifactDef.new()
+	arc_coil.artifact_id = "arc_coil"
+	arc_coil.artifact_name = "Arc Coil"
+	arc_coil.description = "Beam attacks chain to +1 additional target."
+	arc_coil.rarity = 1
+	arc_coil.base_cost = 45
+	arc_coil.stackable = true
+	arc_coil.trigger_type = "on_beam_chain"
+	arc_coil.effect_type = "bonus_chain"
+	arc_coil.effect_value = 1
+	arc_coil.icon = "⚡"
+	arc_coil.icon_color = Color(0.2, 0.8, 1.0)
+	_register_artifact(arc_coil)
+	
+	# Static Buildup - shock slow chance
+	var static_buildup := ArtifactDef.new()
+	static_buildup.artifact_id = "static_buildup"
+	static_buildup.artifact_name = "Static Buildup"
+	static_buildup.description = "Shock attacks have +20% chance to apply Slow."
+	static_buildup.rarity = 2
+	static_buildup.base_cost = 55
+	static_buildup.stackable = false
+	static_buildup.trigger_type = "on_shock_hit"
+	static_buildup.effect_type = "bonus_slow_chance"
+	static_buildup.effect_value = 20
+	static_buildup.icon = "⚡"
+	static_buildup.icon_color = Color(1.0, 0.9, 0.3)
+	_register_artifact(static_buildup)
+	
+	# Corrosive Residue - extra armor shred
+	var corrosive_res := ArtifactDef.new()
+	corrosive_res.artifact_id = "corrosive_residue"
+	corrosive_res.artifact_name = "Corrosive Residue"
+	corrosive_res.description = "Corrosive attacks shred 1 additional armor."
+	corrosive_res.rarity = 2
+	corrosive_res.base_cost = 50
+	corrosive_res.stackable = false
+	corrosive_res.trigger_type = "on_corrosive_hit"
+	corrosive_res.effect_type = "bonus_shred"
+	corrosive_res.effect_value = 1
+	corrosive_res.icon = "🧪"
+	corrosive_res.icon_color = Color(0.5, 0.9, 0.2)
+	_register_artifact(corrosive_res)
+	
+	# Unstable Payload - explosive splash boost with HP cost
+	var unstable := ArtifactDef.new()
+	unstable.artifact_id = "unstable_payload"
+	unstable.artifact_name = "Unstable Payload"
+	unstable.description = "Explosive splash damage +50%. Max HP -3."
+	unstable.rarity = 2
+	unstable.base_cost = 55
+	unstable.stackable = true
+	unstable.stat_modifiers = {"explosive_damage_percent": 50.0, "max_hp": -3}
+	unstable.trigger_type = "passive"
+	unstable.icon = "💣"
+	unstable.icon_color = Color(1.0, 0.3, 0.1)
+	_register_artifact(unstable)
+	
+	# Rifling Upgrade - piercing ignores armor
+	var rifling := ArtifactDef.new()
+	rifling.artifact_id = "rifling_upgrade"
+	rifling.artifact_name = "Rifling Upgrade"
+	rifling.description = "Piercing attacks ignore 1 armor per hit."
+	rifling.rarity = 2
+	rifling.base_cost = 60
+	rifling.stackable = true
+	rifling.stat_modifiers = {"piercing_damage_percent": 10.0}
+	rifling.trigger_type = "on_piercing_overflow"
+	rifling.effect_type = "ignore_armor"
+	rifling.effect_value = 1
+	rifling.icon = "🔩"
+	rifling.icon_color = Color(0.6, 0.6, 0.6)
+	_register_artifact(rifling)
+	
+	# Chain Lightning Module - beam damage scales with chain
+	var chain_lightning := ArtifactDef.new()
+	chain_lightning.artifact_id = "chain_lightning_module"
+	chain_lightning.artifact_name = "Chain Lightning Module"
+	chain_lightning.description = "Beam attacks deal +1 damage per enemy already hit in the chain."
+	chain_lightning.rarity = 3
+	chain_lightning.base_cost = 95
+	chain_lightning.stackable = false
+	chain_lightning.trigger_type = "on_beam_chain"
+	chain_lightning.effect_type = "scaling_chain_damage"
+	chain_lightning.effect_value = 1
+	chain_lightning.icon = "⚡"
+	chain_lightning.icon_color = Color(0.8, 0.2, 1.0)
+	_register_artifact(chain_lightning)
+
+
+# =============================================================================
+# V2 DEPLOYED GUN/ENGINE ARTIFACTS (7)
+# =============================================================================
+
+func _create_deployed_gun_artifacts() -> void:
+	"""Artifacts for deployed gun/engine builds."""
+	
+	# Turret Oil - deployed damage boost
+	var turret_oil := ArtifactDef.new()
+	turret_oil.artifact_id = "turret_oil"
+	turret_oil.artifact_name = "Turret Oil"
+	turret_oil.description = "Deployed guns and engines deal +10% damage."
+	turret_oil.rarity = 1
+	turret_oil.base_cost = 40
+	turret_oil.stackable = true
+	turret_oil.stat_modifiers = {"deployed_gun_damage_percent": 10.0, "engine_damage_percent": 10.0}
+	turret_oil.trigger_type = "passive"
+	turret_oil.icon = "🛢️"
+	turret_oil.icon_color = Color(0.3, 0.3, 0.3)
+	_register_artifact(turret_oil)
+	
+	# Firing Solution - gun count bonus
+	var firing_sol := ArtifactDef.new()
+	firing_sol.artifact_id = "firing_solution"
+	firing_sol.artifact_name = "Firing Solution"
+	firing_sol.description = "Deployed guns deal +1 damage per other gun on the board (max +3)."
+	firing_sol.rarity = 2
+	firing_sol.base_cost = 65
+	firing_sol.stackable = false
+	firing_sol.trigger_type = "on_gun_fire"
+	firing_sol.effect_type = "gun_synergy_damage"
+	firing_sol.effect_value = 1
+	firing_sol.effect_params = {"max_bonus": 3}
+	firing_sol.icon = "📐"
+	firing_sol.icon_color = Color(0.2, 0.5, 0.8)
+	_register_artifact(firing_sol)
+	
+	# Ammo Belts - extra ammo
+	var ammo_belts := ArtifactDef.new()
+	ammo_belts.artifact_id = "ammo_belts"
+	ammo_belts.artifact_name = "Ammo Belts"
+	ammo_belts.description = "Guns with limited ammo have +1 max ammo."
+	ammo_belts.rarity = 1
+	ammo_belts.base_cost = 45
+	ammo_belts.stackable = true
+	ammo_belts.trigger_type = "on_gun_deploy"
+	ammo_belts.effect_type = "bonus_ammo"
+	ammo_belts.effect_value = 1
+	ammo_belts.icon = "🎖️"
+	ammo_belts.icon_color = Color(0.6, 0.5, 0.3)
+	_register_artifact(ammo_belts)
+	
+	# Quick Draw - first gun cost reduction
+	var quick_draw := ArtifactDef.new()
+	quick_draw.artifact_id = "quick_draw"
+	quick_draw.artifact_name = "Quick Draw"
+	quick_draw.description = "First gun you play each turn costs 1 less."
+	quick_draw.rarity = 2
+	quick_draw.base_cost = 60
+	quick_draw.stackable = false
+	quick_draw.trigger_type = "on_turn_start"
+	quick_draw.effect_type = "gun_cost_reduction"
+	quick_draw.effect_value = 1
+	quick_draw.icon = "🤠"
+	quick_draw.icon_color = Color(0.8, 0.6, 0.3)
+	_register_artifact(quick_draw)
+	
+	# Autoloader - ammo reload chance
+	var autoloader := ArtifactDef.new()
+	autoloader.artifact_id = "autoloader"
+	autoloader.artifact_name = "Autoloader"
+	autoloader.description = "When a gun runs out of ammo, 30% chance to fully reload it."
+	autoloader.rarity = 3
+	autoloader.base_cost = 90
+	autoloader.stackable = false
+	autoloader.trigger_type = "on_gun_out_of_ammo"
+	autoloader.effect_type = "reload_chance"
+	autoloader.effect_value = 30
+	autoloader.icon = "🔄"
+	autoloader.icon_color = Color(0.4, 0.7, 0.4)
+	_register_artifact(autoloader)
+	
+	# Engine Sync - engine triggers guns
+	var engine_sync := ArtifactDef.new()
+	engine_sync.artifact_id = "engine_sync"
+	engine_sync.artifact_name = "Engine Sync"
+	engine_sync.description = "When you play an engine, all deployed guns fire once at 50% damage."
+	engine_sync.rarity = 2
+	engine_sync.base_cost = 70
+	engine_sync.stackable = false
+	engine_sync.trigger_type = "on_engine_trigger"
+	engine_sync.effect_type = "trigger_all_guns"
+	engine_sync.effect_value = 50
+	engine_sync.icon = "⚙️"
+	engine_sync.icon_color = Color(0.5, 0.5, 0.6)
+	_register_artifact(engine_sync)
+	
+	# Lane Commander - deployed card energy
+	var lane_cmd := ArtifactDef.new()
+	lane_cmd.artifact_id = "lane_commander"
+	lane_cmd.artifact_name = "Lane Commander"
+	lane_cmd.description = "Start of turn: if 4+ cards deployed in lane, gain 1 energy."
+	lane_cmd.rarity = 3
+	lane_cmd.base_cost = 85
+	lane_cmd.stackable = false
+	lane_cmd.trigger_type = "on_turn_start"
+	lane_cmd.effect_type = "lane_energy"
+	lane_cmd.effect_value = 1
+	lane_cmd.effect_params = {"deployed_threshold": 4}
+	lane_cmd.icon = "👨‍✈️"
+	lane_cmd.icon_color = Color(0.9, 0.8, 0.2)
+	_register_artifact(lane_cmd)
+
+
+# =============================================================================
+# V2 KILL CHAIN ARTIFACTS (6)
+# =============================================================================
+
+func _create_kill_chain_artifacts() -> void:
+	"""Artifacts that reward killing enemies."""
+	
+	# Hunter's Quota - scrap on kill
+	var hunters := ArtifactDef.new()
+	hunters.artifact_id = "hunters_quota"
+	hunters.artifact_name = "Hunter's Quota"
+	hunters.description = "On kill: gain 1 scrap."
+	hunters.rarity = 1
+	hunters.base_cost = 45
+	hunters.stackable = true
+	hunters.trigger_type = "on_kill"
+	hunters.effect_type = "bonus_scrap"
+	hunters.effect_value = 1
+	hunters.icon = "🏹"
+	hunters.icon_color = Color(0.6, 0.4, 0.2)
+	_register_artifact(hunters)
+	
+	# Rampage Core - stacking kill damage
+	var rampage := ArtifactDef.new()
+	rampage.artifact_id = "rampage_core"
+	rampage.artifact_name = "Rampage Core"
+	rampage.description = "On kill: next gun this turn deals +2 damage (stacks up to 3 kills)."
+	rampage.rarity = 2
+	rampage.base_cost = 65
+	rampage.stackable = false
+	rampage.trigger_type = "on_kill"
+	rampage.effect_type = "rampage_damage"
+	rampage.effect_value = 2
+	rampage.effect_params = {"max_stacks": 3}
+	rampage.icon = "😤"
+	rampage.icon_color = Color(0.9, 0.2, 0.2)
+	_register_artifact(rampage)
+	
+	# Salvage Frame - draw on kill
+	var salvage := ArtifactDef.new()
+	salvage.artifact_id = "salvage_frame"
+	salvage.artifact_name = "Salvage Frame"
+	salvage.description = "On kill: 15% chance to draw a card."
+	salvage.rarity = 2
+	salvage.base_cost = 55
+	salvage.stackable = true
+	salvage.trigger_type = "on_kill"
+	salvage.effect_type = "draw_chance"
+	salvage.effect_value = 15
+	salvage.icon = "🔧"
+	salvage.icon_color = Color(0.5, 0.6, 0.7)
+	_register_artifact(salvage)
+	
+	# Execution Protocol - multi-kill energy
+	var execution := ArtifactDef.new()
+	execution.artifact_id = "execution_protocol"
+	execution.artifact_name = "Execution Protocol"
+	execution.description = "Kill 4+ enemies in a single turn: gain 1 energy next turn."
+	execution.rarity = 3
+	execution.base_cost = 80
+	execution.stackable = false
+	execution.trigger_type = "on_turn_end"
+	execution.effect_type = "multi_kill_energy"
+	execution.effect_value = 1
+	execution.effect_params = {"kill_threshold": 4}
+	execution.icon = "☠️"
+	execution.icon_color = Color(0.3, 0.3, 0.3)
+	_register_artifact(execution)
+	
+	# Overkill Catalyst - overkill spreads
+	var overkill := ArtifactDef.new()
+	overkill.artifact_id = "overkill_catalyst"
+	overkill.artifact_name = "Overkill Catalyst"
+	overkill.description = "On kill with overkill: deal overkill amount to a random enemy in the same ring."
+	overkill.rarity = 2
+	overkill.base_cost = 65
+	overkill.stackable = false
+	overkill.trigger_type = "on_overkill"
+	overkill.effect_type = "overkill_spread"
+	overkill.effect_value = 100
+	overkill.icon = "💀"
+	overkill.icon_color = Color(0.8, 0.1, 0.1)
+	_register_artifact(overkill)
+	
+	# Blood Harvest - heal on kill with HP penalty
+	var blood_harvest := ArtifactDef.new()
+	blood_harvest.artifact_id = "blood_harvest"
+	blood_harvest.artifact_name = "Blood Harvest"
+	blood_harvest.description = "On kill: heal 1 HP. Max HP -5."
+	blood_harvest.rarity = 2
+	blood_harvest.base_cost = 50
+	blood_harvest.stackable = false
+	blood_harvest.stat_modifiers = {"max_hp": -5}
+	blood_harvest.trigger_type = "on_kill"
+	blood_harvest.effect_type = "heal"
+	blood_harvest.effect_value = 1
+	blood_harvest.icon = "🌾"
+	blood_harvest.icon_color = Color(0.8, 0.2, 0.3)
+	_register_artifact(blood_harvest)
+
+
+# =============================================================================
+# V2 CROSS-TAG SYNERGY ARTIFACTS (6)
+# =============================================================================
+
+func _create_cross_tag_artifacts() -> void:
+	"""Artifacts that reward mixing damage types and build families."""
+	
+	# Detonation Matrix - explosive restores barriers
+	var detonation := ArtifactDef.new()
+	detonation.artifact_id = "detonation_matrix"
+	detonation.artifact_name = "Detonation Matrix"
+	detonation.description = "Explosive damage to barriers restores 1 barrier use instead of consuming it."
+	detonation.rarity = 3
+	detonation.base_cost = 90
+	detonation.stackable = false
+	detonation.trigger_type = "on_explosive_hit"
+	detonation.effect_type = "barrier_restore"
+	detonation.effect_value = 1
+	detonation.icon = "🔲"
+	detonation.icon_color = Color(1.0, 0.6, 0.1)
+	_register_artifact(detonation)
+	
+	# Hex Conductor - beam spreads hex
+	var hex_conductor := ArtifactDef.new()
+	hex_conductor.artifact_id = "hex_conductor"
+	hex_conductor.artifact_name = "Hex Conductor"
+	hex_conductor.description = "Beam attacks spread hex to chained targets instead of consuming hex."
+	hex_conductor.rarity = 3
+	hex_conductor.base_cost = 95
+	hex_conductor.stackable = false
+	hex_conductor.trigger_type = "on_beam_chain"
+	hex_conductor.effect_type = "hex_spread"
+	hex_conductor.effect_value = 1
+	hex_conductor.icon = "🔮"
+	hex_conductor.icon_color = Color(0.6, 0.2, 0.9)
+	_register_artifact(hex_conductor)
+	
+	# Tesla Casing - shotgun + shock slow
+	var tesla := ArtifactDef.new()
+	tesla.artifact_id = "tesla_casing"
+	tesla.artifact_name = "Tesla Casing"
+	tesla.description = "Shotgun attacks with shock apply Slow to all targets hit."
+	tesla.rarity = 2
+	tesla.base_cost = 60
+	tesla.stackable = false
+	tesla.required_tags = ["shotgun", "shock"]
+	tesla.trigger_type = "on_shock_hit"
+	tesla.trigger_tag = "shotgun"
+	tesla.effect_type = "aoe_slow"
+	tesla.effect_value = 1
+	tesla.icon = "🔋"
+	tesla.icon_color = Color(0.2, 0.8, 0.9)
+	_register_artifact(tesla)
+	
+	# Overflow Transfusion - piercing heals
+	var overflow_trans := ArtifactDef.new()
+	overflow_trans.artifact_id = "overflow_transfusion"
+	overflow_trans.artifact_name = "Overflow Transfusion"
+	overflow_trans.description = "Piercing overflow damage heals you for 50% of overflow dealt."
+	overflow_trans.rarity = 3
+	overflow_trans.base_cost = 90
+	overflow_trans.stackable = false
+	overflow_trans.trigger_type = "on_piercing_overflow"
+	overflow_trans.effect_type = "overflow_heal"
+	overflow_trans.effect_value = 50
+	overflow_trans.icon = "💉"
+	overflow_trans.icon_color = Color(0.9, 0.3, 0.4)
+	_register_artifact(overflow_trans)
+	
+	# Corrosive Resonance - double shred on hex
+	var corrosive_res := ArtifactDef.new()
+	corrosive_res.artifact_id = "corrosive_resonance"
+	corrosive_res.artifact_name = "Corrosive Resonance"
+	corrosive_res.description = "Corrosive armor shred on hexed enemies is doubled."
+	corrosive_res.rarity = 2
+	corrosive_res.base_cost = 60
+	corrosive_res.stackable = false
+	corrosive_res.trigger_type = "on_corrosive_hit"
+	corrosive_res.effect_type = "double_shred_hex"
+	corrosive_res.effect_value = 2
+	corrosive_res.icon = "☣️"
+	corrosive_res.icon_color = Color(0.4, 0.8, 0.2)
+	_register_artifact(corrosive_res)
+	
+	# Volatile Reactor - self-damage deals enemy damage
+	var volatile_reactor := ArtifactDef.new()
+	volatile_reactor.artifact_id = "volatile_reactor"
+	volatile_reactor.artifact_name = "Volatile Reactor"
+	volatile_reactor.description = "When you take self-damage, deal that damage to a random enemy in Melee/Close."
+	volatile_reactor.rarity = 3
+	volatile_reactor.base_cost = 85
+	volatile_reactor.stackable = false
+	volatile_reactor.trigger_type = "on_self_damage"
+	volatile_reactor.effect_type = "reflect_self_damage"
+	volatile_reactor.effect_value = 100
+	volatile_reactor.icon = "☢️"
+	volatile_reactor.icon_color = Color(1.0, 0.8, 0.1)
+	_register_artifact(volatile_reactor)
+
+
+# =============================================================================
+# V2 TEMPO/OVERCLOCK ARTIFACTS (5)
+# =============================================================================
+
+func _create_tempo_artifacts() -> void:
+	"""Artifacts that reward skill chains and Overclock plays."""
+	
+	# Overclock Capacitor - first Overclock free
+	var overclock_cap := ArtifactDef.new()
+	overclock_cap.artifact_id = "overclock_capacitor"
+	overclock_cap.artifact_name = "Overclock Capacitor"
+	overclock_cap.description = "First Overclock you play each turn costs 0."
+	overclock_cap.rarity = 2
+	overclock_cap.base_cost = 65
+	overclock_cap.stackable = false
+	overclock_cap.trigger_type = "on_turn_start"
+	overclock_cap.effect_type = "free_overclock"
+	overclock_cap.effect_value = 1
+	overclock_cap.icon = "⏱️"
+	overclock_cap.icon_color = Color(0.2, 0.6, 0.9)
+	_register_artifact(overclock_cap)
+	
+	# Burst Amplifier - fire immediately bonus
+	var burst_amp := ArtifactDef.new()
+	burst_amp.artifact_id = "burst_amplifier"
+	burst_amp.artifact_name = "Burst Amplifier"
+	burst_amp.description = "'Fire immediately' effects deal +2 damage."
+	burst_amp.rarity = 1
+	burst_amp.base_cost = 45
+	burst_amp.stackable = true
+	burst_amp.trigger_type = "on_gun_fire"
+	burst_amp.trigger_condition = "immediate_fire"
+	burst_amp.effect_type = "bonus_damage"
+	burst_amp.effect_value = 2
+	burst_amp.icon = "💨"
+	burst_amp.icon_color = Color(0.9, 0.5, 0.2)
+	_register_artifact(burst_amp)
+	
+	# Coolant System - skill chain draw
+	var coolant := ArtifactDef.new()
+	coolant.artifact_id = "coolant_system"
+	coolant.artifact_name = "Coolant System"
+	coolant.description = "After playing 3 skill cards in a turn, draw 1 card."
+	coolant.rarity = 2
+	coolant.base_cost = 60
+	coolant.stackable = false
+	coolant.trigger_type = "on_card_play"
+	coolant.trigger_tag = "skill"
+	coolant.effect_type = "skill_chain_draw"
+	coolant.effect_value = 1
+	coolant.effect_params = {"skills_needed": 3}
+	coolant.icon = "❄️"
+	coolant.icon_color = Color(0.3, 0.8, 0.9)
+	_register_artifact(coolant)
+	
+	# Rapid Deployment - persistent gun first fire bonus
+	var rapid_deploy := ArtifactDef.new()
+	rapid_deploy.artifact_id = "rapid_deployment"
+	rapid_deploy.artifact_name = "Rapid Deployment"
+	rapid_deploy.description = "Persistent guns deploy with +1 damage for their first firing."
+	rapid_deploy.rarity = 1
+	rapid_deploy.base_cost = 40
+	rapid_deploy.stackable = true
+	rapid_deploy.trigger_type = "on_gun_deploy"
+	rapid_deploy.effect_type = "first_fire_bonus"
+	rapid_deploy.effect_value = 1
+	rapid_deploy.icon = "🚀"
+	rapid_deploy.icon_color = Color(0.8, 0.3, 0.1)
+	_register_artifact(rapid_deploy)
+	
+	# Infusion Anchor - tag infusion bonus
+	var infusion_anchor := ArtifactDef.new()
+	infusion_anchor.artifact_id = "infusion_anchor"
+	infusion_anchor.artifact_name = "Infusion Anchor"
+	infusion_anchor.description = "Tag Infusion cards also grant +1 permanent damage to the infused gun."
+	infusion_anchor.rarity = 2
+	infusion_anchor.base_cost = 55
+	infusion_anchor.stackable = false
+	infusion_anchor.trigger_type = "on_card_play"
+	infusion_anchor.trigger_condition = "tag_infusion"
+	infusion_anchor.effect_type = "infusion_bonus_damage"
+	infusion_anchor.effect_value = 1
+	infusion_anchor.icon = "⚓"
+	infusion_anchor.icon_color = Color(0.5, 0.4, 0.6)
+	_register_artifact(infusion_anchor)
 
 
 # =============================================================================

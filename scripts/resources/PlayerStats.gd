@@ -20,6 +20,31 @@ class_name PlayerStats
 @export var generic_damage_percent: float = 100.0
 
 # =============================================================================
+# V2 DAMAGE-TYPE STATS
+# =============================================================================
+
+## Explosive damage multiplier - affects splash damage to adjacent rings (100.0 = 100%)
+@export var explosive_damage_percent: float = 100.0
+
+## Piercing damage multiplier - affects overkill overflow damage (100.0 = 100%)
+@export var piercing_damage_percent: float = 100.0
+
+## Beam damage multiplier - affects chaining damage through targets (100.0 = 100%)
+@export var beam_damage_percent: float = 100.0
+
+## Shock damage multiplier - affects slow/stun damage (100.0 = 100%)
+@export var shock_damage_percent: float = 100.0
+
+## Corrosive damage multiplier - affects armor shred damage (100.0 = 100%)
+@export var corrosive_damage_percent: float = 100.0
+
+## Deployed gun damage multiplier - affects all persistent guns on board (100.0 = 100%)
+@export var deployed_gun_damage_percent: float = 100.0
+
+## Engine damage multiplier - affects all engine card effects (100.0 = 100%)
+@export var engine_damage_percent: float = 100.0
+
+# =============================================================================
 # DEFENSE & SUSTAIN STATS
 # =============================================================================
 
@@ -91,6 +116,34 @@ func get_barrier_damage_multiplier() -> float:
 
 func get_generic_damage_multiplier() -> float:
 	return generic_damage_percent / 100.0
+
+
+func get_explosive_damage_multiplier() -> float:
+	return explosive_damage_percent / 100.0
+
+
+func get_piercing_damage_multiplier() -> float:
+	return piercing_damage_percent / 100.0
+
+
+func get_beam_damage_multiplier() -> float:
+	return beam_damage_percent / 100.0
+
+
+func get_shock_damage_multiplier() -> float:
+	return shock_damage_percent / 100.0
+
+
+func get_corrosive_damage_multiplier() -> float:
+	return corrosive_damage_percent / 100.0
+
+
+func get_deployed_gun_damage_multiplier() -> float:
+	return deployed_gun_damage_percent / 100.0
+
+
+func get_engine_damage_multiplier() -> float:
+	return engine_damage_percent / 100.0
 
 
 func get_armor_gain_multiplier() -> float:
@@ -171,6 +224,20 @@ func apply_modifier(stat_name: String, value: float) -> void:
 			damage_vs_mid_percent += value
 		"damage_vs_far_percent":
 			damage_vs_far_percent += value
+		"explosive_damage_percent":
+			explosive_damage_percent += value
+		"piercing_damage_percent":
+			piercing_damage_percent += value
+		"beam_damage_percent":
+			beam_damage_percent += value
+		"shock_damage_percent":
+			shock_damage_percent += value
+		"corrosive_damage_percent":
+			corrosive_damage_percent += value
+		"deployed_gun_damage_percent":
+			deployed_gun_damage_percent += value
+		"engine_damage_percent":
+			engine_damage_percent += value
 		_:
 			push_warning("[PlayerStats] Unknown stat: " + stat_name)
 
@@ -201,6 +268,14 @@ func reset_to_defaults() -> void:
 	damage_vs_close_percent = 100.0
 	damage_vs_mid_percent = 100.0
 	damage_vs_far_percent = 100.0
+	# V2 damage-type stats
+	explosive_damage_percent = 100.0
+	piercing_damage_percent = 100.0
+	beam_damage_percent = 100.0
+	shock_damage_percent = 100.0
+	corrosive_damage_percent = 100.0
+	deployed_gun_damage_percent = 100.0
+	engine_damage_percent = 100.0
 
 
 func clone():
@@ -224,6 +299,14 @@ func clone():
 	copy.damage_vs_close_percent = damage_vs_close_percent
 	copy.damage_vs_mid_percent = damage_vs_mid_percent
 	copy.damage_vs_far_percent = damage_vs_far_percent
+	# V2 damage-type stats
+	copy.explosive_damage_percent = explosive_damage_percent
+	copy.piercing_damage_percent = piercing_damage_percent
+	copy.beam_damage_percent = beam_damage_percent
+	copy.shock_damage_percent = shock_damage_percent
+	copy.corrosive_damage_percent = corrosive_damage_percent
+	copy.deployed_gun_damage_percent = deployed_gun_damage_percent
+	copy.engine_damage_percent = engine_damage_percent
 	return copy
 
 
@@ -252,6 +335,14 @@ func get_stat_summary() -> Dictionary:
 		"damage_vs_close_percent": damage_vs_close_percent,
 		"damage_vs_mid_percent": damage_vs_mid_percent,
 		"damage_vs_far_percent": damage_vs_far_percent,
+		# V2 damage-type stats
+		"explosive_damage_percent": explosive_damage_percent,
+		"piercing_damage_percent": piercing_damage_percent,
+		"beam_damage_percent": beam_damage_percent,
+		"shock_damage_percent": shock_damage_percent,
+		"corrosive_damage_percent": corrosive_damage_percent,
+		"deployed_gun_damage_percent": deployed_gun_damage_percent,
+		"engine_damage_percent": engine_damage_percent,
 	}
 
 

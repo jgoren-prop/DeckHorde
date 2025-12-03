@@ -18,13 +18,10 @@ func _ready() -> void:
 
 
 func _create_v2_cards() -> void:
-	"""Create the complete V2 card pool."""
+	"""Create the complete V2 card pool - brainstorm.md cards only."""
 	_create_v2_starter_cards()
-	_create_gun_board_cards()
-	_create_hex_ritualist_cards()
-	_create_barrier_fortress_cards()
-	_create_lifedrain_cards()
-	_create_overlap_cards()
+	_create_v2_brainstorm_persistent_cards()
+	_create_v2_brainstorm_instant_cards()
 	cards_loaded.emit()
 
 
@@ -51,6 +48,40 @@ func _create_v2_starter_cards() -> void:
 	rusty_pistol.weapon_trigger = "turn_end"
 	rusty_pistol.rarity = 0
 	_register_card(rusty_pistol)
+	
+	# Storm Carbine [Starter] - persistent gun for Close/Mid
+	var storm_carbine := CardDef.new()
+	storm_carbine.card_id = "storm_carbine"
+	storm_carbine.card_name = "Storm Carbine"
+	storm_carbine.description = "Persistent: Deal {damage} damage to 2 random enemies in Close/Mid at end of turn."
+	storm_carbine.persistent_description = "Deal {damage} to 2 enemies in Close/Mid."
+	storm_carbine.card_type = "weapon"
+	storm_carbine.effect_type = "weapon_persistent"
+	storm_carbine.tags = ["gun", "persistent", "close_focus"]
+	storm_carbine.base_cost = 2
+	storm_carbine.base_damage = 3
+	storm_carbine.target_type = "random_enemy"
+	storm_carbine.target_rings = [1, 2]  # Close/Mid
+	storm_carbine.target_count = 2
+	storm_carbine.weapon_trigger = "turn_end"
+	storm_carbine.rarity = 0
+	_register_card(storm_carbine)
+	
+	# Ammo Cache [Starter] - draw + gun cost reduction
+	var ammo_cache := CardDef.new()
+	ammo_cache.card_id = "ammo_cache"
+	ammo_cache.card_name = "Ammo Cache"
+	ammo_cache.description = "Draw 2 cards. The next gun card you play this turn costs 1 less."
+	ammo_cache.card_type = "skill"
+	ammo_cache.effect_type = "draw_and_buff"
+	ammo_cache.tags = ["skill", "instant", "engine_core", "gun"]
+	ammo_cache.base_cost = 1
+	ammo_cache.cards_to_draw = 2
+	ammo_cache.buff_type = "cost_reduction"
+	ammo_cache.buff_value = 1
+	ammo_cache.target_type = "self"
+	ammo_cache.rarity = 0
+	_register_card(ammo_cache)
 	
 	# Minor Hex - basic hex to single enemy
 	var minor_hex := CardDef.new()
@@ -99,16 +130,16 @@ func _create_v2_starter_cards() -> void:
 	guard_stance.rarity = 0
 	_register_card(guard_stance)
 	
-	# Precision Strike - targeted attack to an enemy group/stack
+	# Precision Strike - AoE damage to all enemies in a group/stack
 	var precision_strike := CardDef.new()
 	precision_strike.card_id = "precision_strike"
 	precision_strike.card_name = "Precision Strike"
-	precision_strike.description = "Deal {damage} damage to a targeted enemy. If stacked, hits all enemies in the stack."
+	precision_strike.description = "Deal {damage} damage to all enemies in a group."
 	precision_strike.card_type = "weapon"
 	precision_strike.effect_type = "targeted_group_damage"
-	precision_strike.tags = ["gun", "instant", "single_target"]
+	precision_strike.tags = ["gun", "instant", "aoe"]
 	precision_strike.base_cost = 1
-	precision_strike.base_damage = 7
+	precision_strike.base_damage = 2
 	precision_strike.target_type = "random_enemy"
 	precision_strike.target_rings = [0, 1, 2, 3]  # ALL rings
 	precision_strike.requires_target = false  # Picks random then hits group
@@ -131,716 +162,747 @@ func _create_v2_starter_cards() -> void:
 	shove.target_count = 1
 	shove.rarity = 0
 	_register_card(shove)
+	
+	# Overclock [Starter] - all guns fire at 75% damage
+	var overclock := CardDef.new()
+	overclock.card_id = "overclock"
+	overclock.card_name = "Overclock"
+	overclock.description = "All deployed guns fire immediately for 75% damage. Draw 1 card."
+	overclock.card_type = "skill"
+	overclock.effect_type = "fire_all_guns"
+	overclock.tags = ["skill", "instant", "engine_core"]
+	overclock.base_cost = 1
+	overclock.effect_params = {"damage_percent": 75.0}
+	overclock.cards_to_draw = 1
+	overclock.target_type = "self"
+	overclock.rarity = 0
+	_register_card(overclock)
+	
+	# Tag Infusion: Piercing [Starter] - add piercing tag to a gun
+	var tag_infusion_piercing := CardDef.new()
+	tag_infusion_piercing.card_id = "tag_infusion_piercing"
+	tag_infusion_piercing.card_name = "Tag Infusion: Piercing"
+	tag_infusion_piercing.description = "Add 'piercing' to a deployed gun. Its shots continue through stacks to hit a second enemy (50% overflow)."
+	tag_infusion_piercing.card_type = "skill"
+	tag_infusion_piercing.effect_type = "tag_infusion"
+	tag_infusion_piercing.tags = ["skill", "instant"]
+	tag_infusion_piercing.base_cost = 1
+	tag_infusion_piercing.effect_params = {"tag": "piercing", "bonus_damage": 0}
+	tag_infusion_piercing.target_type = "self"
+	tag_infusion_piercing.rarity = 0
+	_register_card(tag_infusion_piercing)
 
 
 # =============================================================================
-# GUN BOARD FAMILY (10 cards)
+# V2 BRAINSTORM PERSISTENT CARDS (from brainstorm.md #11-50, persistent only)
 # =============================================================================
 
-func _create_gun_board_cards() -> void:
-	"""Gun Board family - persistent guns that auto-clear the horde."""
+func _create_v2_brainstorm_persistent_cards() -> void:
+	"""V2 Brainstorm persistent guns and engines."""
 	
-	# Infernal Pistol - persistent sniper
-	var infernal_pistol := CardDef.new()
-	infernal_pistol.card_id = "infernal_pistol"
-	infernal_pistol.card_name = "Infernal Pistol"
-	infernal_pistol.description = "Persistent: Deal {damage} damage to a random enemy in Mid/Far at end of turn."
-	infernal_pistol.persistent_description = "Deal {damage} to random enemy in Mid/Far."
-	infernal_pistol.card_type = "weapon"
-	infernal_pistol.effect_type = "weapon_persistent"
-	infernal_pistol.tags = ["gun", "persistent", "single_target", "sniper"]
-	infernal_pistol.base_cost = 1
-	infernal_pistol.base_damage = 4
-	infernal_pistol.target_type = "random_enemy"
-	infernal_pistol.target_rings = [2, 3]
-	infernal_pistol.weapon_trigger = "turn_end"
-	infernal_pistol.rarity = 1
-	_register_card(infernal_pistol)
+	# #11 Mortar Team - explosive sniper with ammo
+	var mortar_team := CardDef.new()
+	mortar_team.card_id = "mortar_team"
+	mortar_team.card_name = "Mortar Team"
+	mortar_team.description = "Persistent: Deal 5 damage to Far, splash 2 to Mid. 3 ammo. Reload 2 scrap: restore 2 ammo."
+	mortar_team.persistent_description = "5 damage to Far, splash 2 to Mid."
+	mortar_team.card_type = "weapon"
+	mortar_team.effect_type = "weapon_persistent"
+	mortar_team.tags = ["gun", "persistent", "sniper", "explosive", "ammo"]
+	mortar_team.base_cost = 2
+	mortar_team.base_damage = 5
+	mortar_team.splash_damage = 2
+	mortar_team.effect_params = {"ammo": 3, "reload_cost": 2, "reload_amount": 2}
+	mortar_team.target_type = "ring"
+	mortar_team.target_rings = [3]
+	mortar_team.weapon_trigger = "turn_end"
+	mortar_team.rarity = 2
+	_register_card(mortar_team)
 	
-	# Choirbreaker Shotgun - persistent swarm clear
-	var choirbreaker := CardDef.new()
-	choirbreaker.card_id = "choirbreaker_shotgun"
-	choirbreaker.card_name = "Choirbreaker Shotgun"
-	choirbreaker.description = "Persistent: Deal {damage} damage to up to 3 enemies in Melee/Close at end of turn."
-	choirbreaker.persistent_description = "Deal {damage} to up to 3 enemies in Melee/Close."
-	choirbreaker.card_type = "weapon"
-	choirbreaker.effect_type = "weapon_persistent"
-	choirbreaker.tags = ["gun", "persistent", "shotgun", "close_focus", "swarm_clear"]
-	choirbreaker.base_cost = 1
-	choirbreaker.base_damage = 2
-	choirbreaker.target_type = "random_enemy"
-	choirbreaker.target_rings = [0, 1]
-	choirbreaker.target_count = 3
-	choirbreaker.weapon_trigger = "turn_end"
-	choirbreaker.rarity = 1
-	_register_card(choirbreaker)
+	# #12 Arc Conductor - beam engine with charge mechanic
+	var arc_conductor := CardDef.new()
+	arc_conductor.card_id = "arc_conductor"
+	arc_conductor.card_name = "Arc Conductor"
+	arc_conductor.description = "Persistent: Gain 1 charge when you play a hex card. End of turn: deal 3 chaining damage to that many enemies (prefers hexed)."
+	arc_conductor.persistent_description = "Charges from hex cards, chains damage to enemies."
+	arc_conductor.card_type = "weapon"
+	arc_conductor.effect_type = "weapon_persistent"
+	arc_conductor.tags = ["engine", "persistent", "beam"]
+	arc_conductor.base_cost = 2
+	arc_conductor.base_damage = 3
+	arc_conductor.chain_count = 1
+	arc_conductor.effect_params = {"charge_trigger": "hex_play", "damage_per_charge": 3}
+	arc_conductor.target_type = "random_enemy"
+	arc_conductor.target_rings = [0, 1, 2, 3]
+	arc_conductor.weapon_trigger = "turn_end"
+	arc_conductor.rarity = 2
+	_register_card(arc_conductor)
 	
-	# Riftshard Rifle - high damage sniper
-	var riftshard := CardDef.new()
-	riftshard.card_id = "riftshard_rifle"
-	riftshard.card_name = "Riftshard Rifle"
-	riftshard.description = "Deal {damage} damage to a random enemy in Far. If it dies, apply 2 hex to another enemy."
-	riftshard.card_type = "weapon"
-	riftshard.effect_type = "instant_damage"
-	riftshard.tags = ["gun", "instant", "sniper", "single_target"]
-	riftshard.base_cost = 2
-	riftshard.base_damage = 8
-	riftshard.hex_damage = 2
-	riftshard.target_type = "random_enemy"
-	riftshard.target_rings = [3]
-	riftshard.rarity = 2
-	_register_card(riftshard)
+	# #13 Bulwark Drone - fortress engine
+	var bulwark_drone := CardDef.new()
+	bulwark_drone.card_id = "bulwark_drone"
+	bulwark_drone.card_name = "Bulwark Drone"
+	bulwark_drone.description = "Persistent: End of turn: grant 2 armor. If you control 3+ barriers, also place a 2-damage, 1-use barrier in Close."
+	bulwark_drone.persistent_description = "Grant 2 armor. 3+ barriers: +barrier in Close."
+	bulwark_drone.card_type = "defense"
+	bulwark_drone.effect_type = "weapon_persistent"
+	bulwark_drone.tags = ["engine", "persistent", "fortress"]
+	bulwark_drone.base_cost = 2
+	bulwark_drone.armor_amount = 2
+	bulwark_drone.base_damage = 2
+	bulwark_drone.duration = 1
+	bulwark_drone.effect_params = {"barrier_threshold": 3, "barrier_ring": 1}
+	bulwark_drone.target_type = "self"
+	bulwark_drone.weapon_trigger = "turn_end"
+	bulwark_drone.rarity = 2
+	_register_card(bulwark_drone)
 	
-	# Scatter Volley - multi-target instant
-	var scatter := CardDef.new()
-	scatter.card_id = "scatter_volley"
-	scatter.card_name = "Scatter Volley"
-	scatter.description = "Deal {damage} damage to 4 random enemies."
-	scatter.card_type = "weapon"
-	scatter.effect_type = "scatter_damage"
-	scatter.tags = ["gun", "instant", "shotgun", "swarm_clear"]
-	scatter.base_cost = 1
-	scatter.base_damage = 2
-	scatter.target_count = 4
-	scatter.target_type = "random_enemy"
-	scatter.target_rings = [0, 1, 2, 3]
-	scatter.rarity = 1
-	_register_card(scatter)
+	# #14 Pulse Array - shock AoE gun
+	var pulse_array := CardDef.new()
+	pulse_array.card_id = "pulse_array"
+	pulse_array.card_name = "Pulse Array"
+	pulse_array.description = "Persistent: Before enemy phase: deal 1 damage to all enemies in a chosen ring. If they moved this turn, apply Slow."
+	pulse_array.persistent_description = "1 damage to ring, slow movers."
+	pulse_array.card_type = "weapon"
+	pulse_array.effect_type = "weapon_persistent"
+	pulse_array.tags = ["gun", "persistent", "aoe", "shock"]
+	pulse_array.base_cost = 2
+	pulse_array.base_damage = 1
+	pulse_array.effect_params = {"slow_movers": true}
+	pulse_array.target_type = "ring"
+	pulse_array.target_rings = [0, 1, 2, 3]
+	pulse_array.requires_target = true
+	pulse_array.weapon_trigger = "before_enemy_phase"
+	pulse_array.rarity = 2
+	_register_card(pulse_array)
 	
-	# Storm Carbine - persistent mid-range
-	var storm := CardDef.new()
-	storm.card_id = "storm_carbine"
-	storm.card_name = "Storm Carbine"
-	storm.description = "Persistent: Deal {damage} damage to 2 random enemies in Close/Mid at end of turn."
-	storm.persistent_description = "Deal {damage} to 2 enemies in Close/Mid."
-	storm.card_type = "weapon"
-	storm.effect_type = "weapon_persistent"
-	storm.tags = ["gun", "persistent", "single_target", "mid_focus"]
-	storm.base_cost = 2
-	storm.base_damage = 3
-	storm.target_type = "random_enemy"
-	storm.target_rings = [1, 2]
-	storm.target_count = 2
-	storm.weapon_trigger = "turn_end"
-	storm.rarity = 2
-	_register_card(storm)
+	# #15 Ammo Foundry - volatile gun buff engine
+	var ammo_foundry := CardDef.new()
+	ammo_foundry.card_id = "ammo_foundry"
+	ammo_foundry.card_name = "Ammo Foundry"
+	ammo_foundry.description = "Persistent: Every 2 kills: +1 damage to all deployed guns next turn. Then lose 1 HP."
+	ammo_foundry.persistent_description = "2 kills: +1 gun damage, -1 HP."
+	ammo_foundry.card_type = "skill"
+	ammo_foundry.effect_type = "weapon_persistent"
+	ammo_foundry.tags = ["engine", "persistent", "volatile"]
+	ammo_foundry.base_cost = 1
+	ammo_foundry.self_damage = 1
+	ammo_foundry.effect_params = {"kills_needed": 2, "damage_buff": 1}
+	ammo_foundry.target_type = "self"
+	ammo_foundry.weapon_trigger = "on_kill"
+	ammo_foundry.rarity = 1
+	_register_card(ammo_foundry)
 	
-	# Overcharged Revolver - volatile damage
-	var overcharged := CardDef.new()
-	overcharged.card_id = "overcharged_revolver"
-	overcharged.card_name = "Overcharged Revolver"
-	overcharged.description = "Deal {damage} damage to a random enemy. Lose 1 HP."
-	overcharged.card_type = "weapon"
-	overcharged.effect_type = "instant_damage"
-	overcharged.tags = ["gun", "instant", "volatile", "single_target"]
-	overcharged.base_cost = 1
-	overcharged.base_damage = 6
-	overcharged.self_damage = 1
-	overcharged.target_type = "random_enemy"
-	overcharged.target_rings = [0, 1, 2, 3]
-	overcharged.rarity = 1
-	_register_card(overcharged)
+	# #16 Scrap Forge - on-kill card generation
+	var scrap_forge := CardDef.new()
+	scrap_forge.card_id = "scrap_forge"
+	scrap_forge.card_name = "Scrap Forge"
+	scrap_forge.description = "Persistent: On kill: 20% chance to create a 1-cost 'Shard Shot' (4 damage instant) in next hand."
+	scrap_forge.persistent_description = "On kill: 20% chance for Shard Shot."
+	scrap_forge.card_type = "skill"
+	scrap_forge.effect_type = "weapon_persistent"
+	scrap_forge.tags = ["engine", "persistent"]
+	scrap_forge.base_cost = 1
+	scrap_forge.effect_params = {"spawn_chance": 20, "spawn_card": "shard_shot"}
+	scrap_forge.target_type = "self"
+	scrap_forge.weapon_trigger = "on_kill"
+	scrap_forge.rarity = 1
+	_register_card(scrap_forge)
 	
-	# Suppressing Fire - ring control gun
-	var suppressing := CardDef.new()
-	suppressing.card_id = "suppressing_fire"
-	suppressing.card_name = "Suppressing Fire"
-	suppressing.description = "Deal {damage} damage to all enemies in Mid."
-	suppressing.card_type = "weapon"
-	suppressing.effect_type = "instant_damage"
-	suppressing.tags = ["gun", "instant", "ring_control", "mid_focus"]
-	suppressing.base_cost = 1
-	suppressing.base_damage = 3
-	suppressing.target_type = "ring"
-	suppressing.target_rings = [2]
-	suppressing.requires_target = false
-	suppressing.rarity = 1
-	_register_card(suppressing)
+	# Shard Shot - generated card from Scrap Forge
+	var shard_shot := CardDef.new()
+	shard_shot.card_id = "shard_shot"
+	shard_shot.card_name = "Shard Shot"
+	shard_shot.description = "Deal 4 damage to a random enemy. (Generated by Scrap Forge)"
+	shard_shot.card_type = "weapon"
+	shard_shot.effect_type = "instant_damage"
+	shard_shot.tags = ["gun", "instant"]
+	shard_shot.base_cost = 1
+	shard_shot.base_damage = 4
+	shard_shot.target_type = "random_enemy"
+	shard_shot.target_rings = [0, 1, 2, 3]
+	shard_shot.rarity = 0
+	_register_card(shard_shot)
 	
-	# Twin Pistols - persistent close range
-	var twin := CardDef.new()
-	twin.card_id = "twin_pistols"
-	twin.card_name = "Twin Pistols"
-	twin.description = "Persistent: Deal {damage} damage to 2 random enemies in Melee/Close at end of turn."
-	twin.persistent_description = "Deal {damage} to 2 enemies in Melee/Close."
-	twin.card_type = "weapon"
-	twin.effect_type = "weapon_persistent"
-	twin.tags = ["gun", "persistent", "single_target", "close_focus"]
-	twin.base_cost = 1
-	twin.base_damage = 2
-	twin.target_type = "random_enemy"
-	twin.target_rings = [0, 1]
-	twin.target_count = 2
-	twin.weapon_trigger = "turn_end"
-	twin.rarity = 1
-	_register_card(twin)
+	# #24 Shock Lattice - shock engine
+	var shock_lattice := CardDef.new()
+	shock_lattice.card_id = "shock_lattice"
+	shock_lattice.card_name = "Shock Lattice"
+	shock_lattice.description = "Persistent: When you play a ring_control card, deal 1 shock damage to all enemies in that ring; 20% chance to Slow."
+	shock_lattice.persistent_description = "Ring control cards shock that ring."
+	shock_lattice.card_type = "weapon"
+	shock_lattice.effect_type = "weapon_persistent"
+	shock_lattice.tags = ["engine", "persistent", "shock"]
+	shock_lattice.base_cost = 1
+	shock_lattice.base_damage = 1
+	shock_lattice.effect_params = {"trigger_tag": "ring_control", "slow_chance": 20}
+	shock_lattice.target_type = "ring"
+	shock_lattice.target_rings = [0, 1, 2, 3]
+	shock_lattice.weapon_trigger = "on_tag_play"
+	shock_lattice.rarity = 1
+	_register_card(shock_lattice)
 	
-	# Salvo Drone - persistent AoE
-	var salvo := CardDef.new()
-	salvo.card_id = "salvo_drone"
-	salvo.card_name = "Salvo Drone"
-	salvo.description = "Persistent: Deal {damage} damage to a random ring at end of turn."
-	salvo.persistent_description = "Deal {damage} to all enemies in a random ring."
-	salvo.card_type = "weapon"
-	salvo.effect_type = "weapon_persistent"
-	salvo.tags = ["gun", "engine", "persistent", "aoe"]
-	salvo.base_cost = 2
-	salvo.base_damage = 3
-	salvo.target_type = "ring"
-	salvo.target_rings = [0, 1, 2, 3]
-	salvo.weapon_trigger = "turn_end"
-	salvo.rarity = 2
-	_register_card(salvo)
+	# #26 Scatter Mines - explosive barrier engine
+	var scatter_mines := CardDef.new()
+	scatter_mines.card_id = "scatter_mines"
+	scatter_mines.card_name = "Scatter Mines"
+	scatter_mines.description = "Place 3 mines across random rings: 3 damage, 2 uses, splash 1 to adjacent ring on trigger."
+	scatter_mines.card_type = "defense"
+	scatter_mines.effect_type = "ring_barrier"
+	scatter_mines.tags = ["barrier", "engine", "persistent", "barrier_trap", "explosive"]
+	scatter_mines.base_cost = 2
+	scatter_mines.base_damage = 3
+	scatter_mines.splash_damage = 1
+	scatter_mines.duration = 2
+	scatter_mines.effect_params = {"mine_count": 3, "random_rings": true}
+	scatter_mines.target_type = "all_rings"
+	scatter_mines.rarity = 2
+	_register_card(scatter_mines)
 	
-	# Ammo Cache - gun support skill
-	var ammo := CardDef.new()
-	ammo.card_id = "ammo_cache"
-	ammo.card_name = "Ammo Cache"
-	ammo.description = "Draw 2 cards. The next gun card you play this turn costs 1 less."
-	ammo.card_type = "skill"
-	ammo.effect_type = "draw_and_buff"
-	ammo.tags = ["skill", "instant", "engine_core", "gun"]
-	ammo.base_cost = 1
-	ammo.cards_to_draw = 2
-	ammo.buff_type = "cost_reduction"
-	ammo.buff_value = 1
-	ammo.rarity = 1
-	_register_card(ammo)
-
-
-# =============================================================================
-# HEX RITUALIST FAMILY (10 cards)
-# =============================================================================
-
-func _create_hex_ritualist_cards() -> void:
-	"""Hex Ritualist family - stack hex for massive delayed damage."""
+	# #28 Twin Lances - beam persistent gun
+	var twin_lances := CardDef.new()
+	twin_lances.card_id = "twin_lances"
+	twin_lances.card_name = "Twin Lances"
+	twin_lances.description = "Persistent: End of turn: deal 2 damage to 2 enemies. If both in same stack, spread 1 hex."
+	twin_lances.persistent_description = "2 damage to 2 enemies, hex if stacked."
+	twin_lances.card_type = "weapon"
+	twin_lances.effect_type = "weapon_persistent"
+	twin_lances.tags = ["gun", "persistent", "beam", "single_target"]
+	twin_lances.base_cost = 2
+	twin_lances.base_damage = 2
+	twin_lances.hex_damage = 1
+	twin_lances.target_count = 2
+	twin_lances.target_type = "random_enemy"
+	twin_lances.target_rings = [0, 1, 2, 3]
+	twin_lances.weapon_trigger = "turn_end"
+	twin_lances.rarity = 2
+	_register_card(twin_lances)
 	
-	# Plague Cloud - AoE hex
-	var plague := CardDef.new()
-	plague.card_id = "plague_cloud"
-	plague.card_name = "Plague Cloud"
-	plague.description = "Apply {hex_damage} Hex to all enemies."
-	plague.card_type = "hex"
-	plague.effect_type = "apply_hex"
-	plague.tags = ["hex", "instant", "aoe", "swarm_clear", "hex_ritual"]
-	plague.base_cost = 2
-	plague.hex_damage = 2
-	plague.target_type = "all_enemies"
-	plague.rarity = 1
-	_register_card(plague)
+	# #29 Volley Rig - shotgun with ammo refund
+	var volley_rig := CardDef.new()
+	volley_rig.card_id = "volley_rig"
+	volley_rig.card_name = "Volley Rig"
+	volley_rig.description = "Persistent: End of turn: 1 damage 5 times in Melee/Close. Each kill refunds 1 ammo (max 3, +1 dmg per charge)."
+	volley_rig.persistent_description = "5x 1 damage, kills refund ammo."
+	volley_rig.card_type = "weapon"
+	volley_rig.effect_type = "weapon_persistent"
+	volley_rig.tags = ["gun", "persistent", "shotgun", "swarm_clear", "ammo"]
+	volley_rig.base_cost = 2
+	volley_rig.base_damage = 1
+	volley_rig.target_count = 5
+	volley_rig.effect_params = {"max_charges": 3, "damage_per_charge": 1, "refund_on_kill": true}
+	volley_rig.target_type = "random_enemy"
+	volley_rig.target_rings = [0, 1]
+	volley_rig.weapon_trigger = "turn_end"
+	volley_rig.rarity = 2
+	_register_card(volley_rig)
 	
-	# Withering Mark - single target high hex
-	var withering := CardDef.new()
-	withering.card_id = "withering_mark"
-	withering.card_name = "Withering Mark"
-	withering.description = "Apply {hex_damage} Hex to a single enemy."
-	withering.card_type = "hex"
-	withering.effect_type = "apply_hex"
-	withering.tags = ["hex", "instant", "single_target", "sniper", "hex_ritual"]
-	withering.base_cost = 1
-	withering.hex_damage = 5
-	withering.target_type = "random_enemy"
-	withering.target_rings = [0, 1, 2, 3]
-	withering.target_count = 1
-	withering.rarity = 1
-	_register_card(withering)
+	# #32 Hex Lance Turret - hex beam engine
+	var hex_lance_turret := CardDef.new()
+	hex_lance_turret.card_id = "hex_lance_turret"
+	hex_lance_turret.card_name = "Hex Lance Turret"
+	hex_lance_turret.description = "Persistent: End of turn: deal 2 damage to a hexed enemy. If it survives, increase its hex by 1."
+	hex_lance_turret.persistent_description = "2 damage to hexed, +1 hex if alive."
+	hex_lance_turret.card_type = "weapon"
+	hex_lance_turret.effect_type = "weapon_persistent"
+	hex_lance_turret.tags = ["engine", "persistent", "hex", "beam"]
+	hex_lance_turret.base_cost = 2
+	hex_lance_turret.base_damage = 2
+	hex_lance_turret.hex_damage = 1
+	hex_lance_turret.effect_params = {"prefer_hexed": true, "add_hex_on_survive": true}
+	hex_lance_turret.target_type = "random_enemy"
+	hex_lance_turret.target_rings = [0, 1, 2, 3]
+	hex_lance_turret.weapon_trigger = "turn_end"
+	hex_lance_turret.rarity = 2
+	_register_card(hex_lance_turret)
 	
-	# Plague Turret - persistent hex engine
-	var plague_turret := CardDef.new()
-	plague_turret.card_id = "plague_turret"
-	plague_turret.card_name = "Plague Turret"
-	plague_turret.description = "Persistent: Apply {hex_damage} Hex to all enemies in a random ring at end of turn."
-	plague_turret.persistent_description = "Apply {hex_damage} Hex to a random ring."
-	plague_turret.card_type = "hex"
-	plague_turret.effect_type = "weapon_persistent"
-	plague_turret.tags = ["hex", "engine", "persistent", "aoe", "hex_ritual"]
-	plague_turret.base_cost = 2
-	plague_turret.hex_damage = 2
-	plague_turret.target_type = "ring"
-	plague_turret.target_rings = [0, 1, 2, 3]
-	plague_turret.weapon_trigger = "turn_end"
-	plague_turret.rarity = 2
-	_register_card(plague_turret)
+	# #35 Pulse Repeater - engine core
+	var pulse_repeater := CardDef.new()
+	pulse_repeater.card_id = "pulse_repeater"
+	pulse_repeater.card_name = "Pulse Repeater"
+	pulse_repeater.description = "Persistent: At turn start, choose: draw 1, or next Overclock costs 0."
+	pulse_repeater.persistent_description = "Turn start: draw 1 or free Overclock."
+	pulse_repeater.card_type = "skill"
+	pulse_repeater.effect_type = "weapon_persistent"
+	pulse_repeater.tags = ["engine", "persistent", "engine_core"]
+	pulse_repeater.base_cost = 1
+	pulse_repeater.cards_to_draw = 1
+	pulse_repeater.effect_params = {"choice_mode": true, "free_card": "overclock"}
+	pulse_repeater.target_type = "self"
+	pulse_repeater.weapon_trigger = "turn_start"
+	pulse_repeater.rarity = 1
+	_register_card(pulse_repeater)
 	
-	# Soul Brand - hex with armor on kill
-	var soul_brand := CardDef.new()
-	soul_brand.card_id = "soul_brand"
-	soul_brand.card_name = "Soul Brand"
-	soul_brand.description = "Apply {hex_damage} Hex. If the target dies this turn, gain 2 armor."
-	soul_brand.card_type = "hex"
-	soul_brand.effect_type = "apply_hex"
-	soul_brand.tags = ["hex", "instant", "single_target", "hex_ritual"]
-	soul_brand.base_cost = 1
-	soul_brand.hex_damage = 3
-	soul_brand.armor_amount = 2
-	soul_brand.target_type = "random_enemy"
-	soul_brand.target_rings = [0, 1, 2, 3]
-	soul_brand.target_count = 1
-	soul_brand.rarity = 1
-	_register_card(soul_brand)
+	# #38 Hex Capacitor - hex ritual engine
+	var hex_capacitor := CardDef.new()
+	hex_capacitor.card_id = "hex_capacitor"
+	hex_capacitor.card_name = "Hex Capacitor"
+	hex_capacitor.description = "Persistent: When hex is consumed, gain 1 charge (max 3). Spend charge: next gun applies 2 hex."
+	hex_capacitor.persistent_description = "Hex consume = charge. Charge = gun hex."
+	hex_capacitor.card_type = "skill"
+	hex_capacitor.effect_type = "weapon_persistent"
+	hex_capacitor.tags = ["engine", "persistent", "hex_ritual"]
+	hex_capacitor.base_cost = 1
+	hex_capacitor.hex_damage = 2
+	hex_capacitor.effect_params = {"max_charges": 3, "charge_on_hex_consume": true}
+	hex_capacitor.target_type = "self"
+	hex_capacitor.weapon_trigger = "on_hex_consumed"
+	hex_capacitor.rarity = 1
+	_register_card(hex_capacitor)
 	
-	# Rotting Gale - hex + push
-	var rotting := CardDef.new()
-	rotting.card_id = "rotting_gale"
-	rotting.card_name = "Rotting Gale"
-	rotting.description = "Apply {hex_damage} Hex to all enemies in Close/Mid. Push Far enemies into Mid."
-	rotting.card_type = "hex"
-	rotting.effect_type = "apply_hex"
-	rotting.tags = ["hex", "instant", "aoe", "ring_control", "hex_ritual"]
-	rotting.base_cost = 2
-	rotting.hex_damage = 2
-	rotting.push_amount = -1  # Pull toward center
-	rotting.target_type = "ring"
-	rotting.target_rings = [1, 2]
-	rotting.requires_target = false
-	rotting.rarity = 2
-	_register_card(rotting)
+	# #39 Sentinel Barrier - fortress barrier engine
+	var sentinel_barrier := CardDef.new()
+	sentinel_barrier.card_id = "sentinel_barrier"
+	sentinel_barrier.card_name = "Sentinel Barrier"
+	sentinel_barrier.description = "Place barrier with 3 HP, 2 damage. When triggered, your weakest gun gains +1 damage this turn."
+	sentinel_barrier.card_type = "defense"
+	sentinel_barrier.effect_type = "ring_barrier"
+	sentinel_barrier.tags = ["barrier", "engine", "persistent", "fortress"]
+	sentinel_barrier.base_cost = 2
+	sentinel_barrier.base_damage = 2
+	sentinel_barrier.duration = 3
+	sentinel_barrier.effect_params = {"buff_weakest_gun": 1}
+	sentinel_barrier.target_type = "ring"
+	sentinel_barrier.target_rings = [1, 2, 3]
+	sentinel_barrier.requires_target = true
+	sentinel_barrier.rarity = 2
+	_register_card(sentinel_barrier)
 	
-	# Ritual Focus - HP cost for hex boost
-	var ritual := CardDef.new()
-	ritual.card_id = "ritual_focus"
-	ritual.card_name = "Ritual Focus"
-	ritual.description = "Lose 2 HP. The next hex card you play this turn has +100% hex value."
-	ritual.card_type = "skill"
-	ritual.effect_type = "buff"
-	ritual.tags = ["skill", "instant", "hex_ritual", "engine_core"]
-	ritual.base_cost = 0
-	ritual.self_damage = 2
-	ritual.buff_type = "hex_damage"
-	ritual.buff_value = 100
-	ritual.rarity = 2
-	_register_card(ritual)
+	# #40 Overwatch Drone - sniper engine
+	var overwatch_drone := CardDef.new()
+	overwatch_drone.card_id = "overwatch_drone"
+	overwatch_drone.card_name = "Overwatch Drone"
+	overwatch_drone.description = "Persistent: When you play a skill, deal 2 damage to a Far/Mid enemy. If none, random."
+	overwatch_drone.persistent_description = "Skills trigger 2 damage to Far/Mid."
+	overwatch_drone.card_type = "weapon"
+	overwatch_drone.effect_type = "weapon_persistent"
+	overwatch_drone.tags = ["engine", "persistent", "sniper"]
+	overwatch_drone.base_cost = 1
+	overwatch_drone.base_damage = 2
+	overwatch_drone.effect_params = {"trigger_on": "skill_play", "prefer_rings": [2, 3]}
+	overwatch_drone.target_type = "random_enemy"
+	overwatch_drone.target_rings = [2, 3]
+	overwatch_drone.weapon_trigger = "on_skill_play"
+	overwatch_drone.rarity = 1
+	_register_card(overwatch_drone)
 	
-	# Blood Sigil Bolt - hex + heal
-	var blood_sigil := CardDef.new()
-	blood_sigil.card_id = "blood_sigil_bolt"
-	blood_sigil.card_name = "Blood Sigil Bolt"
-	blood_sigil.description = "Apply {hex_damage} Hex to a random enemy. Heal 1 HP."
-	blood_sigil.card_type = "hex"
-	blood_sigil.effect_type = "apply_hex"
-	blood_sigil.tags = ["hex", "instant", "lifedrain", "hex_ritual"]
-	blood_sigil.base_cost = 1
-	blood_sigil.hex_damage = 3
-	blood_sigil.heal_amount = 1
-	blood_sigil.target_type = "random_enemy"
-	blood_sigil.target_rings = [0, 1, 2, 3]
-	blood_sigil.target_count = 1
-	blood_sigil.rarity = 1
-	_register_card(blood_sigil)
+	# #47 Inferno Stack - explosive sniper
+	var inferno_stack := CardDef.new()
+	inferno_stack.card_id = "inferno_stack"
+	inferno_stack.card_name = "Inferno Stack"
+	inferno_stack.description = "Persistent: End of turn: deal 4 to Far/Mid, splash 2 to adjacent. Each kill adds +1 splash (resets if no kill)."
+	inferno_stack.persistent_description = "4 damage Far/Mid, splash grows on kills."
+	inferno_stack.card_type = "weapon"
+	inferno_stack.effect_type = "weapon_persistent"
+	inferno_stack.tags = ["gun", "persistent", "explosive", "sniper"]
+	inferno_stack.base_cost = 2
+	inferno_stack.base_damage = 4
+	inferno_stack.splash_damage = 2
+	inferno_stack.effect_params = {"splash_on_kill_bonus": 1, "reset_on_no_kill": true}
+	inferno_stack.target_type = "random_enemy"
+	inferno_stack.target_rings = [2, 3]
+	inferno_stack.weapon_trigger = "turn_end"
+	inferno_stack.rarity = 2
+	_register_card(inferno_stack)
 	
-	# Cursed Miasma - hex + draw
-	var miasma := CardDef.new()
-	miasma.card_id = "cursed_miasma"
-	miasma.card_name = "Cursed Miasma"
-	miasma.description = "Apply 1 Hex to all enemies. Draw 1 card for every 3 hex applied."
-	miasma.card_type = "hex"
-	miasma.effect_type = "apply_hex"
-	miasma.tags = ["hex", "instant", "aoe", "swarm_clear"]
-	miasma.base_cost = 2
-	miasma.hex_damage = 1
-	miasma.target_type = "all_enemies"
-	miasma.rarity = 2
-	_register_card(miasma)
-	
-	# Doom Clock - persistent hex amplifier
-	var doom := CardDef.new()
-	doom.card_id = "doom_clock"
-	doom.card_name = "Doom Clock"
-	doom.description = "Persistent: At end of your turn, increase hex on all hexed enemies by 1."
-	doom.persistent_description = "Increase hex on all hexed enemies by 1."
-	doom.card_type = "hex"
-	doom.effect_type = "weapon_persistent"
-	doom.tags = ["hex", "engine", "persistent", "hex_ritual"]
-	doom.base_cost = 2
-	doom.hex_damage = 1
-	doom.weapon_trigger = "turn_end"
-	doom.rarity = 2
-	_register_card(doom)
-	
-	# Last Rite - consume hex for AoE
-	var last_rite := CardDef.new()
-	last_rite.card_id = "last_rite"
-	last_rite.card_name = "Last Rite"
-	last_rite.description = "Choose a hexed enemy. Consume its hex and deal that much damage to all other enemies."
-	last_rite.card_type = "hex"
-	last_rite.effect_type = "consume_hex_aoe"
-	last_rite.tags = ["hex", "instant", "single_target", "volatile", "hex_ritual"]
-	last_rite.base_cost = 2
-	last_rite.target_type = "random_enemy"
-	last_rite.target_rings = [0, 1, 2, 3]
-	last_rite.rarity = 2
-	_register_card(last_rite)
+	# #48 Chain Reactor - beam + explosive engine
+	var chain_reactor := CardDef.new()
+	chain_reactor.card_id = "chain_reactor"
+	chain_reactor.card_name = "Chain Reactor"
+	chain_reactor.description = "Persistent: First gun each turn: deal 2 beam damage to 2 enemies. If either dies, 2 explosive splash to ring."
+	chain_reactor.persistent_description = "First gun: 2 beam to 2. Death = splash."
+	chain_reactor.card_type = "weapon"
+	chain_reactor.effect_type = "weapon_persistent"
+	chain_reactor.tags = ["engine", "persistent", "beam", "explosive"]
+	chain_reactor.base_cost = 2
+	chain_reactor.base_damage = 2
+	chain_reactor.splash_damage = 2
+	chain_reactor.chain_count = 2
+	chain_reactor.effect_params = {"trigger_on": "first_gun_play", "splash_on_kill": true}
+	chain_reactor.target_type = "random_enemy"
+	chain_reactor.target_rings = [0, 1, 2, 3]
+	chain_reactor.weapon_trigger = "on_gun_play"
+	chain_reactor.rarity = 2
+	_register_card(chain_reactor)
 
 
 # =============================================================================
-# BARRIER FORTRESS FAMILY (10 cards)
+# V2 BRAINSTORM INSTANT CARDS (from brainstorm.md #17-50, instant only)
 # =============================================================================
 
-func _create_barrier_fortress_cards() -> void:
-	"""Barrier Fortress family - turn rings into minefields."""
+func _create_v2_brainstorm_instant_cards() -> void:
+	"""V2 Brainstorm instant spells and skills."""
 	
-	# Ring Ward - persistent barrier
-	var ring_ward := CardDef.new()
-	ring_ward.card_id = "ring_ward"
-	ring_ward.card_name = "Ring Ward"
-	ring_ward.description = "Place a barrier in a chosen ring. Deals {damage} damage when crossed (3 uses)."
-	ring_ward.card_type = "defense"
-	ring_ward.effect_type = "ring_barrier"
-	ring_ward.tags = ["barrier", "engine", "persistent", "ring_control", "barrier_trap", "fortress"]
-	ring_ward.base_cost = 2
-	ring_ward.base_damage = 3
-	ring_ward.duration = 3
-	ring_ward.target_type = "ring"
-	ring_ward.target_rings = [1, 2, 3]
-	ring_ward.requires_target = true
-	ring_ward.rarity = 2
-	_register_card(ring_ward)
+	# #17 Target Sync - ring priority buff
+	var target_sync := CardDef.new()
+	target_sync.card_id = "target_sync"
+	target_sync.card_name = "Target Sync"
+	target_sync.description = "Choose a ring. Deployed guns prioritize it this turn and gain +2 damage against it."
+	target_sync.card_type = "skill"
+	target_sync.effect_type = "target_sync"
+	target_sync.tags = ["skill", "instant"]
+	target_sync.base_cost = 1
+	target_sync.base_damage = 2
+	target_sync.target_type = "ring"
+	target_sync.target_rings = [0, 1, 2, 3]
+	target_sync.requires_target = true
+	target_sync.rarity = 1
+	_register_card(target_sync)
 	
-	# Barrier Sigil - barrier + slow
-	var barrier_sigil := CardDef.new()
-	barrier_sigil.card_id = "barrier_sigil"
-	barrier_sigil.card_name = "Barrier Sigil"
-	barrier_sigil.description = "Place a barrier that deals {damage} damage. Enemies that cross don't move this turn."
-	barrier_sigil.card_type = "defense"
-	barrier_sigil.effect_type = "ring_barrier"
-	barrier_sigil.tags = ["barrier", "instant", "ring_control", "barrier_trap"]
-	barrier_sigil.base_cost = 1
-	barrier_sigil.base_damage = 4
-	barrier_sigil.duration = 2
-	barrier_sigil.target_type = "ring"
-	barrier_sigil.target_rings = [1, 2, 3]
-	barrier_sigil.requires_target = true
-	barrier_sigil.rarity = 1
-	_register_card(barrier_sigil)
+	# #18 Explosive Primer - explosive buff
+	var explosive_primer := CardDef.new()
+	explosive_primer.card_id = "explosive_primer"
+	explosive_primer.card_name = "Explosive Primer"
+	explosive_primer.description = "This turn: explosive attacks double splash. Explosive hits restore 1 use to barriers they damage."
+	explosive_primer.card_type = "skill"
+	explosive_primer.effect_type = "buff"
+	explosive_primer.tags = ["skill", "instant", "explosive"]
+	explosive_primer.base_cost = 1
+	explosive_primer.buff_type = "explosive_buff"
+	explosive_primer.buff_value = 2
+	explosive_primer.effect_params = {"double_splash": true, "barrier_restore": 1}
+	explosive_primer.target_type = "self"
+	explosive_primer.rarity = 1
+	_register_card(explosive_primer)
 	
-	# Glass Ward - pure armor
-	var glass_ward := CardDef.new()
-	glass_ward.card_id = "glass_ward"
-	glass_ward.card_name = "Glass Ward"
-	glass_ward.description = "Gain {armor} Armor."
-	glass_ward.card_type = "defense"
-	glass_ward.effect_type = "gain_armor"
-	glass_ward.tags = ["defense", "instant", "fortress"]
-	glass_ward.base_cost = 1
-	glass_ward.armor_amount = 5
-	glass_ward.target_type = "self"
-	glass_ward.rarity = 1
-	_register_card(glass_ward)
+	# #19 Hex Transfer - move hex between enemies
+	var hex_transfer := CardDef.new()
+	hex_transfer.card_id = "hex_transfer"
+	hex_transfer.card_name = "Hex Transfer"
+	hex_transfer.description = "Move all hex from one enemy to another. Your next persistent gun applies 2 hex on hit this turn."
+	hex_transfer.card_type = "skill"
+	hex_transfer.effect_type = "hex_transfer"
+	hex_transfer.tags = ["skill", "instant", "hex_ritual"]
+	hex_transfer.base_cost = 1
+	hex_transfer.hex_damage = 2
+	hex_transfer.effect_params = {"gun_hex_buff": 2}
+	hex_transfer.target_type = "random_enemy"
+	hex_transfer.target_rings = [0, 1, 2, 3]
+	hex_transfer.rarity = 1
+	_register_card(hex_transfer)
 	
-	# Runic Rampart - double barrier
-	var rampart := CardDef.new()
-	rampart.card_id = "runic_rampart"
-	rampart.card_name = "Runic Rampart"
-	rampart.description = "Place a barrier in Melee and Close. Each has 3 HP and deals 2 damage when crossed."
-	rampart.card_type = "defense"
-	rampart.effect_type = "ring_barrier"
-	rampart.tags = ["barrier", "instant", "fortress"]
-	rampart.base_cost = 2
-	rampart.base_damage = 2
-	rampart.duration = 3
-	rampart.target_type = "ring"
-	rampart.target_rings = [0, 1]
-	rampart.requires_target = false
-	rampart.rarity = 2
-	_register_card(rampart)
+	# #20 Barrier Channel - trigger all barriers
+	var barrier_channel := CardDef.new()
+	barrier_channel.card_id = "barrier_channel"
+	barrier_channel.card_name = "Barrier Channel"
+	barrier_channel.description = "Trigger all barriers once without consuming uses. Gain 1 armor per trigger."
+	barrier_channel.card_type = "skill"
+	barrier_channel.effect_type = "barrier_trigger"
+	barrier_channel.tags = ["skill", "instant", "fortress"]
+	barrier_channel.base_cost = 1
+	barrier_channel.armor_amount = 1
+	barrier_channel.effect_params = {"armor_per_trigger": 1}
+	barrier_channel.target_type = "self"
+	barrier_channel.rarity = 1
+	_register_card(barrier_channel)
 	
-	# Reinforced Circle - barrier buff
-	var reinforced := CardDef.new()
-	reinforced.card_id = "reinforced_circle"
-	reinforced.card_name = "Reinforced Circle"
-	reinforced.description = "Choose a ring. Existing barriers in that ring gain +2 HP/duration."
-	reinforced.card_type = "skill"
-	reinforced.effect_type = "buff_barriers"
-	reinforced.tags = ["barrier", "instant", "fortress"]
-	reinforced.base_cost = 1
-	reinforced.buff_value = 2
-	reinforced.target_type = "ring"
-	reinforced.target_rings = [0, 1, 2, 3]
-	reinforced.requires_target = true
-	reinforced.rarity = 1
-	_register_card(reinforced)
+	# #21 Emergency Deploy - play gun from deck
+	var emergency_deploy := CardDef.new()
+	emergency_deploy.card_id = "emergency_deploy"
+	emergency_deploy.card_name = "Emergency Deploy"
+	emergency_deploy.description = "Play the top persistent gun from your draw pile at -1 cost. It fires once at 75% damage."
+	emergency_deploy.card_type = "skill"
+	emergency_deploy.effect_type = "emergency_deploy"
+	emergency_deploy.tags = ["skill", "instant", "swarm_clear"]
+	emergency_deploy.base_cost = 1
+	emergency_deploy.effect_params = {"cost_reduction": 1, "fire_percent": 75}
+	emergency_deploy.target_type = "self"
+	emergency_deploy.rarity = 1
+	_register_card(emergency_deploy)
 	
-	# Ward Shock - barrier synergy damage
-	var ward_shock := CardDef.new()
-	ward_shock.card_id = "ward_shock"
-	ward_shock.card_name = "Ward Shock"
-	ward_shock.description = "All enemies that crossed a barrier this turn take {damage} damage."
-	ward_shock.card_type = "skill"
-	ward_shock.effect_type = "barrier_synergy_damage"
-	ward_shock.tags = ["skill", "instant", "barrier_trap", "ring_control"]
-	ward_shock.base_cost = 1
-	ward_shock.base_damage = 2
-	ward_shock.rarity = 1
-	_register_card(ward_shock)
+	# #22 Piercing Ammo - this turn buff
+	var piercing_ammo := CardDef.new()
+	piercing_ammo.card_id = "piercing_ammo"
+	piercing_ammo.card_name = "Piercing Ammo"
+	piercing_ammo.description = "This turn, guns gain piercing: overkill flows to next enemy (50% overflow)."
+	piercing_ammo.card_type = "skill"
+	piercing_ammo.effect_type = "buff"
+	piercing_ammo.tags = ["skill", "instant", "piercing"]
+	piercing_ammo.base_cost = 1
+	piercing_ammo.buff_type = "piercing_buff"
+	piercing_ammo.effect_params = {"overflow_percent": 50}
+	piercing_ammo.target_type = "self"
+	piercing_ammo.rarity = 1
+	_register_card(piercing_ammo)
 	
-	# Lockdown Field - prevent movement
-	var lockdown := CardDef.new()
-	lockdown.card_id = "lockdown_field"
-	lockdown.card_name = "Lockdown Field"
-	lockdown.description = "This turn, enemies cannot move from Close into Melee. Place a barrier in Close."
-	lockdown.card_type = "defense"
-	lockdown.effect_type = "ring_barrier"
-	lockdown.tags = ["barrier", "instant", "ring_control", "fortress"]
-	lockdown.base_cost = 2
-	lockdown.base_damage = 3
-	lockdown.duration = 1
-	lockdown.target_type = "ring"
-	lockdown.target_rings = [1]
-	lockdown.requires_target = false
-	lockdown.rarity = 2
-	_register_card(lockdown)
+	# #23 Beam Splitter - beam instant
+	var beam_splitter := CardDef.new()
+	beam_splitter.card_id = "beam_splitter"
+	beam_splitter.card_name = "Beam Splitter"
+	beam_splitter.description = "Deal 4 damage chaining to up to 3 enemies in the same ring. Each hit spreads 1 hex if present."
+	beam_splitter.card_type = "weapon"
+	beam_splitter.effect_type = "beam_damage"
+	beam_splitter.tags = ["gun", "instant", "beam", "aoe"]
+	beam_splitter.base_cost = 2
+	beam_splitter.base_damage = 4
+	beam_splitter.chain_count = 3
+	beam_splitter.hex_damage = 1
+	beam_splitter.effect_params = {"spread_hex": true}
+	beam_splitter.target_type = "ring"
+	beam_splitter.target_rings = [0, 1, 2, 3]
+	beam_splitter.requires_target = true
+	beam_splitter.rarity = 2
+	_register_card(beam_splitter)
 	
-	# Guardian Circle - armor + barrier synergy
-	var guardian := CardDef.new()
-	guardian.card_id = "guardian_circle"
-	guardian.card_name = "Guardian Circle"
-	guardian.description = "Gain 3 armor. If you control 3+ barriers, gain 2 additional armor."
-	guardian.card_type = "defense"
-	guardian.effect_type = "gain_armor"
-	guardian.tags = ["defense", "instant", "fortress"]
-	guardian.base_cost = 1
-	guardian.armor_amount = 3
-	guardian.target_type = "self"
-	guardian.rarity = 1
-	_register_card(guardian)
+	# #25 Corrosive Rounds - corrosive buff
+	var corrosive_rounds := CardDef.new()
+	corrosive_rounds.card_id = "corrosive_rounds"
+	corrosive_rounds.card_name = "Corrosive Rounds"
+	corrosive_rounds.description = "This turn, guns apply -2 armor shred on hit. If target has hex, shred doubles."
+	corrosive_rounds.card_type = "skill"
+	corrosive_rounds.effect_type = "buff"
+	corrosive_rounds.tags = ["skill", "instant", "corrosive"]
+	corrosive_rounds.base_cost = 1
+	corrosive_rounds.armor_shred = 2
+	corrosive_rounds.buff_type = "corrosive_buff"
+	corrosive_rounds.effect_params = {"double_on_hex": true}
+	corrosive_rounds.target_type = "self"
+	corrosive_rounds.rarity = 1
+	_register_card(corrosive_rounds)
 	
-	# Repulsion Wave - push + barrier damage
-	var repulsion := CardDef.new()
-	repulsion.card_id = "repulsion_wave"
-	repulsion.card_name = "Repulsion Wave"
-	repulsion.description = "Push all enemies in Melee/Close back 1 ring. Enemies that cross a barrier take 2 damage."
-	repulsion.card_type = "skill"
-	repulsion.effect_type = "push_enemies"
-	repulsion.tags = ["skill", "instant", "ring_control", "swarm_clear", "volatile"]
-	repulsion.base_cost = 1
-	repulsion.push_amount = 1
-	repulsion.base_damage = 2
-	repulsion.target_type = "ring"
-	repulsion.target_rings = [0, 1]
-	repulsion.requires_target = false
-	repulsion.rarity = 1
-	_register_card(repulsion)
+	# #27 Kinetic Pulse - shock ring control
+	var kinetic_pulse := CardDef.new()
+	kinetic_pulse.card_id = "kinetic_pulse"
+	kinetic_pulse.card_name = "Kinetic Pulse"
+	kinetic_pulse.description = "Push all Melee enemies to Close. Deal 2 damage and apply Slow to pushed enemies."
+	kinetic_pulse.card_type = "skill"
+	kinetic_pulse.effect_type = "shock_damage"
+	kinetic_pulse.tags = ["skill", "instant", "ring_control", "shock"]
+	kinetic_pulse.base_cost = 1
+	kinetic_pulse.base_damage = 2
+	kinetic_pulse.push_amount = 1
+	kinetic_pulse.effect_params = {"slow_chance": 100, "push_first": true}
+	kinetic_pulse.target_type = "ring"
+	kinetic_pulse.target_rings = [0]
+	kinetic_pulse.rarity = 1
+	_register_card(kinetic_pulse)
 	
-	# Iron Bastion - strong armor
-	var bastion := CardDef.new()
-	bastion.card_id = "iron_bastion"
-	bastion.card_name = "Iron Bastion"
-	bastion.description = "Gain {armor} Armor."
-	bastion.card_type = "defense"
-	bastion.effect_type = "gain_armor"
-	bastion.tags = ["defense", "instant", "fortress"]
-	bastion.base_cost = 2
-	bastion.armor_amount = 8
-	bastion.target_type = "self"
-	bastion.rarity = 2
-	_register_card(bastion)
+	# #30 Rail Piercer - piercing sniper
+	var rail_piercer := CardDef.new()
+	rail_piercer.card_id = "rail_piercer"
+	rail_piercer.card_name = "Rail Piercer"
+	rail_piercer.description = "Deal 9 damage. Overflow 50% continues to the next enemy in line or stack."
+	rail_piercer.card_type = "weapon"
+	rail_piercer.effect_type = "piercing_damage"
+	rail_piercer.tags = ["gun", "instant", "piercing", "sniper"]
+	rail_piercer.base_cost = 2
+	rail_piercer.base_damage = 9
+	rail_piercer.effect_params = {"overflow_percent": 50}
+	rail_piercer.target_type = "random_enemy"
+	rail_piercer.target_rings = [0, 1, 2, 3]
+	rail_piercer.rarity = 2
+	_register_card(rail_piercer)
 	
-
-# =============================================================================
-# LIFEDRAIN BRUISER FAMILY (7 cards)
-# =============================================================================
-
-func _create_lifedrain_cards() -> void:
-	"""Lifedrain Bruiser family - trade damage for sustain."""
+	# #31 Flame Coil - explosive instant
+	var flame_coil := CardDef.new()
+	flame_coil.card_id = "flame_coil"
+	flame_coil.card_name = "Flame Coil"
+	flame_coil.description = "Deal 3 damage to a ring. Splash 1 to adjacent rings. Explosive hits add 1 hex."
+	flame_coil.card_type = "weapon"
+	flame_coil.effect_type = "explosive_damage"
+	flame_coil.tags = ["gun", "instant", "explosive", "aoe"]
+	flame_coil.base_cost = 1
+	flame_coil.base_damage = 3
+	flame_coil.splash_damage = 1
+	flame_coil.hex_damage = 1
+	flame_coil.effect_params = {"add_hex": true}
+	flame_coil.target_type = "ring"
+	flame_coil.target_rings = [0, 1, 2, 3]
+	flame_coil.requires_target = true
+	flame_coil.rarity = 1
+	_register_card(flame_coil)
 	
-	# Blood Shield - armor + kill heal
-	var blood_shield := CardDef.new()
-	blood_shield.card_id = "blood_shield"
-	blood_shield.card_name = "Blood Shield"
-	blood_shield.description = "Gain 3 armor. This turn, heal 1 HP whenever you kill an enemy."
-	blood_shield.card_type = "defense"
-	blood_shield.effect_type = "gain_armor"
-	blood_shield.tags = ["defense", "instant", "lifedrain", "fortress"]
-	blood_shield.base_cost = 1
-	blood_shield.armor_amount = 3
-	blood_shield.lifesteal_on_kill = 1
-	blood_shield.target_type = "self"
-	blood_shield.rarity = 1
-	_register_card(blood_shield)
+	# #33 Barrier Siphon - lifedrain fortress
+	var barrier_siphon := CardDef.new()
+	barrier_siphon.card_id = "barrier_siphon"
+	barrier_siphon.card_name = "Barrier Siphon"
+	barrier_siphon.description = "Drain 2 HP from each barrier you control. Heal equal to total drained. Barriers keep uses."
+	barrier_siphon.card_type = "skill"
+	barrier_siphon.effect_type = "barrier_siphon"
+	barrier_siphon.tags = ["skill", "instant", "lifedrain", "fortress"]
+	barrier_siphon.base_cost = 1
+	barrier_siphon.effect_params = {"drain_per_barrier": 2}
+	barrier_siphon.target_type = "self"
+	barrier_siphon.rarity = 1
+	_register_card(barrier_siphon)
 	
-	# Blood Bolt - damage + heal
-	var blood_bolt := CardDef.new()
-	blood_bolt.card_id = "blood_bolt"
-	blood_bolt.card_name = "Blood Bolt"
-	blood_bolt.description = "Deal {damage} damage to a random enemy. Heal 2 HP."
-	blood_bolt.card_type = "weapon"
-	blood_bolt.effect_type = "damage_and_heal"
-	blood_bolt.tags = ["gun", "instant", "lifedrain", "single_target"]
-	blood_bolt.base_cost = 1
-	blood_bolt.base_damage = 5
-	blood_bolt.heal_amount = 2
-	blood_bolt.target_type = "random_enemy"
-	blood_bolt.target_rings = [0, 1, 2, 3]
-	blood_bolt.rarity = 1
-	_register_card(blood_bolt)
+	# #34 Shock Net - shock barrier
+	var shock_net := CardDef.new()
+	shock_net.card_id = "shock_net"
+	shock_net.card_name = "Shock Net"
+	shock_net.description = "Place barrier: 0 damage, 2 uses. Enemies crossing are Slowed and take +1 damage from shock this turn."
+	shock_net.card_type = "defense"
+	shock_net.effect_type = "ring_barrier"
+	shock_net.tags = ["barrier", "instant", "shock", "ring_control"]
+	shock_net.base_cost = 1
+	shock_net.base_damage = 0
+	shock_net.duration = 2
+	shock_net.effect_params = {"apply_slow": true, "shock_vuln": 1}
+	shock_net.target_type = "ring"
+	shock_net.target_rings = [1, 2, 3]
+	shock_net.requires_target = true
+	shock_net.rarity = 1
+	_register_card(shock_net)
 	
-	# Leeching Slash - close range lifesteal
-	var leeching := CardDef.new()
-	leeching.card_id = "leeching_slash"
-	leeching.card_name = "Leeching Slash"
-	leeching.description = "Deal {damage} damage to an enemy in Melee/Close. Heal 2 HP."
-	leeching.card_type = "weapon"
-	leeching.effect_type = "damage_and_heal"
-	leeching.tags = ["gun", "instant", "lifedrain", "close_focus"]
-	leeching.base_cost = 1
-	leeching.base_damage = 4
-	leeching.heal_amount = 2
-	leeching.target_type = "random_enemy"
-	leeching.target_rings = [0, 1]
-	leeching.rarity = 1
-	_register_card(leeching)
+	# #36 Focused Salvo - synergy instant
+	var focused_salvo := CardDef.new()
+	focused_salvo.card_id = "focused_salvo"
+	focused_salvo.card_name = "Focused Salvo"
+	focused_salvo.description = "Deal 5 damage. If a deployed gun shares a tag, it fires at same target for +2 damage."
+	focused_salvo.card_type = "weapon"
+	focused_salvo.effect_type = "instant_damage"
+	focused_salvo.tags = ["gun", "instant", "single_target", "engine_core"]
+	focused_salvo.base_cost = 1
+	focused_salvo.base_damage = 5
+	focused_salvo.effect_params = {"synergy_fire": true, "synergy_bonus": 2}
+	focused_salvo.target_type = "random_enemy"
+	focused_salvo.target_rings = [0, 1, 2, 3]
+	focused_salvo.rarity = 1
+	_register_card(focused_salvo)
 	
-	# Crimson Guard - armor + heal
-	var crimson := CardDef.new()
-	crimson.card_id = "crimson_guard"
-	crimson.card_name = "Crimson Guard"
-	crimson.description = "Gain 4 armor. Heal 1 HP."
-	crimson.card_type = "defense"
-	crimson.effect_type = "armor_and_heal"
-	crimson.tags = ["defense", "instant", "lifedrain"]
-	crimson.base_cost = 1
-	crimson.armor_amount = 4
-	crimson.heal_amount = 1
-	crimson.target_type = "self"
-	crimson.rarity = 1
-	_register_card(crimson)
+	# #37 Fracture Rounds - piercing swarm clear
+	var fracture_rounds := CardDef.new()
+	fracture_rounds.card_id = "fracture_rounds"
+	fracture_rounds.card_name = "Fracture Rounds"
+	fracture_rounds.description = "Next shotgun/piercing attack this turn repeats on a second random target for 50% damage."
+	fracture_rounds.card_type = "skill"
+	fracture_rounds.effect_type = "buff"
+	fracture_rounds.tags = ["skill", "instant", "piercing", "swarm_clear"]
+	fracture_rounds.base_cost = 1
+	fracture_rounds.buff_type = "fracture_buff"
+	fracture_rounds.effect_params = {"repeat_percent": 50, "trigger_tags": ["shotgun", "piercing"]}
+	fracture_rounds.target_type = "self"
+	fracture_rounds.rarity = 1
+	_register_card(fracture_rounds)
 	
-	# Sanguine Aura - persistent heal engine
-	var sanguine := CardDef.new()
-	sanguine.card_id = "sanguine_aura"
-	sanguine.card_name = "Sanguine Aura"
-	sanguine.description = "Persistent: At end of your turn, heal 1 HP for each enemy killed this turn."
-	sanguine.persistent_description = "Heal 1 HP for each enemy killed this turn."
-	sanguine.card_type = "skill"
-	sanguine.effect_type = "weapon_persistent"
-	sanguine.tags = ["engine", "persistent", "lifedrain"]
-	sanguine.base_cost = 2
-	sanguine.heal_amount = 1
-	sanguine.weapon_trigger = "turn_end"
-	sanguine.rarity = 2
-	_register_card(sanguine)
+	# #41 Ricochet Disk - piercing shotgun
+	var ricochet_disk := CardDef.new()
+	ricochet_disk.card_id = "ricochet_disk"
+	ricochet_disk.card_name = "Ricochet Disk"
+	ricochet_disk.description = "Deal 2 damage bouncing up to 4 times in Close/Mid. Cannot hit same enemy twice."
+	ricochet_disk.card_type = "weapon"
+	ricochet_disk.effect_type = "beam_damage"
+	ricochet_disk.tags = ["gun", "instant", "piercing", "shotgun"]
+	ricochet_disk.base_cost = 1
+	ricochet_disk.base_damage = 2
+	ricochet_disk.chain_count = 4
+	ricochet_disk.effect_params = {"no_repeat_targets": true}
+	ricochet_disk.target_type = "random_enemy"
+	ricochet_disk.target_rings = [1, 2]
+	ricochet_disk.rarity = 1
+	_register_card(ricochet_disk)
 	
-	# Martyr's Vow - HP risk for big heal
-	var martyr := CardDef.new()
-	martyr.card_id = "martyrs_vow"
-	martyr.card_name = "Martyr's Vow"
-	martyr.description = "Lose 3 HP. This turn, whenever you kill an enemy, heal 3 HP."
-	martyr.card_type = "skill"
-	martyr.effect_type = "buff"
-	martyr.tags = ["skill", "instant", "lifedrain", "volatile"]
-	martyr.base_cost = 0
-	martyr.self_damage = 3
-	martyr.buff_type = "kill_heal"
-	martyr.buff_value = 3
-	martyr.rarity = 2
-	_register_card(martyr)
+	# #42 Hex Bloom - hex AoE
+	var hex_bloom := CardDef.new()
+	hex_bloom.card_id = "hex_bloom"
+	hex_bloom.card_name = "Hex Bloom"
+	hex_bloom.description = "Apply 1 hex to all enemies. If already hexed, apply +2 more."
+	hex_bloom.card_type = "hex"
+	hex_bloom.effect_type = "apply_hex"
+	hex_bloom.tags = ["hex", "instant", "aoe"]
+	hex_bloom.base_cost = 2
+	hex_bloom.hex_damage = 1
+	hex_bloom.effect_params = {"bonus_if_hexed": 2}
+	hex_bloom.target_type = "all_enemies"
+	hex_bloom.rarity = 2
+	_register_card(hex_bloom)
 	
-	# Vampiric Volley - multi-target lifesteal
-	var vampiric := CardDef.new()
-	vampiric.card_id = "vampiric_volley"
-	vampiric.card_name = "Vampiric Volley"
-	vampiric.description = "Deal {damage} damage to up to 3 random enemies. Heal 1 HP for each enemy hit."
-	vampiric.card_type = "weapon"
-	vampiric.effect_type = "scatter_damage"
-	vampiric.tags = ["gun", "instant", "lifedrain", "swarm_clear"]
-	vampiric.base_cost = 2
-	vampiric.base_damage = 3
-	vampiric.target_count = 3
-	vampiric.heal_amount = 1
-	vampiric.target_type = "random_enemy"
-	vampiric.target_rings = [0, 1, 2, 3]
-	vampiric.rarity = 2
-	_register_card(vampiric)
-
-
-# =============================================================================
-# OVERLAP / ENGINE CARDS (5 cards)
-# =============================================================================
-
-func _create_overlap_cards() -> void:
-	"""Overlap cards - bridge multiple families for hybrid builds."""
+	# #43 Runic Overload - fortress volatile
+	var runic_overload := CardDef.new()
+	runic_overload.card_id = "runic_overload"
+	runic_overload.card_name = "Runic Overload"
+	runic_overload.description = "Gain 4 armor. If you have 3+ barriers, Overclock costs 0 this turn."
+	runic_overload.card_type = "defense"
+	runic_overload.effect_type = "gain_armor"
+	runic_overload.tags = ["skill", "instant", "fortress", "volatile"]
+	runic_overload.base_cost = 1
+	runic_overload.armor_amount = 4
+	runic_overload.effect_params = {"barrier_threshold": 3, "free_card": "overclock"}
+	runic_overload.target_type = "self"
+	runic_overload.rarity = 1
+	_register_card(runic_overload)
 	
-	# Hex-Tipped Rounds - gun + hex
-	var hex_rounds := CardDef.new()
-	hex_rounds.card_id = "hex_tipped_rounds"
-	hex_rounds.card_name = "Hex-Tipped Rounds"
-	hex_rounds.description = "Deal {damage} damage to a random enemy. Apply 2 hex to it."
-	hex_rounds.card_type = "weapon"
-	hex_rounds.effect_type = "damage_and_hex"
-	hex_rounds.tags = ["gun", "instant", "hex_ritual", "sniper"]
-	hex_rounds.base_cost = 1
-	hex_rounds.base_damage = 3
-	hex_rounds.hex_damage = 2
-	hex_rounds.target_type = "random_enemy"
-	hex_rounds.target_rings = [0, 1, 2, 3]
-	hex_rounds.rarity = 1
-	_register_card(hex_rounds)
+	# #44 Barrier Bloom - duplicate barriers
+	var barrier_bloom := CardDef.new()
+	barrier_bloom.card_id = "barrier_bloom"
+	barrier_bloom.card_name = "Barrier Bloom"
+	barrier_bloom.description = "Choose a ring. Duplicate each barrier there with 1 use and 1 damage."
+	barrier_bloom.card_type = "skill"
+	barrier_bloom.effect_type = "barrier_bloom"
+	barrier_bloom.tags = ["skill", "instant", "barrier_trap"]
+	barrier_bloom.base_cost = 1
+	barrier_bloom.base_damage = 1
+	barrier_bloom.duration = 1
+	barrier_bloom.target_type = "ring"
+	barrier_bloom.target_rings = [0, 1, 2, 3]
+	barrier_bloom.requires_target = true
+	barrier_bloom.rarity = 1
+	_register_card(barrier_bloom)
 	
-	# Barrier Leech - barrier + lifedrain
-	var barrier_leech := CardDef.new()
-	barrier_leech.card_id = "barrier_leech"
-	barrier_leech.card_name = "Barrier Leech"
-	barrier_leech.description = "Place a barrier that deals 2 damage when crossed. Heal 1 HP when it triggers."
-	barrier_leech.card_type = "defense"
-	barrier_leech.effect_type = "ring_barrier"
-	barrier_leech.tags = ["barrier", "instant", "lifedrain", "barrier_trap"]
-	barrier_leech.base_cost = 1
-	barrier_leech.base_damage = 2
-	barrier_leech.duration = 2
-	barrier_leech.heal_amount = 1
-	barrier_leech.target_type = "ring"
-	barrier_leech.target_rings = [1, 2, 3]
-	barrier_leech.requires_target = true
-	barrier_leech.rarity = 1
-	_register_card(barrier_leech)
+	# #45 Scrap Vents - volatile buff
+	var scrap_vents := CardDef.new()
+	scrap_vents.card_id = "scrap_vents"
+	scrap_vents.card_name = "Scrap Vents"
+	scrap_vents.description = "Lose 2 HP. Your next explosive or piercing card this turn gains +3 damage."
+	scrap_vents.card_type = "skill"
+	scrap_vents.effect_type = "buff"
+	scrap_vents.tags = ["skill", "instant", "volatile"]
+	scrap_vents.base_cost = 0
+	scrap_vents.self_damage = 2
+	scrap_vents.buff_type = "damage_buff"
+	scrap_vents.buff_value = 3
+	scrap_vents.effect_params = {"buff_tags": ["explosive", "piercing"]}
+	scrap_vents.target_type = "self"
+	scrap_vents.rarity = 0
+	_register_card(scrap_vents)
 	
-	# Ritual Cartridge - gun + hex cost reduction
-	var ritual_cart := CardDef.new()
-	ritual_cart.card_id = "ritual_cartridge"
-	ritual_cart.card_name = "Ritual Cartridge"
-	ritual_cart.description = "The next gun and the next hex card you play this turn each cost 1 less."
-	ritual_cart.card_type = "skill"
-	ritual_cart.effect_type = "buff"
-	ritual_cart.tags = ["skill", "instant", "engine_core", "gun", "hex_ritual"]
-	ritual_cart.base_cost = 1
-	ritual_cart.buff_type = "cost_reduction"
-	ritual_cart.buff_value = 1
-	ritual_cart.rarity = 1
-	_register_card(ritual_cart)
+	# #46 Shockwave Gauntlet - shock ring control
+	var shockwave_gauntlet := CardDef.new()
+	shockwave_gauntlet.card_id = "shockwave_gauntlet"
+	shockwave_gauntlet.card_name = "Shockwave Gauntlet"
+	shockwave_gauntlet.description = "Deal 3 damage and push target 1 ring. If it hits a barrier, stun it for 1 turn."
+	shockwave_gauntlet.card_type = "weapon"
+	shockwave_gauntlet.effect_type = "shock_damage"
+	shockwave_gauntlet.tags = ["gun", "instant", "shock", "ring_control"]
+	shockwave_gauntlet.base_cost = 1
+	shockwave_gauntlet.base_damage = 3
+	shockwave_gauntlet.push_amount = 1
+	shockwave_gauntlet.effect_params = {"stun_on_barrier": true}
+	shockwave_gauntlet.target_type = "random_enemy"
+	shockwave_gauntlet.target_rings = [0, 1, 2]
+	shockwave_gauntlet.rarity = 1
+	_register_card(shockwave_gauntlet)
 	
-	# Cursed Bulwark - armor + hex
-	var cursed_bulwark := CardDef.new()
-	cursed_bulwark.card_id = "cursed_bulwark"
-	cursed_bulwark.card_name = "Cursed Bulwark"
-	cursed_bulwark.description = "Gain 6 armor. Apply 1 hex to all enemies in Melee."
-	cursed_bulwark.card_type = "defense"
-	cursed_bulwark.effect_type = "armor_and_hex"
-	cursed_bulwark.tags = ["defense", "instant", "fortress", "hex_ritual"]
-	cursed_bulwark.base_cost = 2
-	cursed_bulwark.armor_amount = 6
-	cursed_bulwark.hex_damage = 1
-	cursed_bulwark.target_type = "ring"
-	cursed_bulwark.target_rings = [0]
-	cursed_bulwark.rarity = 2
-	_register_card(cursed_bulwark)
+	# #49 Glass Shards - volatile piercing
+	var glass_shards := CardDef.new()
+	glass_shards.card_id = "glass_shards"
+	glass_shards.card_name = "Glass Shards"
+	glass_shards.description = "Deal 6 damage. Lose 2 armor. If target dies, gain 1 energy next turn."
+	glass_shards.card_type = "weapon"
+	glass_shards.effect_type = "piercing_damage"
+	glass_shards.tags = ["gun", "instant", "piercing", "volatile"]
+	glass_shards.base_cost = 1
+	glass_shards.base_damage = 6
+	glass_shards.effect_params = {"armor_cost": 2, "energy_on_kill": 1}
+	glass_shards.target_type = "random_enemy"
+	glass_shards.target_rings = [0, 1, 2, 3]
+	glass_shards.rarity = 1
+	_register_card(glass_shards)
 	
-	# Blood Ward Turret - lifedrain engine
-	var blood_turret := CardDef.new()
-	blood_turret.card_id = "blood_ward_turret"
-	blood_turret.card_name = "Blood Ward Turret"
-	blood_turret.description = "Persistent: Deal 2 damage to a random enemy in Melee/Close and heal 1 HP at end of turn."
-	blood_turret.persistent_description = "Deal 2 damage to enemy in Melee/Close. Heal 1 HP."
-	blood_turret.card_type = "weapon"
-	blood_turret.effect_type = "weapon_persistent"
-	blood_turret.tags = ["engine", "persistent", "lifedrain", "barrier_trap"]
-	blood_turret.base_cost = 2
-	blood_turret.base_damage = 2
-	blood_turret.heal_amount = 1
-	blood_turret.target_type = "random_enemy"
-	blood_turret.target_rings = [0, 1]
-	blood_turret.weapon_trigger = "turn_end"
-	blood_turret.rarity = 2
-	_register_card(blood_turret)
+	# #50 Null Field - fortress defense
+	var null_field := CardDef.new()
+	null_field.card_id = "null_field"
+	null_field.card_name = "Null Field"
+	null_field.description = "Gain 5 armor. This turn, enemies in Melee deal -2 damage. If barrier, slow Melee enemies."
+	null_field.card_type = "defense"
+	null_field.effect_type = "gain_armor"
+	null_field.tags = ["defense", "instant", "fortress"]
+	null_field.base_cost = 1
+	null_field.armor_amount = 5
+	null_field.effect_params = {"melee_damage_reduction": 2, "slow_if_barrier": true}
+	null_field.target_type = "self"
+	null_field.rarity = 1
+	_register_card(null_field)
 
 
 # =============================================================================

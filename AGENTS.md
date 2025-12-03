@@ -243,12 +243,19 @@ Key tools:
 - **Never use vague descriptions** like "deals damage" - always specify "deals 6 damage to all enemies in Close ring"
 
 ### PROGRESS.md  
-- Contains current status tracker with checkboxes
+- **Purpose**: Track **unfinished work only** - not a historical archive
+- Contains current status tracker with checkboxes for in-progress items
 - Update when:
-  - Completing any task
-  - Finding new bugs or issues
+  - Starting new multi-step features (add tracking)
+  - Completing any task (check it off)
+  - Finding new bugs or issues (add tracking)
   - Changing what's working vs broken
-  - Testing reveals new status
+
+**Cleanup Rules:**
+- **Delete completed items** once ALL parts are fully finished - DESIGN.md is the source of truth for what's implemented
+- **Multi-phase items**: Keep ALL tracking until EVERY phase and sub-item is complete, then delete the entire section
+- Don't accumulate "Previously Completed" historical sections - that's what DESIGN.md is for
+- The goal is a short, actionable list of what needs work, not a changelog
 
 **Both files should reflect the TRUE current state of the project at all times.**
 

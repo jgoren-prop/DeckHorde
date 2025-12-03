@@ -25,7 +25,9 @@ class_name ArtifactDefinition
 @export var required_tags: Array = []  # e.g., ["gun"] for gun-only bonuses
 
 # Effect type determines when/how the artifact triggers
-@export_enum("passive", "on_card_play", "on_kill", "on_damage_taken", "on_turn_start", "on_turn_end", "on_wave_start", "on_wave_end", "on_heal", "on_hex_consumed", "on_barrier_trigger") var trigger_type: String = "passive"
+# V1 triggers: passive, on_card_play, on_kill, on_damage_taken, on_turn_start, on_turn_end, on_wave_start, on_wave_end, on_heal, on_hex_consumed, on_barrier_trigger
+# V2 triggers: on_explosive_hit, on_piercing_overflow, on_beam_chain, on_shock_hit, on_corrosive_hit, on_gun_deploy, on_gun_fire, on_gun_out_of_ammo, on_engine_trigger, on_self_damage, on_overkill
+@export_enum("passive", "on_card_play", "on_kill", "on_damage_taken", "on_turn_start", "on_turn_end", "on_wave_start", "on_wave_end", "on_heal", "on_hex_consumed", "on_barrier_trigger", "on_explosive_hit", "on_piercing_overflow", "on_beam_chain", "on_shock_hit", "on_corrosive_hit", "on_gun_deploy", "on_gun_fire", "on_gun_out_of_ammo", "on_engine_trigger", "on_self_damage", "on_overkill") var trigger_type: String = "passive"
 
 # Filter for when the artifact triggers (e.g., only on Gun cards)
 @export var trigger_tag: String = ""  # Card tag filter
@@ -50,6 +52,7 @@ func get_description_with_values() -> String:
 	var desc: String = description
 	desc = desc.replace("{value}", str(effect_value))
 	return desc
+
 
 
 

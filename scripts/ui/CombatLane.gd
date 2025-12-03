@@ -974,23 +974,3 @@ func _create_drop_highlight() -> void:
 	
 	add_child(_drop_highlight_panel)
 	_drop_highlight_panel.visible = false
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

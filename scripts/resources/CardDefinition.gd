@@ -59,6 +59,14 @@ const TagConstantsClass = preload("res://scripts/constants/TagConstants.gd")
 # Push/pull effects
 @export var push_amount: int = 0  # Positive = push outward, negative = pull inward
 
+# V2: Generic effect parameters dictionary for flexible effects
+@export var effect_params: Dictionary = {}
+
+# V2: Damage-type specific values
+@export var splash_damage: int = 0  # For explosive effects
+@export var chain_count: int = 0  # For beam effects (number of targets to chain)
+@export var armor_shred: int = 0  # For corrosive effects
+
 # Tier scaling - defines how values change per tier
 # Format: {tier_number: {property_name: value}}
 @export var tier_scaling: Dictionary = {}
@@ -85,6 +93,12 @@ func get_scaled_value(property: String, tier: int) -> Variant:
 			return duration
 		"target_count":
 			return target_count
+		"splash_damage":
+			return splash_damage
+		"chain_count":
+			return chain_count
+		"armor_shred":
+			return armor_shred
 		_:
 			return 0
 

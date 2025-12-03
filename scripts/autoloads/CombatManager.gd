@@ -31,6 +31,18 @@ signal ring_phase_ended(ring: int)  # Ring processing complete
 signal enemy_attacking(enemy, damage: int)  # Enemy is about to attack
 signal weapons_phase_started()  # Persistent weapons starting to fire
 signal weapons_phase_ended()  # All persistent weapons finished firing
+# V2 Signals
+signal gun_deployed(card_def)  # Persistent gun deployed
+signal gun_fired(card_def, damage: int)  # Gun fired (for artifact triggers)
+signal gun_out_of_ammo(card_def)  # Gun ran out of ammo
+signal engine_triggered(card_def)  # Engine effect triggered
+signal self_damage_dealt(amount: int)  # Player took self-damage (volatile cards)
+signal explosive_hit(damage: int, ring: int, splash_damage: int)  # Explosive damage dealt
+signal beam_chain(damage: int, chain_index: int)  # Beam chain hit
+signal piercing_overflow(damage: int, overflow: int)  # Piercing overkill
+signal shock_hit(damage: int, target)  # Shock damage dealt
+signal corrosive_hit(damage: int, shred: int, target)  # Corrosive damage dealt
+signal overkill(damage: int, overkill_amount: int, target)  # Overkill damage
 
 enum CombatPhase { INACTIVE, WAVE_START, DRAW_PHASE, PLAYER_PHASE, END_PLAYER_PHASE, ENEMY_PHASE, WAVE_CHECK }
 
@@ -42,6 +54,13 @@ var max_energy: int = 3
 var turn_limit: int = 5
 var kills_this_turn: int = 0  # Track kills for Leech Tooth artifact
 var gun_played_this_turn: bool = false  # Track for Gun Harness cost reduction
+# V2 state tracking
+var skills_played_this_turn: int = 0  # Track for Coolant System
+var overclocks_played_this_turn: int = 0  # Track for Overclock Capacitor
+var priority_ring: int = -1  # Target Sync priority ring
+var priority_ring_bonus: int = 0  # Target Sync damage bonus
+var rampage_stacks: int = 0  # Rampage Core kill stacks
+var first_gun_played_this_turn: bool = false  # Track for Quick Draw / Chain Reactor
 
 # Combat objects
 var battlefield = null  # BattlefieldState
@@ -94,6 +113,13 @@ func start_player_turn() -> void:
 	current_turn += 1
 	kills_this_turn = 0
 	gun_played_this_turn = false
+	# V2 state reset
+	skills_played_this_turn = 0
+	overclocks_played_this_turn = 0
+	priority_ring = -1
+	priority_ring_bonus = 0
+	rampage_stacks = 0
+	first_gun_played_this_turn = false
 	turn_started.emit(current_turn)
 	AudioManager.play_turn_start()
 	
@@ -894,3 +920,127 @@ func cleanup_combat() -> void:
 	current_wave_def = null
 	active_weapons.clear()
 	current_phase = CombatPhase.INACTIVE
+
+
+# =============================================================================
+# V2 HELPER METHODS
+# =============================================================================
+
+func get_registered_weapons() -> Array:
+	"""Get all currently deployed persistent weapons."""
+	return active_weapons
+
+
+func set_priority_ring(ring: int, bonus_damage: int) -> void:
+	"""Set priority ring for deployed guns (Target Sync effect)."""
+	priority_ring = ring
+	priority_ring_bonus = bonus_damage
+	print("[CombatManager] Priority ring set: ", ring, " with +", bonus_damage, " damage")
+
+
+func get_priority_ring_bonus(ring: int) -> int:
+	"""Get bonus damage for targeting a specific ring."""
+	if ring == priority_ring:
+		return priority_ring_bonus
+	return 0
+
+
+func trigger_v2_artifact(trigger_type: String, context: Dictionary = {}) -> Dictionary:
+	"""Trigger V2 artifacts and return combined effects."""
+	return ArtifactManager.trigger_artifacts(trigger_type, context)
+
+
+func track_gun_play(card_def) -> void:
+	"""Track gun play for V2 artifact triggers."""
+	if not first_gun_played_this_turn:
+		first_gun_played_this_turn = true
+		# Trigger Chain Reactor if equipped
+		ArtifactManager.trigger_artifacts("on_card_play", {
+			"card_tags": card_def.tags,
+			"first_gun": true
+		})
+	gun_played_this_turn = true
+	gun_fired.emit(card_def, card_def.base_damage)
+
+
+func track_skill_play() -> void:
+	"""Track skill play for Coolant System artifact."""
+	skills_played_this_turn += 1
+	# Coolant System: After 3 skills, draw 1
+	if skills_played_this_turn == 3:
+		var effects: Dictionary = ArtifactManager.trigger_artifacts("on_card_play", {
+			"card_tags": ["skill"],
+			"skills_count": skills_played_this_turn
+		})
+		if effects.draw_cards > 0:
+			for i: int in range(effects.draw_cards):
+				deck_manager.draw_card()
+
+
+func track_overclock_play() -> void:
+	"""Track Overclock play for Overclock Capacitor artifact."""
+	overclocks_played_this_turn += 1
+
+
+func record_overkill(damage: int, overkill_amount: int, target) -> void:
+	"""Record overkill for artifact triggers."""
+	overkill.emit(damage, overkill_amount, target)
+	ArtifactManager.trigger_artifacts("on_overkill", {
+		"damage": damage,
+		"overkill": overkill_amount,
+		"target_ring": target.ring if target else -1
+	})
+
+
+func deal_self_damage(amount: int, source: String = "card") -> void:
+	"""Deal self-damage and trigger V2 artifacts."""
+	RunManager.take_damage(amount)
+	self_damage_dealt.emit(amount)
+	
+	# Volatile Reactor: Deal self-damage to enemy
+	var effects: Dictionary = ArtifactManager.trigger_artifacts("on_self_damage", {
+		"damage": amount,
+		"source": source
+	})
+	
+	if effects.has("reflect_damage") and effects.reflect_damage > 0:
+		# Deal damage to random enemy in Melee/Close
+		deal_damage_to_random_enemy(0b0011, effects.reflect_damage, false)
+
+
+func get_deployed_gun_count() -> int:
+	"""Get count of deployed guns for Firing Solution."""
+	var count: int = 0
+	for weapon: Dictionary in active_weapons:
+		if weapon.card_def.has_tag("gun"):
+			count += 1
+	return count
+
+
+func trigger_on_kill_effects() -> void:
+	"""Trigger all on-kill effects."""
+	kills_this_turn += 1
+	
+	# Rampage Core: Stack damage bonus
+	if rampage_stacks < 3:
+		rampage_stacks += 1
+	
+	var effects: Dictionary = ArtifactManager.trigger_artifacts("on_kill", {
+		"kills_this_turn": kills_this_turn,
+		"rampage_stacks": rampage_stacks
+	})
+	
+	# Apply scrap bonus
+	if effects.bonus_scrap > 0:
+		RunManager.add_scrap(effects.bonus_scrap)
+	
+	# Apply draw chance
+	if effects.has("draw_chance") and randf() * 100.0 < effects.draw_chance:
+		deck_manager.draw_card()
+
+
+func get_rampage_bonus() -> int:
+	"""Get current Rampage Core damage bonus."""
+	if ArtifactManager.has_artifact("rampage_core"):
+		return rampage_stacks * 2  # +2 damage per stack
+	return 0
