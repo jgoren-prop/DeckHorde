@@ -48,8 +48,8 @@ class_name PlayerStats
 # DEFENSE & SUSTAIN STATS
 # =============================================================================
 
-## Maximum HP
-@export var max_hp: int = 70
+## Maximum HP (Brotato Economy: start with 50, was 70)
+@export var max_hp: int = 50
 
 ## Armor gained multiplier (100.0 = 100%)
 @export var armor_gain_percent: float = 100.0
@@ -61,17 +61,34 @@ class_name PlayerStats
 @export var barrier_strength_percent: float = 100.0
 
 # =============================================================================
+# XP / LEVELING STATS (Brotato-style)
+# =============================================================================
+
+## Current XP accumulated this run
+@export var current_xp: int = 0
+
+## Current player level (starts at 0)
+@export var current_level: int = 0
+
+## XP gain multiplier (100.0 = 100%)
+@export var xp_gain_percent: float = 100.0
+
+# =============================================================================
 # ECONOMY / TEMPO STATS
 # =============================================================================
 
-## Energy gained per turn
-@export var energy_per_turn: int = 3
+## Energy gained per turn (Brotato Economy: start with 1, was 3)
+@export var energy_per_turn: int = 1
 
-## Cards drawn per turn
-@export var draw_per_turn: int = 5
+## Cards drawn per turn (Brotato Economy: start with 1, was 5)
+@export var draw_per_turn: int = 1
 
 ## Maximum hand size
 @export var hand_size_max: int = 7
+
+## DEPRECATED: V2 removes weapon slot limit
+## Kept for backwards compatibility but no longer used
+@export var weapon_slots_max: int = 999  # Effectively unlimited
 
 ## Scrap gain multiplier (100.0 = 100%)
 @export var scrap_gain_percent: float = 100.0
@@ -166,6 +183,31 @@ func get_shop_price_multiplier() -> float:
 	return shop_price_percent / 100.0
 
 
+func get_xp_gain_multiplier() -> float:
+	return xp_gain_percent / 100.0
+
+
+func get_xp_required_for_level(level: int) -> int:
+	"""Brotato XP formula: (level + 3)²"""
+	return (level + 3) * (level + 3)
+
+
+func get_xp_for_next_level() -> int:
+	"""Get XP required to reach the next level."""
+	return get_xp_required_for_level(current_level + 1)
+
+
+func get_xp_progress() -> float:
+	"""Get progress to next level as 0.0-1.0"""
+	var required: int = get_xp_for_next_level()
+	var previous: int = 0 if current_level == 0 else get_xp_required_for_level(current_level)
+	var progress_xp: int = current_xp - previous
+	var level_xp: int = required - previous
+	if level_xp <= 0:
+		return 1.0
+	return clampf(float(progress_xp) / float(level_xp), 0.0, 1.0)
+
+
 func get_ring_damage_multiplier(ring: int) -> float:
 	"""Get damage multiplier for a specific ring (0=Melee, 1=Close, 2=Mid, 3=Far)."""
 	match ring:
@@ -238,6 +280,14 @@ func apply_modifier(stat_name: String, value: float) -> void:
 			deployed_gun_damage_percent += value
 		"engine_damage_percent":
 			engine_damage_percent += value
+		"weapon_slots_max":
+			weapon_slots_max += int(value)
+		"xp_gain_percent":
+			xp_gain_percent += value
+		"current_xp":
+			current_xp += int(value)
+		"current_level":
+			current_level += int(value)
 		_:
 			push_warning("[PlayerStats] Unknown stat: " + stat_name)
 
@@ -249,18 +299,24 @@ func apply_modifiers(modifiers: Dictionary) -> void:
 
 
 func reset_to_defaults() -> void:
-	"""Reset all stats to default V2 baseline (Veteran Warden stats)."""
+	"""Reset all stats to Brotato Economy defaults."""
+	# XP stats
+	current_xp = 0
+	current_level = 0
+	xp_gain_percent = 100.0
+	# Offense stats
 	gun_damage_percent = 100.0
 	hex_damage_percent = 100.0
 	barrier_damage_percent = 100.0
 	generic_damage_percent = 100.0
-	max_hp = 70
+	max_hp = 50  # Brotato Economy: was 70
 	armor_gain_percent = 100.0
 	heal_power_percent = 100.0
 	barrier_strength_percent = 100.0
-	energy_per_turn = 3
-	draw_per_turn = 5
+	energy_per_turn = 1  # Brotato Economy: was 3
+	draw_per_turn = 1  # Brotato Economy: was 5
 	hand_size_max = 7
+	weapon_slots_max = 999  # V2: No weapon slot limit
 	scrap_gain_percent = 100.0
 	shop_price_percent = 100.0
 	reroll_base_cost = 5
@@ -281,6 +337,11 @@ func reset_to_defaults() -> void:
 func clone():
 	"""Create a copy of this PlayerStats."""
 	var copy = get_script().new()
+	# XP stats
+	copy.current_xp = current_xp
+	copy.current_level = current_level
+	copy.xp_gain_percent = xp_gain_percent
+	# Offense stats
 	copy.gun_damage_percent = gun_damage_percent
 	copy.hex_damage_percent = hex_damage_percent
 	copy.barrier_damage_percent = barrier_damage_percent
@@ -292,6 +353,7 @@ func clone():
 	copy.energy_per_turn = energy_per_turn
 	copy.draw_per_turn = draw_per_turn
 	copy.hand_size_max = hand_size_max
+	copy.weapon_slots_max = weapon_slots_max
 	copy.scrap_gain_percent = scrap_gain_percent
 	copy.shop_price_percent = shop_price_percent
 	copy.reroll_base_cost = reroll_base_cost
@@ -317,6 +379,9 @@ func clone():
 func get_stat_summary() -> Dictionary:
 	"""Return all stats as a dictionary for debug display."""
 	return {
+		"current_xp": current_xp,
+		"current_level": current_level,
+		"xp_gain_percent": xp_gain_percent,
 		"gun_damage_percent": gun_damage_percent,
 		"hex_damage_percent": hex_damage_percent,
 		"barrier_damage_percent": barrier_damage_percent,
@@ -328,6 +393,7 @@ func get_stat_summary() -> Dictionary:
 		"energy_per_turn": energy_per_turn,
 		"draw_per_turn": draw_per_turn,
 		"hand_size_max": hand_size_max,
+		"weapon_slots_max": weapon_slots_max,
 		"scrap_gain_percent": scrap_gain_percent,
 		"shop_price_percent": shop_price_percent,
 		"reroll_base_cost": reroll_base_cost,

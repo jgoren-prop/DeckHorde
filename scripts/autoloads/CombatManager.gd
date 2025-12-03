@@ -43,6 +43,7 @@ signal piercing_overflow(damage: int, overflow: int)  # Piercing overkill
 signal shock_hit(damage: int, target)  # Shock damage dealt
 signal corrosive_hit(damage: int, shred: int, target)  # Corrosive damage dealt
 signal overkill(damage: int, overkill_amount: int, target)  # Overkill damage
+signal weapon_expired(card_def, destination: String)  # Weapon duration ended
 
 enum CombatPhase { INACTIVE, WAVE_START, DRAW_PHASE, PLAYER_PHASE, END_PLAYER_PHASE, ENEMY_PHASE, WAVE_CHECK }
 
@@ -203,8 +204,8 @@ func _trigger_persistent_weapons() -> void:
 	# Signal that weapons phase is ending (BattlefieldArena can release holds)
 	weapons_phase_ended.emit()
 	
-	# Remove expired weapons
-	active_weapons = active_weapons.filter(func(w: Dictionary) -> bool: return w.triggers_remaining != 0)
+	# V2: Decrement turn-based durations and remove expired weapons
+	_process_weapon_durations()
 
 
 func _get_weapon_target(card_def) -> Variant:
@@ -237,7 +238,35 @@ func can_play_card(card_def, _tier: int) -> bool:
 		return false
 	if not card_def:
 		return false
-	return current_energy >= card_def.base_cost
+	if current_energy < card_def.base_cost:
+		return false
+	
+	# V2: No weapon slot limit - limited by hand/energy instead
+	# Persistent weapons stay deployed but can be unlimited
+	
+	return true
+
+
+func _is_persistent_weapon(card_def) -> bool:
+	"""Check if a card is a persistent weapon that takes a slot."""
+	if not card_def:
+		return false
+	return card_def.effect_type == "weapon_persistent" or "persistent" in card_def.tags
+
+
+func is_weapon_slots_full() -> bool:
+	"""V2: Weapon slots removed - always returns false."""
+	return false
+
+
+func get_weapon_slots_remaining() -> int:
+	"""V2: Weapon slots removed - returns -1 to indicate no limit."""
+	return -1
+
+
+func get_deployed_weapon_count() -> int:
+	"""Get number of currently deployed weapons."""
+	return active_weapons.size()
 
 
 func play_card(hand_index: int, target_ring: int = -1) -> bool:
@@ -262,10 +291,14 @@ func play_card(hand_index: int, target_ring: int = -1) -> bool:
 	current_energy -= cost
 	energy_changed.emit(current_energy, max_energy)
 	
-	# Remove from hand and add to discard
-	deck_manager.play_card(hand_index)
+	# V2: Persistent weapons are DEPLOYED (removed from deck while in play)
+	# Instant cards are PLAYED (go to discard, cycle back)
+	if _is_persistent_weapon(card_def):
+		deck_manager.deploy_card(hand_index)
+	else:
+		deck_manager.play_card(hand_index)
 	
-	# Execute card effect (simplified for now)
+	# Execute card effect
 	_execute_card_effect(card_def, tier, target_ring)
 	
 	card_played.emit(card_def, tier)
@@ -720,6 +753,11 @@ func _handle_enemy_death(enemy, hex_was_triggered: bool = false) -> void:
 	var scrap_reward: int = 2 if not enemy_def else enemy_def.scrap_value
 	scrap_reward += kill_effects.bonus_scrap
 	RunManager.add_scrap(scrap_reward)
+	
+	# Give XP based on enemy definition (Brotato-style leveling)
+	var xp_reward: int = 1 if not enemy_def else enemy_def.xp_value
+	RunManager.add_xp(xp_reward)
+	
 	RunManager.record_enemy_kill()
 	
 	# Check if all enemies are dead - auto-end wave immediately
@@ -864,11 +902,20 @@ func deal_damage_to_random_enemy(ring_mask: int, damage: int, show_targeting: bo
 
 
 func register_weapon(card_def, tier: int, duration: int = -1) -> void:
-	active_weapons.append({
+	"""Register a persistent weapon. V2: Now tracks duration based on card's duration_type."""
+	var weapon_data: Dictionary = {
 		"card_def": card_def,
 		"tier": tier,
-		"triggers_remaining": duration
-	})
+		"triggers_remaining": duration,  # Legacy: -1 = infinite
+		# V2 Duration tracking
+		"turns_remaining": card_def.duration_turns if card_def.duration_type == "turns" or card_def.duration_type == "burn_out" else -1,
+		"kills_remaining": card_def.duration_kills if card_def.duration_type == "kills" else -1,
+		"kill_count": 0  # Track kills for kill-based duration
+	}
+	active_weapons.append(weapon_data)
+	print("[CombatManager] Registered weapon: %s (duration_type: %s, turns: %d, kills: %d)" % [
+		card_def.card_name, card_def.duration_type, weapon_data.turns_remaining, weapon_data.kills_remaining
+	])
 
 
 func calculate_incoming_damage() -> Dictionary:
@@ -915,6 +962,11 @@ func get_enemies_moving_to_melee() -> int:
 
 
 func cleanup_combat() -> void:
+	# V2: Return deployed and banished cards to deck before cleanup
+	if deck_manager:
+		deck_manager.return_deployed_to_deck()
+		deck_manager.return_banished_to_deck()
+	
 	battlefield = null
 	deck_manager = null
 	current_wave_def = null
@@ -1044,3 +1096,76 @@ func get_rampage_bonus() -> int:
 	if ArtifactManager.has_artifact("rampage_core"):
 		return rampage_stacks * 2  # +2 damage per stack
 	return 0
+
+
+# =============================================================================
+# V2 WEAPON DURATION MANAGEMENT
+# =============================================================================
+
+func _process_weapon_durations() -> void:
+	"""Process turn-based weapon durations and remove expired weapons."""
+	var weapons_to_remove: Array[int] = []
+	
+	for i: int in range(active_weapons.size()):
+		var weapon: Dictionary = active_weapons[i]
+		var card_def = weapon.card_def
+		
+		# Legacy duration system (triggers_remaining)
+		if weapon.triggers_remaining > 0:
+			weapon.triggers_remaining -= 1
+			if weapon.triggers_remaining == 0:
+				weapons_to_remove.append(i)
+				continue
+		
+		# V2 turn-based duration
+		if weapon.turns_remaining > 0:
+			weapon.turns_remaining -= 1
+			print("[CombatManager] %s turns remaining: %d" % [card_def.card_name, weapon.turns_remaining])
+			if weapon.turns_remaining == 0:
+				weapons_to_remove.append(i)
+				continue
+	
+	# Remove expired weapons in reverse order (to maintain indices)
+	for i: int in range(weapons_to_remove.size() - 1, -1, -1):
+		var index: int = weapons_to_remove[i]
+		_expire_weapon(index)
+
+
+func _expire_weapon(weapon_index: int) -> void:
+	"""Handle weapon expiry - remove from active and notify."""
+	if weapon_index < 0 or weapon_index >= active_weapons.size():
+		return
+	
+	var weapon: Dictionary = active_weapons[weapon_index]
+	var card_def = weapon.card_def
+	var destination: String = card_def.on_expire if card_def.on_expire else "discard"
+	
+	print("[CombatManager] Weapon expired: %s -> %s" % [card_def.card_name, destination])
+	
+	# Remove from active weapons
+	active_weapons.remove_at(weapon_index)
+	
+	# Handle deck manager side (if using deployed tracking)
+	if deck_manager:
+		deck_manager.undeploy_card_by_id(card_def.card_id, destination)
+	
+	# Emit signal for visual feedback
+	weapon_expired.emit(card_def, destination)
+
+
+func record_weapon_kill(weapon_index: int) -> void:
+	"""Record a kill for a specific weapon. Called when weapon damage kills an enemy."""
+	if weapon_index < 0 or weapon_index >= active_weapons.size():
+		return
+	
+	var weapon: Dictionary = active_weapons[weapon_index]
+	weapon.kill_count = weapon.get("kill_count", 0) + 1
+	
+	# Check kill-based duration
+	if weapon.kills_remaining > 0:
+		weapon.kills_remaining -= 1
+		var card_def = weapon.card_def
+		print("[CombatManager] %s kills remaining: %d" % [card_def.card_name, weapon.kills_remaining])
+		if weapon.kills_remaining == 0:
+			# Expire this weapon
+			call_deferred("_expire_weapon", weapon_index)

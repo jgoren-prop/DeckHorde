@@ -11,13 +11,36 @@
 - **Shop-centric runs** where most of the "game" is in **fast build commits and synergies**
 - **Ring-based tactics and horde pressure** with power coming from your *build* rather than micro-optimizing each turn
 
-### Core Loop
+### Core Loop (Brotato Economy)
 
-1. **Select Warden** - Choose from 4 characters with unique passives
-2. **Combat** - Survive waves of enemies using cards
-3. **Reward** - Pick new cards, scrap, or healing
-4. **Shop** - Buy cards, artifacts, services (primary build driver)
-5. **Repeat** - Progress through 12 waves to victory
+1. **Select Warden** - Choose from 4 characters with stat modifiers
+2. **Select Starter Weapon** - Pick 1 of 7 starter weapons (your only starting card!)
+3. **Combat** - Survive waves of enemies using your deck
+4. **Reward** - Pick new cards, scrap, or healing (with interest on scrap)
+5. **Shop** - Buy cards, artifacts, stat upgrades, services (primary build driver)
+6. **Repeat** - Progress through 20 waves to victory
+
+### Brotato Economy Overview
+
+Inspired by Brotato, this economy system emphasizes shop-driven progression:
+
+| Feature | Value | Notes |
+|---------|-------|-------|
+| Starting HP | 50 | +20 from typical warden bonus |
+| Starting Energy | 1 | Buy more in shop |
+| Starting Draw | 1 | Buy more in shop |
+| Starting Cards | 3 | Picked weapon + 2 bundle cards |
+| Weapon Slots | ∞ | V2: No limit (removed) |
+| Total Waves | 20 | Extended from 12 |
+| Interest Rate | 5% | Up to 25 scrap/wave |
+
+**Interest System**: After each wave, earn 5% of your scrap (max 25). Encourages saving!
+
+**V2 Changes**:
+- Weapons stay deployed (out of deck) while in play
+- Weapon slot limit removed - limited by hand/energy instead
+- Weapons have varied durations (infinite, turns, kills, burn_out)
+- Each warden gets a starter bundle (weapon pick + 2 fixed cards)
 
 ---
 
@@ -356,16 +379,123 @@ Per wave, when you open the shop:
 
 ---
 
+## Starter Weapons (Brotato Economy)
+
+Player picks 1 starter weapon after selecting their warden. All cost 1 energy and are persistent. **Every starter MUST be able to kill enemies solo.**
+
+### V2 Weapon Duration System
+
+Weapons now have varied durations instead of all being permanent:
+
+| Duration Type | Behavior | Example |
+|---------------|----------|---------|
+| `infinite` | Stays deployed until wave ends | Rusty Pistol, Mini Turret |
+| `turns` | Lasts X turns then discards/banishes | Shock Prod (5 turns) |
+| `kills` | Destroys after X kills | Volatile Handgun (4 kills) |
+| `burn_out` | Strong but short, then banished | Spark Coil (3 turns) |
+
+On expiry, weapons can:
+- `discard` - Return to deck, can draw again
+- `banish` - Gone for rest of wave
+- `destroy` - Gone from run entirely
+
+### Starter Weapon Table
+
+| Weapon | Tags | Effect | Duration | On Expire |
+|--------|------|--------|----------|-----------|
+| Rusty Pistol | gun, persistent | Deal 3 damage to random enemy | Infinite | - |
+| Worn Hex Staff | hex, persistent, hex_ritual | Deal 1 damage + apply 2 Hex | Infinite | - |
+| Shock Prod | shock, persistent | Deal 3 shock to closest enemy | 5 turns | Discard |
+| Leaky Siphon | gun, persistent, lifedrain | Deal 2 damage, heal 1 HP | Infinite | - |
+| Volatile Handgun | gun, persistent, volatile | Deal 4 damage, lose 1 HP | 4 kills | Banish |
+| Mini Turret | gun, engine, persistent, aoe | Deal 2 damage to 2 enemies | Infinite | - |
+| Spark Coil | shock, persistent, aoe | Deal 3 damage to all Melee | 3 turns | Banish |
+
+### Warden Starter Bundles
+
+Each warden gets **bonus cards** alongside the weapon they pick:
+
+| Warden | Weapon Pick | Bundle Cards |
+|--------|-------------|--------------|
+| Veteran | Pick 1 of 7 | Guard Stance + Ammo Cache |
+| Ash | Pick 1 of 7 | Minor Hex + Guard Stance |
+| Gloom | Pick 1 of 7 | Minor Hex + Guard Stance |
+| Glass | Pick 1 of 7 | Guard Stance + Minor Barrier |
+
+**Veteran starts with 3 cards**: 1 picked weapon + Guard Stance (defense) + Ammo Cache (draw/utility)
+
+---
+
+## Stat Upgrades (Brotato Economy)
+
+Buyable stat upgrades appear in the shop (1-2 per refresh). Prices scale exponentially with purchases.
+
+**V2 Note**: Weapon Slot upgrade removed - no limit on deployed weapons now.
+
+| Upgrade | Base Price | Effect | Cap |
+|---------|------------|--------|-----|
+| +1 Max Energy | 60 | energy_per_turn +1 | 5 |
+| +1 Draw | 50 | draw_per_turn +1 | 7 |
+| +10 Max HP | 25 | max_hp +10 | None |
+| +5% Gun Damage | 20 | gun_damage_percent +5 | None |
+| +5% Hex Damage | 20 | hex_damage_percent +5 | None |
+| +10% Armor Gain | 15 | armor_gain_percent +10 | None |
+| +10% Scrap Gain | 30 | scrap_gain_percent +10 | None |
+| -5% Shop Prices | 40 | shop_price_percent -5 | -30% |
+| +10% XP Gain | 25 | xp_gain_percent +10 | None |
+
+---
+
+## XP / Leveling System (Brotato-style)
+
+Killing enemies grants XP. Accumulate enough XP to level up and gain permanent bonuses.
+
+### XP Formula (Brotato-style)
+- **XP Required for Level N** = `(N + 3)²`
+- Level 1: 16 XP
+- Level 2: 25 XP  
+- Level 3: 36 XP
+- Level 4: 49 XP
+- Level 5: 64 XP
+- etc.
+
+### Level Up Rewards
+- **+1 Max HP** (permanent)
+- HP is also healed by that amount
+- Displayed at end of wave in post-wave reward screen
+
+### Enemy XP Values
+| Enemy | XP Value | Notes |
+|-------|----------|-------|
+| Weakling | 1 | Fodder, minimal XP |
+| Cultist | 1 | Fodder |
+| Husk | 2 | Basic grunt |
+| Spitter | 2 | Basic ranged |
+| Spinecrawler | 3 | Fast threat |
+| Bomber | 3 | Risky target |
+| Stalker | 5 | Mid-tier |
+| Torchbearer | 6 | Elite buffer |
+| Reaver | 6 | Elite shredder |
+| Titan | 8 | Elite tank |
+| Channeler | 8 | Elite spawner |
+| Ember Saint | 50 | Boss - massive XP |
+
+### XP Modifiers
+- `xp_gain_percent` stat (default 100%) - multiplies all XP gained
+- Can be increased via shop upgrades or artifacts
+
+---
+
 ## Wardens (4 Playable Characters)
 
-### Veteran Warden (V2 Baseline)
+Wardens now provide stat MODIFIERS (bonuses) rather than setting absolute stats. Base stats come from PlayerStats defaults (50 HP, 1 energy, 1 draw).
+
+### Veteran Warden (Neutral Baseline)
 
 - **Fantasy**: Battle-hardened generalist
-- **Max HP**: 70
-- **Energy/Turn**: 3
-- **Draw/Turn**: 5
-- **Passive**: None (neutral baseline)
-- **Starting Deck (current implementation)**: Rusty Pistol ×2, Minor Hex, Minor Barrier, Guard Stance ×2, Precision Strike ×2, Shove ×2
+- **Stat Bonuses**: +20 HP, +2 energy
+- **Passive**: None (balanced stats, no special bonuses)
+- **Starting Cards**: None - player picks starter weapon
 
 #### Starter Deck (board-synergy proposal, not implemented yet)
 - Goal: put the lane to work immediately, then amplify it with tempo and tag infusion.
@@ -385,16 +515,17 @@ Per wave, when you open the shop:
 ### Ash Warden
 
 - **Focus**: Guns/Fire
-- **Passive**: Gun cards deal +15% damage to Close/Melee rings
+- **Stat Bonuses**: +10 HP, +2 energy, +15% gun damage, +10% damage vs Close/Melee
 
 ### Gloom Warden
 
 - **Focus**: Hexes
-- **Passive**: Heal 1 HP when hexed enemies die
+- **Stat Bonuses**: +15 HP, +2 energy, +20% hex damage, -10% heal power
 
 ### Glass Warden
 
 - **Focus**: Defense/Risk
+- **Stat Bonuses**: +20 HP, +1 energy, +25% armor gain
 - **Passive**: Survive fatal hit once per wave at 1 HP
 
 ---
@@ -420,6 +551,7 @@ Per wave, when you open the shop:
 
 | Enemy | HP | Damage | Speed | Armor | Archetype | Behavior |
 |-------|-----|--------|-------|-------|-----------|----------|
+| Weakling | 3 | 2 | 1 | 0 | Rusher | Trivially easy Wave 1 enemy |
 | Husk | 8 | 4 | 1 | 0 | Rusher | Basic melee, walks to player |
 | Spinecrawler | 6 | 3 | 2 | 0 | Fast Rusher | Moves 2 rings/turn |
 | Cultist | 4 | 2 | 1 | 0 | Rusher (Swarm) | Spawns in groups |
@@ -432,12 +564,12 @@ Per wave, when you open the shop:
 | Armor Reaver | 10 | 3 | 1 | 0 | Shredder | Deals 3 damage + shreds 3 armor |
 | Ember Saint | 60 | 10 | 0 | 4 | Boss | Ranged AoE, spawns Bombers/Husks |
 
-### Wave Bands
+### Wave Bands (20 Waves - Brotato Economy)
 
-**Waves 1-3: Onboarding**
-- Mostly Husks and Cultist Swarms
-- Occasional Spitter or single Bomber by wave 3
-- Allow shops to push into a family
+**Waves 1-3: Onboarding (Trivially Easy)**
+- Wave 1: Just 3 Weaklings (3 HP, 2 damage each)
+- Waves 2-3: Weaklings + Cultists, transitioning to Husks
+- Survive and collect scrap for your first shop visit
 
 **Waves 4-6: Build Check**
 - Introduce Spinecrawlers (Fast Rushers)
@@ -445,15 +577,24 @@ Per wave, when you open the shop:
 - Tests that builds are coming online
 
 **Waves 7-9: Stress Mix**
-- Shell Titans, Bombers, Buffers, Spawners, Ambushers, Armor Reavers
 - Theme waves:
   - Bomber Storm (great for Barrier/Volatile)
   - Ranged Wall (counters pure Barrier)
   - Tank Corridor (tests Hex/Barrier scaling)
 
-**Waves 10-12: Boss & Pre-Boss**
-- Pre-boss: Ambushers and Armor Reavers
-- Final wave: Ember Saint + supporting spawns
+**Waves 10-12: Late Game**
+- Heavy elite pressure
+- Multiple elite types per wave
+- Build should be strong now
+
+**Waves 13-16: Endgame**
+- Shredder Rush, Double Buffer, Tank Line
+- All-out assault with mixed elite compositions
+- Build is complete, survive the onslaught
+
+**Waves 17-20: Boss Rush**
+- Gauntlet waves with massive pressure
+- Wave 20: Ember Saint boss + enhanced support
 
 ---
 
@@ -601,6 +742,7 @@ A Hearthstone-style "board" for deployed persistent weapons, positioned between 
 | Main Menu | `scenes/MainMenu.tscn` |
 | Settings | `scenes/Settings.tscn` |
 | Warden Select | `scenes/WardenSelect.tscn` |
+| Starter Weapon Select | `scenes/StarterWeaponSelect.tscn` |
 | Combat | `scenes/Combat.tscn` |
 | Shop | `scenes/Shop.tscn` |
 | Post-Wave Reward | `scenes/PostWaveReward.tscn` |

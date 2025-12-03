@@ -15,7 +15,9 @@ const CARD_SPACING: int = 10  # Spacing between scaled cards (positive = gap)
 
 # Calculated at runtime based on lane height
 var card_scale: float = 0.55  # Default, recalculated in _ready
-const MAX_LANE_CARDS: int = 7  # Maximum weapons that can be deployed
+# V2: No weapon slot limit - can deploy unlimited weapons
+# MAX_VISUAL_SLOTS is only for UI layout purposes (cards shrink if more than this)
+const MAX_VISUAL_SLOTS: int = 12  # Increased from 8 since no limit now
 const DEPLOY_ANIM_DURATION: float = 0.35  # Card fly animation duration
 const FIRE_PULSE_DURATION: float = 0.25  # Weapon fire pulse duration
 
@@ -144,6 +146,7 @@ func _connect_signals() -> void:
 		CombatManager.weapon_triggered.connect(_on_weapon_triggered)
 		CombatManager.weapons_phase_started.connect(_on_weapons_phase_started)
 		CombatManager.weapons_phase_ended.connect(_on_weapons_phase_ended)
+		CombatManager.weapon_expired.connect(_on_weapon_expired)
 
 
 func _update_visibility() -> void:
@@ -151,25 +154,29 @@ func _update_visibility() -> void:
 	# Lane is always visible to show the golden border/highlight
 	visible = true
 	
-	# Update label text
+	# V2: No slot limit, just show count
 	if lane_label:
 		var count: int = deployed_weapons.size()
 		if count == 0:
-			lane_label.text = "⚡ WEAPON SLOT"
+			lane_label.text = "⚡ DEPLOY WEAPONS HERE"
 			lane_label.add_theme_color_override("font_color", Color(0.7, 0.6, 0.3, 0.7))  # Dimmer when empty
 		else:
-			lane_label.text = "⚡ DEPLOYED WEAPONS (" + str(count) + "/" + str(MAX_LANE_CARDS) + ")"
+			lane_label.text = "⚡ DEPLOYED WEAPONS (%d)" % count
 			lane_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.35, 0.9))  # Brighter when has weapons
+
+
+func get_max_weapon_slots() -> int:
+	"""V2: No weapon slot limit. Returns a high number for UI layout purposes only."""
+	return MAX_VISUAL_SLOTS
 
 
 func deploy_weapon(card_def, tier: int, triggers_remaining: int = -1, drop_position: Vector2 = Vector2.ZERO) -> void:
 	"""Deploy a persistent weapon to the lane with animation.
 	drop_position: The EXACT global position where the card was released (dropped).
 	Animation: Card moves from drop_position to its calculated centered position.
+	V2: No weapon slot limit - can deploy unlimited weapons.
 	"""
-	if deployed_weapons.size() >= MAX_LANE_CARDS:
-		print("[CombatLane] Lane is full! Cannot deploy more weapons.")
-		return
+	# V2: No slot limit check - UI will shrink cards if needed
 	
 	# Create the card UI
 	var card_ui: Control = _create_deployed_card(card_def, tier)
@@ -691,6 +698,12 @@ func _on_weapons_phase_ended() -> void:
 	pass
 
 
+func _on_weapon_expired(card_def, destination: String) -> void:
+	"""Called when a weapon's duration expires."""
+	print("[CombatLane] Weapon expired: %s -> %s" % [card_def.card_name, destination])
+	remove_weapon(card_def)
+
+
 func update_weapon_triggers(card_name: String, remaining: int) -> void:
 	"""Update the remaining triggers display for a weapon."""
 	var weapon: Dictionary = get_weapon_by_name(card_name)
@@ -709,8 +722,8 @@ func get_deployed_count() -> int:
 
 
 func is_full() -> bool:
-	"""Check if the lane is at capacity."""
-	return deployed_weapons.size() >= MAX_LANE_CARDS
+	"""V2: No weapon slot limit, always returns false."""
+	return false
 
 
 func get_weapon_center_position(card_name: String) -> Vector2:

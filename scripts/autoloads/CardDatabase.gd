@@ -19,10 +19,145 @@ func _ready() -> void:
 
 func _create_v2_cards() -> void:
 	"""Create the complete V2 card pool - brainstorm.md cards only."""
+	_create_brotato_starter_weapons()  # New Brotato-style starter weapons
 	_create_v2_starter_cards()
 	_create_v2_brainstorm_persistent_cards()
 	_create_v2_brainstorm_instant_cards()
 	cards_loaded.emit()
+
+
+# =============================================================================
+# BROTATO STARTER WEAPONS (Pick 1 at run start)
+# =============================================================================
+
+func _create_brotato_starter_weapons() -> void:
+	"""7 starter weapons for Brotato-style economy. All cost 1, all persistent, all weak."""
+	
+	# Note: Rusty Pistol already exists in _create_v2_starter_cards()
+	
+	# Worn Hex Staff - hex, persistent - deals damage AND applies hex (INFINITE)
+	var worn_hex_staff := CardDef.new()
+	worn_hex_staff.card_id = "worn_hex_staff"
+	worn_hex_staff.card_name = "Worn Hex Staff"
+	worn_hex_staff.description = "Persistent: Deal {damage} damage and apply {hex_damage} Hex to a random enemy at end of turn."
+	worn_hex_staff.persistent_description = "Deal {damage} + apply {hex_damage} Hex."
+	worn_hex_staff.card_type = "hex"
+	worn_hex_staff.effect_type = "weapon_persistent"
+	worn_hex_staff.tags = ["hex", "persistent", "hex_ritual"]
+	worn_hex_staff.base_cost = 1
+	worn_hex_staff.base_damage = 1  # Low damage but triggers hex
+	worn_hex_staff.hex_damage = 2   # Hex triggers on the hit
+	worn_hex_staff.target_type = "random_enemy"
+	worn_hex_staff.target_rings = [0, 1, 2, 3]
+	worn_hex_staff.weapon_trigger = "turn_end"
+	worn_hex_staff.rarity = 0
+	worn_hex_staff.is_starter_weapon = true
+	worn_hex_staff.duration_type = "infinite"  # V2: Permanent - core hex build weapon
+	_register_card(worn_hex_staff)
+	
+	# Shock Prod - shock, persistent - targets closest enemy (TIMED: 5 turns)
+	var shock_prod := CardDef.new()
+	shock_prod.card_id = "shock_prod"
+	shock_prod.card_name = "Shock Prod"
+	shock_prod.description = "Persistent (5 turns): Deal {damage} shock damage to the closest enemy at end of turn."
+	shock_prod.persistent_description = "Deal {damage} shock to closest enemy. (5 turns)"
+	shock_prod.card_type = "weapon"
+	shock_prod.effect_type = "weapon_persistent"
+	shock_prod.tags = ["shock", "persistent", "single_target"]
+	shock_prod.base_cost = 1
+	shock_prod.base_damage = 3
+	shock_prod.target_type = "closest_enemy"
+	shock_prod.target_rings = [0, 1, 2, 3]
+	shock_prod.weapon_trigger = "turn_end"
+	shock_prod.rarity = 0
+	shock_prod.is_starter_weapon = true
+	shock_prod.duration_type = "turns"  # V2: Timed weapon
+	shock_prod.duration_turns = 5
+	shock_prod.on_expire = "discard"  # Returns to deck after expiring
+	_register_card(shock_prod)
+	
+	# Leaky Siphon - gun, persistent, lifedrain (INFINITE)
+	var leaky_siphon := CardDef.new()
+	leaky_siphon.card_id = "leaky_siphon"
+	leaky_siphon.card_name = "Leaky Siphon"
+	leaky_siphon.description = "Persistent: Deal {damage} damage to random enemy, heal 1 HP at end of turn."
+	leaky_siphon.persistent_description = "Deal {damage} damage, heal 1 HP."
+	leaky_siphon.card_type = "weapon"
+	leaky_siphon.effect_type = "weapon_persistent"
+	leaky_siphon.tags = ["gun", "persistent", "lifedrain"]
+	leaky_siphon.base_cost = 1
+	leaky_siphon.base_damage = 2
+	leaky_siphon.heal_amount = 1
+	leaky_siphon.target_type = "random_enemy"
+	leaky_siphon.target_rings = [0, 1, 2, 3]
+	leaky_siphon.weapon_trigger = "turn_end"
+	leaky_siphon.rarity = 0
+	leaky_siphon.is_starter_weapon = true
+	leaky_siphon.duration_type = "infinite"  # V2: Permanent - sustain build core
+	_register_card(leaky_siphon)
+	
+	# Volatile Handgun - gun, persistent, volatile (KILL-BASED: 4 kills then banished)
+	var volatile_handgun := CardDef.new()
+	volatile_handgun.card_id = "volatile_handgun"
+	volatile_handgun.card_name = "Volatile Handgun"
+	volatile_handgun.description = "Persistent (4 kills): Deal {damage} damage to random enemy, lose 1 HP at end of turn. Banished after 4 kills."
+	volatile_handgun.persistent_description = "Deal {damage} damage, lose 1 HP. (4 kills)"
+	volatile_handgun.card_type = "weapon"
+	volatile_handgun.effect_type = "weapon_persistent"
+	volatile_handgun.tags = ["gun", "persistent", "volatile"]
+	volatile_handgun.base_cost = 1
+	volatile_handgun.base_damage = 4
+	volatile_handgun.self_damage = 1
+	volatile_handgun.target_type = "random_enemy"
+	volatile_handgun.target_rings = [0, 1, 2, 3]
+	volatile_handgun.weapon_trigger = "turn_end"
+	volatile_handgun.rarity = 0
+	volatile_handgun.is_starter_weapon = true
+	volatile_handgun.duration_type = "kills"  # V2: Expires after kills
+	volatile_handgun.duration_kills = 4
+	volatile_handgun.on_expire = "banish"  # Gone for the wave when it burns out
+	_register_card(volatile_handgun)
+	
+	# Mini Turret - gun, engine, persistent, aoe (INFINITE)
+	var mini_turret := CardDef.new()
+	mini_turret.card_id = "mini_turret"
+	mini_turret.card_name = "Mini Turret"
+	mini_turret.description = "Persistent: Deal {damage} damage to 2 random enemies at end of turn."
+	mini_turret.persistent_description = "Deal {damage} damage to 2 random enemies."
+	mini_turret.card_type = "weapon"
+	mini_turret.effect_type = "weapon_persistent"
+	mini_turret.tags = ["gun", "engine", "persistent", "aoe"]
+	mini_turret.base_cost = 1
+	mini_turret.base_damage = 2  # Buffed from 1 - needs to kill 3HP weaklings
+	mini_turret.target_count = 2
+	mini_turret.target_type = "random_enemy"
+	mini_turret.target_rings = [0, 1, 2, 3]
+	mini_turret.weapon_trigger = "turn_end"
+	mini_turret.rarity = 0
+	mini_turret.is_starter_weapon = true
+	mini_turret.duration_type = "infinite"  # V2: Permanent - engine build core
+	_register_card(mini_turret)
+	
+	# Spark Coil - AoE close range damage, persistent (BURN_OUT: 3 turns then banished)
+	var spark_coil := CardDef.new()
+	spark_coil.card_id = "spark_coil"
+	spark_coil.card_name = "Spark Coil"
+	spark_coil.description = "Persistent (3 turns): Deal {damage} damage to ALL enemies in Close ring at end of turn. Banished after 3 turns."
+	spark_coil.persistent_description = "Deal {damage} to all Close enemies. (3 turns)"
+	spark_coil.card_type = "weapon"
+	spark_coil.effect_type = "weapon_persistent"
+	spark_coil.tags = ["shock", "persistent", "aoe", "defensive"]
+	spark_coil.base_cost = 1
+	spark_coil.base_damage = 3  # Buffed from 2 since it's limited duration
+	spark_coil.target_type = "all_in_ring"
+	spark_coil.target_rings = [0]  # Close ring only (changed to Melee for more defensive)
+	spark_coil.weapon_trigger = "turn_end"
+	spark_coil.rarity = 0
+	spark_coil.is_starter_weapon = true
+	spark_coil.duration_type = "burn_out"  # V2: Strong but burns out
+	spark_coil.duration_turns = 3
+	spark_coil.on_expire = "banish"  # Gone for the wave
+	_register_card(spark_coil)
 
 
 # =============================================================================
@@ -32,7 +167,7 @@ func _create_v2_cards() -> void:
 func _create_v2_starter_cards() -> void:
 	"""V2 Veteran Warden starter deck - weak, flexible cards for build pivots."""
 	
-	# Rusty Pistol - basic PERSISTENT gun (gives starter deck auto-fire ramp)
+	# Rusty Pistol - basic PERSISTENT gun (INFINITE - reliable starter)
 	var rusty_pistol := CardDef.new()
 	rusty_pistol.card_id = "rusty_pistol"
 	rusty_pistol.card_name = "Rusty Pistol"
@@ -47,6 +182,8 @@ func _create_v2_starter_cards() -> void:
 	rusty_pistol.target_rings = [0, 1, 2, 3]  # ALL rings
 	rusty_pistol.weapon_trigger = "turn_end"
 	rusty_pistol.rarity = 0
+	rusty_pistol.is_starter_weapon = true
+	rusty_pistol.duration_type = "infinite"  # V2: Permanent - reliable baseline
 	_register_card(rusty_pistol)
 	
 	# Storm Carbine [Starter] - persistent gun for Close/Mid
@@ -958,3 +1095,13 @@ func get_cards_by_tag(tag: String) -> Array:
 func get_cards_by_type(card_type: String) -> Array:
 	"""Get all card IDs of a specific type."""
 	return cards_by_type.get(card_type, [])
+
+
+func get_starter_weapons() -> Array:
+	"""Get all starter weapon cards for Brotato economy mode."""
+	var result: Array = []
+	for card_id: String in cards.keys():
+		var card = cards[card_id]
+		if card.is_starter_weapon:
+			result.append(card)
+	return result

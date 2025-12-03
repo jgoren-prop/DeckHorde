@@ -33,11 +33,16 @@ var card_ui_scene: PackedScene = preload("res://scenes/ui/CardUI.tscn")
 
 var shop_cards: Array = []  # Array of CardDefinition (can't type due to preload issues)
 var shop_artifacts: Array = []  # Array of artifact data dictionaries
+var shop_stat_upgrades: Array = []  # Brotato Economy: stat upgrades
 
 # V2: Service costs calculated by ShopGenerator
 var remove_cost: int = 10
 var heal_cost: int = 10
 var reroll_cost: int = 3
+
+# Stat upgrades UI
+var stat_upgrades_panel: PanelContainer = null
+var stat_upgrades_container: HBoxContainer = null
 
 var pending_merge_card_id: String = ""
 var pending_merge_tier: int = 0
@@ -51,6 +56,7 @@ func _ready() -> void:
 	_create_dev_panel()
 	_create_stats_panel()
 	_create_tag_tracker_panel()
+	_create_stat_upgrades_panel()  # Brotato Economy
 	_refresh_shop()
 	_update_ui()
 	_check_merges()
@@ -73,6 +79,9 @@ func _refresh_shop() -> void:
 	# Generate biased artifacts (3 slots in V2)
 	shop_artifacts = ShopGenerator.generate_shop_artifacts(wave)
 	
+	# Brotato Economy: Generate stat upgrades
+	shop_stat_upgrades = ShopGenerator.generate_shop_stat_upgrades()
+	
 	# Update service costs based on wave
 	heal_cost = ShopGenerator.get_heal_cost(wave)
 	remove_cost = ShopGenerator.get_remove_card_cost(wave)
@@ -80,6 +89,7 @@ func _refresh_shop() -> void:
 	
 	_populate_card_slots()
 	_populate_artifact_slots()
+	_populate_stat_upgrades()
 
 
 # V2: Artifact generation moved to ShopGenerator for family biasing
@@ -1051,3 +1061,163 @@ func _get_family_tag_icon(tag: String) -> String:
 			return "🔋"
 		_:
 			return "•"
+
+
+# === Stat Upgrades Panel Functions (Brotato Economy) ===
+
+func _create_stat_upgrades_panel() -> void:
+	"""Create the stat upgrades panel above the cards section."""
+	stat_upgrades_panel = PanelContainer.new()
+	stat_upgrades_panel.name = "StatUpgradesPanel"
+	
+	# Position above the main content
+	stat_upgrades_panel.anchor_left = 0.5
+	stat_upgrades_panel.anchor_right = 0.5
+	stat_upgrades_panel.anchor_top = 0.0
+	stat_upgrades_panel.anchor_bottom = 0.0
+	stat_upgrades_panel.offset_left = -400
+	stat_upgrades_panel.offset_top = 60
+	stat_upgrades_panel.offset_right = 400
+	stat_upgrades_panel.offset_bottom = 180
+	
+	var style: StyleBoxFlat = StyleBoxFlat.new()
+	style.bg_color = Color(0.1, 0.08, 0.15, 0.95)
+	style.border_color = Color(0.6, 0.8, 0.4)
+	style.set_border_width_all(2)
+	style.set_corner_radius_all(8)
+	style.content_margin_left = 15.0
+	style.content_margin_right = 15.0
+	style.content_margin_top = 10.0
+	style.content_margin_bottom = 10.0
+	stat_upgrades_panel.add_theme_stylebox_override("panel", style)
+	
+	var vbox: VBoxContainer = VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 8)
+	stat_upgrades_panel.add_child(vbox)
+	
+	# Title
+	var title: Label = Label.new()
+	title.text = "📈 STAT UPGRADES"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 16)
+	title.add_theme_color_override("font_color", Color(0.6, 0.9, 0.5))
+	vbox.add_child(title)
+	
+	# Container for upgrade slots
+	stat_upgrades_container = HBoxContainer.new()
+	stat_upgrades_container.name = "UpgradeSlots"
+	stat_upgrades_container.add_theme_constant_override("separation", 15)
+	stat_upgrades_container.alignment = BoxContainer.ALIGNMENT_CENTER
+	vbox.add_child(stat_upgrades_container)
+	
+	add_child(stat_upgrades_panel)
+
+
+func _populate_stat_upgrades() -> void:
+	"""Populate the stat upgrades container."""
+	if not stat_upgrades_container:
+		return
+	
+	# Clear existing
+	for child: Node in stat_upgrades_container.get_children():
+		child.queue_free()
+	
+	if shop_stat_upgrades.size() == 0:
+		stat_upgrades_panel.visible = false
+		return
+	
+	stat_upgrades_panel.visible = true
+	
+	for i: int in range(shop_stat_upgrades.size()):
+		var upgrade: Dictionary = shop_stat_upgrades[i]
+		var slot: PanelContainer = _create_stat_upgrade_slot(upgrade, i)
+		stat_upgrades_container.add_child(slot)
+
+
+func _create_stat_upgrade_slot(upgrade: Dictionary, index: int) -> PanelContainer:
+	"""Create a UI slot for a stat upgrade."""
+	var panel: PanelContainer = PanelContainer.new()
+	panel.custom_minimum_size = Vector2(180, 80)
+	
+	var style: StyleBoxFlat = StyleBoxFlat.new()
+	style.bg_color = Color(0.08, 0.12, 0.08)
+	style.border_color = Color(0.4, 0.7, 0.4)
+	style.set_border_width_all(2)
+	style.set_corner_radius_all(6)
+	panel.add_theme_stylebox_override("panel", style)
+	
+	var hbox: HBoxContainer = HBoxContainer.new()
+	hbox.add_theme_constant_override("separation", 10)
+	panel.add_child(hbox)
+	
+	# Icon
+	var icon: Label = Label.new()
+	icon.text = upgrade.icon
+	icon.add_theme_font_size_override("font_size", 32)
+	icon.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	hbox.add_child(icon)
+	
+	# Info column
+	var info_vbox: VBoxContainer = VBoxContainer.new()
+	info_vbox.add_theme_constant_override("separation", 2)
+	hbox.add_child(info_vbox)
+	
+	# Name
+	var name_label: Label = Label.new()
+	name_label.text = upgrade.name
+	name_label.add_theme_font_size_override("font_size", 14)
+	name_label.add_theme_color_override("font_color", Color(0.9, 0.95, 0.8))
+	info_vbox.add_child(name_label)
+	
+	# Current value
+	var current_label: Label = Label.new()
+	var value_str: String = ""
+	if upgrade.stat in ["gun_damage_percent", "hex_damage_percent", "armor_gain_percent", "scrap_gain_percent", "shop_price_percent"]:
+		value_str = "Current: %.0f%%" % upgrade.current_value
+	else:
+		value_str = "Current: %d" % int(upgrade.current_value)
+	current_label.text = value_str
+	current_label.add_theme_font_size_override("font_size", 10)
+	current_label.add_theme_color_override("font_color", Color(0.6, 0.7, 0.6))
+	info_vbox.add_child(current_label)
+	
+	# Price + Buy button
+	var buy_hbox: HBoxContainer = HBoxContainer.new()
+	buy_hbox.add_theme_constant_override("separation", 5)
+	info_vbox.add_child(buy_hbox)
+	
+	var price_label: Label = Label.new()
+	price_label.text = "%d ⚙️" % upgrade.price
+	price_label.add_theme_font_size_override("font_size", 12)
+	if RunManager.scrap >= upgrade.price:
+		price_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.4))
+	else:
+		price_label.add_theme_color_override("font_color", Color(0.6, 0.4, 0.4))
+	buy_hbox.add_child(price_label)
+	
+	var buy_btn: Button = Button.new()
+	buy_btn.text = "Buy"
+	buy_btn.custom_minimum_size = Vector2(50, 25)
+	buy_btn.pressed.connect(_on_stat_upgrade_buy_pressed.bind(upgrade.upgrade_id, index))
+	buy_hbox.add_child(buy_btn)
+	
+	panel.set_meta("upgrade", upgrade)
+	panel.set_meta("index", index)
+	
+	return panel
+
+
+func _on_stat_upgrade_buy_pressed(upgrade_id: String, index: int) -> void:
+	"""Handle stat upgrade purchase."""
+	if ShopGenerator.purchase_stat_upgrade(upgrade_id):
+		AudioManager.play_shop_purchase()
+		print("[Shop] Bought stat upgrade: %s" % upgrade_id)
+		
+		# Remove from shop
+		shop_stat_upgrades.remove_at(index)
+		_populate_stat_upgrades()
+		_update_stats_panel()  # Refresh stats display
+		_update_ui()
+	else:
+		print("[Shop] Cannot buy stat upgrade: %s" % upgrade_id)
+		_show_not_enough_scrap()

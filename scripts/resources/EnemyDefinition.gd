@@ -52,6 +52,7 @@ enum BehaviorType {
 
 # Economy
 @export var scrap_value: int = 2
+@export var xp_value: int = 1  # XP awarded when killed (Brotato-style leveling)
 
 # Visual/UI
 @export var icon_color: Color = Color.RED

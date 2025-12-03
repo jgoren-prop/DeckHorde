@@ -6,6 +6,9 @@ signal card_drawn(card_entry: Dictionary)
 signal card_played(card_entry: Dictionary)
 signal card_discarded(card_entry: Dictionary)
 signal card_exhausted(card_entry: Dictionary)
+signal card_deployed(card_entry: Dictionary)  # Persistent weapon deployed
+signal card_undeployed(card_entry: Dictionary)  # Weapon removed from play
+signal card_banished(card_entry: Dictionary)  # Card banished for rest of wave
 signal deck_shuffled()
 signal hand_changed()
 
@@ -14,6 +17,8 @@ var deck: Array[Dictionary] = []
 var hand: Array[Dictionary] = []
 var discard: Array[Dictionary] = []
 var exhaust: Array[Dictionary] = []
+var deployed: Array[Dictionary] = []  # Persistent weapons currently in play (OUT of deck)
+var banished: Array[Dictionary] = []  # Cards removed for rest of wave (return next wave)
 
 
 func initialize(starting_deck: Array) -> void:  # Array[Dictionary]
@@ -22,6 +27,8 @@ func initialize(starting_deck: Array) -> void:  # Array[Dictionary]
 	hand.clear()
 	discard.clear()
 	exhaust.clear()
+	deployed.clear()
+	banished.clear()
 	
 	# Copy starting deck
 	for card_entry: Dictionary in starting_deck:
@@ -167,4 +174,108 @@ func add_card_to_deck(card_id: String, tier: int = 1, shuffle_after: bool = true
 	deck.append(card_entry)
 	if shuffle_after:
 		shuffle_deck()
+
+
+# =============================================================================
+# V2 DEPLOYED WEAPON MANAGEMENT
+# =============================================================================
+
+func deploy_card(hand_index: int) -> Dictionary:
+	"""Deploy a persistent card from hand. Card is removed from deck circulation while deployed.
+	Returns the deployed card entry."""
+	if hand_index < 0 or hand_index >= hand.size():
+		return {}
+	
+	var card_entry: Dictionary = hand[hand_index]
+	hand.remove_at(hand_index)
+	deployed.append(card_entry)
+	
+	card_deployed.emit(card_entry)
+	hand_changed.emit()
+	
+	return card_entry
+
+
+func undeploy_card(deployed_index: int, destination: String = "discard") -> Dictionary:
+	"""Remove a deployed weapon and send it to the specified destination.
+	destination: "discard" (can draw again), "banish" (gone for wave), "destroy" (gone forever)
+	Returns the removed card entry."""
+	if deployed_index < 0 or deployed_index >= deployed.size():
+		return {}
+	
+	var card_entry: Dictionary = deployed[deployed_index]
+	deployed.remove_at(deployed_index)
+	
+	match destination:
+		"discard":
+			discard.append(card_entry)
+			card_discarded.emit(card_entry)
+		"banish":
+			banished.append(card_entry)
+			card_banished.emit(card_entry)
+		"destroy":
+			exhaust.append(card_entry)
+			card_exhausted.emit(card_entry)
+		_:
+			discard.append(card_entry)
+			card_discarded.emit(card_entry)
+	
+	card_undeployed.emit(card_entry)
+	return card_entry
+
+
+func undeploy_card_by_id(card_id: String, destination: String = "discard") -> Dictionary:
+	"""Remove a deployed weapon by card_id and send it to destination."""
+	for i: int in range(deployed.size()):
+		if deployed[i].card_id == card_id:
+			return undeploy_card(i, destination)
+	return {}
+
+
+func banish_card_from_hand(hand_index: int) -> Dictionary:
+	"""Banish a card from hand (removed for rest of wave)."""
+	if hand_index < 0 or hand_index >= hand.size():
+		return {}
+	
+	var card_entry: Dictionary = hand[hand_index]
+	hand.remove_at(hand_index)
+	banished.append(card_entry)
+	
+	card_banished.emit(card_entry)
+	hand_changed.emit()
+	
+	return card_entry
+
+
+func get_deployed_count() -> int:
+	"""Get number of deployed weapons."""
+	return deployed.size()
+
+
+func get_deployed_cards() -> Array[Dictionary]:
+	"""Get all deployed weapon entries."""
+	return deployed
+
+
+func is_card_deployed(card_id: String) -> bool:
+	"""Check if a card with given ID is currently deployed."""
+	for entry: Dictionary in deployed:
+		if entry.card_id == card_id:
+			return true
+	return false
+
+
+func return_banished_to_deck() -> void:
+	"""Return all banished cards to deck (call at wave end)."""
+	for card_entry: Dictionary in banished:
+		deck.append(card_entry)
+	banished.clear()
+	shuffle_deck()
+
+
+func return_deployed_to_deck() -> void:
+	"""Return all deployed weapons to deck (call at wave end)."""
+	for card_entry: Dictionary in deployed:
+		discard.append(card_entry)
+	deployed.clear()
 

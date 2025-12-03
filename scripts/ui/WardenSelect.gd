@@ -37,12 +37,12 @@ func _create_default_wardens() -> Array[WardenDefinition]:
 	ash.warden_id = "ash_warden"
 	ash.warden_name = "Ash Warden"
 	ash.description = "Ex-riot cop branded with a burning sigil."
-	ash.passive_description = "Gun cards deal +15% damage. +10% damage to Close/Melee."
-	ash.max_hp = 63  # 70 * 0.9 = 63 (10% HP penalty)
+	ash.passive_description = "Gun +15% dmg. Close/Melee +10% dmg. +10 HP, +2 energy."
 	ash.base_armor = 2
-	ash.base_energy = 3
-	ash.hand_size = 5
+	# Brotato Economy: Use stat_modifiers for HP/energy bonuses
 	ash.stat_modifiers = {
+		"max_hp": 10,  # +10 HP (50 -> 60)
+		"energy_per_turn": 2,  # +2 energy (1 -> 3)
 		"gun_damage_percent": 15.0,  # +15% gun damage
 		"damage_vs_melee_percent": 10.0,  # +10% vs Melee
 		"damage_vs_close_percent": 10.0   # +10% vs Close
@@ -68,12 +68,12 @@ func _create_default_wardens() -> Array[WardenDefinition]:
 	gloom.warden_id = "gloom_warden"
 	gloom.warden_name = "Gloom Warden"
 	gloom.description = "Cult defector bound to a parasitic entity."
-	gloom.passive_description = "Hex damage +20%. Heal power reduced by 10%."
-	gloom.max_hp = 65
+	gloom.passive_description = "Hex +20% dmg. Heal -10%. +15 HP, +2 energy."
 	gloom.base_armor = 1
-	gloom.base_energy = 3
-	gloom.hand_size = 5
+	# Brotato Economy: Use stat_modifiers for HP/energy bonuses
 	gloom.stat_modifiers = {
+		"max_hp": 15,  # +15 HP (50 -> 65)
+		"energy_per_turn": 2,  # +2 energy (1 -> 3)
 		"hex_damage_percent": 20.0,   # +20% hex damage
 		"heal_power_percent": -10.0   # -10% heal power
 	}
@@ -98,12 +98,12 @@ func _create_default_wardens() -> Array[WardenDefinition]:
 	glass.warden_id = "glass_warden"
 	glass.warden_name = "Glass Warden"
 	glass.description = "Sigil-knight encased in reflective glass armor."
-	glass.passive_description = "First fatal hit per wave: survive at 1 HP. Armor gain +25%."
-	glass.max_hp = 70
+	glass.passive_description = "Survive fatal hit once/wave. Armor +25%. +20 HP, +1 energy."
 	glass.base_armor = 4
-	glass.base_energy = 2  # Drawback: reduced energy
-	glass.hand_size = 5
+	# Brotato Economy: Use stat_modifiers for HP/energy bonuses
 	glass.stat_modifiers = {
+		"max_hp": 20,  # +20 HP (50 -> 70)
+		"energy_per_turn": 1,  # +1 energy (1 -> 2) - drawback vs other wardens
 		"armor_gain_percent": 25.0  # +25% armor gain
 	}
 	glass.passive_id = "cheat_death"  # Special passive: survive fatal hit once per wave
@@ -123,19 +123,19 @@ func _create_default_wardens() -> Array[WardenDefinition]:
 	result.append(glass)
 	
 	# =============================================================================
-	# V2 VETERAN WARDEN - Neutral baseline for Brotato-style buildcraft
+	# VETERAN WARDEN - Neutral baseline for Brotato-style buildcraft
 	# =============================================================================
 	var veteran: WardenDefinition = WardenDefinition.new()
 	veteran.warden_id = "veteran_warden"
 	veteran.warden_name = "Veteran Warden"
 	veteran.description = "Battle-hardened generalist who has seen every horror."
-	veteran.passive_description = "No bonuses or penalties. Adapt your build through shop choices."
-	veteran.max_hp = 70
+	veteran.passive_description = "Balanced stats. +20 HP, +2 energy. No special bonuses."
 	veteran.base_armor = 0
-	veteran.base_energy = 3
-	veteran.hand_size = 5
-	# V2: All stats at 100% baseline (neutral)
-	veteran.stat_modifiers = {}  # Empty = all defaults (100%)
+	# Brotato Economy: Veteran gets standard bonuses but no special modifiers
+	veteran.stat_modifiers = {
+		"max_hp": 20,  # +20 HP (50 -> 70)
+		"energy_per_turn": 2  # +2 energy (1 -> 3)
+	}
 	veteran.passive_id = ""  # No special passive
 	veteran.portrait_color = Color(0.6, 0.6, 0.7)  # Neutral gray-blue
 	veteran.icon = "⚔️"
@@ -208,8 +208,12 @@ func _create_warden_card(warden: WardenDefinition) -> PanelContainer:
 	name_label.add_theme_color_override("font_color", warden.portrait_color)
 	vbox.add_child(name_label)
 	
+	# Calculate actual HP and energy after modifiers
+	var hp: int = 50 + int(warden.stat_modifiers.get("max_hp", 0))
+	var energy: int = 1 + int(warden.stat_modifiers.get("energy_per_turn", 0))
+	
 	var stats_label: Label = Label.new()
-	stats_label.text = "HP: %d | ⚡: %d" % [warden.max_hp, warden.base_energy]
+	stats_label.text = "HP: %d | ⚡: %d" % [hp, energy]
 	stats_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	stats_label.add_theme_font_size_override("font_size", 14)
 	stats_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
@@ -252,15 +256,19 @@ func _on_warden_selected(warden: WardenDefinition, card: PanelContainer) -> void
 func _update_preview(warden: WardenDefinition) -> void:
 	warden_preview.visible = true
 	preview_name.text = warden.warden_name
-	preview_stats.text = "HP: %d | Armor: %d | Energy: %d | Hand: %d" % [
-		warden.max_hp, warden.base_armor, warden.base_energy, warden.hand_size
+	
+	# Calculate actual stats after modifiers (base: 50 HP, 1 energy, 1 draw)
+	var hp: int = 50 + int(warden.stat_modifiers.get("max_hp", 0))
+	var energy: int = 1 + int(warden.stat_modifiers.get("energy_per_turn", 0))
+	var draw: int = 1 + int(warden.stat_modifiers.get("draw_per_turn", 0))
+	
+	preview_stats.text = "HP: %d | Armor: %d | Energy: %d | Draw: %d" % [
+		hp, warden.base_armor, energy, draw
 	]
 	preview_passive.text = "[b]Passive:[/b] %s" % warden.passive_description
 	
-	var deck_count: int = 0
-	for entry: Dictionary in warden.starting_deck:
-		deck_count += entry.get("count", 1)
-	preview_deck.text = "Starting Deck: %d cards" % deck_count
+	# Brotato Economy: No starting deck - player picks starter weapon
+	preview_deck.text = "Starting: Pick 1 weapon next"
 
 
 func _on_difficulty_changed(value: float) -> void:
@@ -283,23 +291,18 @@ func _on_start_pressed() -> void:
 	if selected_warden == null:
 		return
 	
-	print("[WardenSelect] Starting V2 run with: ", selected_warden.warden_name)
+	print("[WardenSelect] Selected warden: ", selected_warden.warden_name)
 	
 	# V2: Use set_warden to apply all stat modifiers
 	RunManager.set_warden(selected_warden)
 	RunManager.danger_level = int(difficulty_slider.value)
 	
-	# Initialize deck from warden's starting deck
+	# Brotato Economy: Don't initialize deck here - go to StarterWeaponSelect
+	# The player will pick their starter weapon there
 	RunManager.deck.clear()
-	for entry: Dictionary in selected_warden.starting_deck:
-		var count: int = entry.get("count", 1)
-		for i: int in range(count):
-			RunManager.deck.append({
-				"card_id": entry.card_id,
-				"tier": entry.get("tier", 1)
-			})
 	
-	GameManager.start_new_run()
+	# Go to starter weapon selection
+	GameManager.go_to_starter_weapon_select()
 
 
 func _on_back_pressed() -> void:

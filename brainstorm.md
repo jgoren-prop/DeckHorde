@@ -1,215 +1,463 @@
-# Board Synergy Brainstorm (2024-03-13)
+# Brotato-Style Economy Brainstorm
 
-### What currently works
-- Persistent guns already feel good as auto-clear; shotgun/sniper variants cover Close/Far rings.
-- Hex and barriers scale well when waves are wide (Plague Cloud, Ring Ward), but have few hooks into the weapon lane.
-- Volatile and lifedrain cards are mostly instant; they do not currently buff or consume board state.
+## The Vision
 
-### Problems to solve
-- Turns lack "board knobs": few cards change how deployed weapons behave or when they fire.
-- Tags like `aoe`, `shotgun`, `sniper` exist, but we lack damage-type tags (explosive/beam/piercing/shock) that can be buffed wholesale.
-- Instant cards rarely interact with deployed weapons or barriers beyond raw damage.
+Shift from "start with a deck, add cards" to **"start with nothing, build everything through the shop."**
 
-### Damage-type tag directions
-- Add damage tags layered on top of behavior tags: `explosive` (splash hits adjacent rings), `piercing` (overkill flows to next target), `beam` (chains through a ring), `shock` (stun/slow chance), `corrosive` (armor shred, synergizes with hex).
-- Global/turn buffs can target these tags: "Explosive shots deal +100% damage this turn and splash 2 to adjacent ring", "Piercing attacks gain +50% overflow".
-- Consider **tag infusion** cards/services that permanently add a damage tag to a weapon: e.g., give Rusty Pistol `piercing` so its single shot continues through the stack and hits a second enemy, or give Storm Carbine `explosive` to add adjacent-ring splash.
-
-### New board-deployed concepts
-- Mortar Team (gun, persistent, explosive, sniper): End of turn, deal 5 damage to Far; splash 2 to Mid. Limited ammo 3; can be reloaded.
-- Arc Conductor (engine, persistent, beam): Stores 1 charge when you play a hex card; at end of turn, discharge for 3 chaining damage to 3 enemies (prefers hexed).
-- Bulwark Drone (engine, persistent, fortress): End of turn, grant 2 armor; if you control 3+ barriers, also place a 2-damage barrier in Close.
-- Pulse Array (gun, persistent, shock, aoe): Fires before enemy phase, dealing 1 damage to all enemies in one chosen ring; applies slow if they already moved this turn.
-- Ammo Foundry (engine, persistent, volatile): Every 2 kills, give +1 damage to all deployed guns for the next turn; then deal 1 self-damage.
-- Scrap Forge (engine, persistent): On kill, 20% chance to create a 1-cost "Shard Shot" (instant gun, 4 damage) into hand next turn.
-
-### Instant/tempo plays that touch the board
-- Overclock (skill, instant, engine_core): All deployed guns fire immediately for 75% damage; draw 1.
-- Target Sync (skill, instant): Choose a ring; deployed weapons prioritize that ring this turn and gain +2 damage against it.
-- Explosive Primer (skill, instant, explosive tag): This turn, explosive attacks double splash damage and can damage barriers to refresh them (restore 1 use/HP per hit).
-- Hex Transfer (skill, instant, hex_ritual): Move all hex from one enemy to another and make your next persistent gun apply 2 hex on hit.
-- Barrier Channel (skill, instant, fortress): Triggers all barriers once without consuming uses; each trigger grants 1 armor.
-- Emergency Deploy (skill, instant, swarm_clear): Play the top persistent gun from your draw pile to the lane for -1 cost and fire it once.
-
-### Cross-tag synergies to chase (Brotato-style)
-- Explosive + Barrier: Barriers detonated by explosive splash deal bonus hex and refresh 1 use.
-- Beam + Hex: Beam damage spreads hex instead of consuming it; encourages lane + hex builds.
-- Shock + Shotgun: Multi-hit guns apply stacking slow, amplifying push/lockdown rings.
-- Piercing + Lifedrain: Overflow damage heals for 50% of overflow; rewards overkill builds.
-
-### What to avoid
-- Too many single-ring-only buffs; prefer effects that either retarget the board or scale all weapons of a tag to keep generic synergy feel.
-- Permanent multiplicative stacking on the lane without caps; keep turn-based bursts or short-duration ammo to avoid runaway boards.
-
-### Starter deck rethink (board-first, tag-flex)
-- Premise: lane online by turn 1-2, then scale via tempo and tag infusion so future shops have clear synergy hooks.
-- Proposed 10-card starter (concept only):
-	- Rusty Pistol ×2 (persistent gun) – baseline lane fill, good pierce target.
-	- Storm Carbine ×1 (persistent gun, close/mid) – spreads coverage without high cost.
-	- Ammo Cache ×1 (engine_core skill) – fuels early plays and cheaper guns.
-	- Minor Hex ×1 (instant hex) – sets up beam/hex synergies and Arc Conductor-style effects.
-	- Minor Barrier ×1 (instant barrier) – early ring control and fortress hooks.
-	- Guard Stance ×1 (defense) – stabilizer, scales with armor stats.
-	- Precision Strike ×1 (instant single_target) – stack breaker and tag-scaling testbed.
-	- Shove ×1 (ring_control) – barrier trigger and movement control.
-	- Overclock ×1 (new) – "All deployed guns fire immediately for 75% damage; draw 1." (tempo lever).
-	- Tag Infusion: Piercing ×1 (new) – "Add `piercing` tag to a chosen gun; piercing shots continue through a stack to hit a second enemy (overflow applies)." (turns Rusty Pistol into two-hit vs stacks).
-- Early shop guidance: grab 1 more persistent gun (Twin Pistols/Choirbreaker/Infernal Pistol), 1 barrier enabler (Ring Ward/Barrier Sigil), and 1 extra tempo tool (Ammo Cache/Ritual Cartridge) to keep lane filling and firing twice per turn with Overclock.
-
-## Card concepts (50, board/tag focus)
-
-Includes the 10-card starter above (marked [Starter]). Costs and effects are balance targets.
-
-| # | Card | Cost | Tags | Effect |
-|---|------|------|------|--------|
-| 1 | Rusty Pistol [Starter] | 1 | gun, persistent, single_target | End of turn: deal 3 damage to a random enemy. |
-| 2 | Storm Carbine [Starter] | 2 | gun, persistent, close_focus | End of turn: deal 3 damage to 2 enemies in Close/Mid. |
-| 3 | Ammo Cache [Starter] | 1 | skill, instant, engine_core, gun | Draw 2. Next gun costs 1 less this turn. |
-| 4 | Minor Hex [Starter] | 1 | hex, instant, hex_ritual | Apply 3 hex to a random enemy. |
-| 5 | Minor Barrier [Starter] | 1 | barrier, instant, ring_control, barrier_trap | Place barrier: 3 damage when crossed, 1 use. |
-| 6 | Guard Stance [Starter] | 1 | defense, instant, fortress | Gain 4 armor. |
-| 7 | Precision Strike [Starter] | 1 | gun, instant, aoe | Deal 2 damage to all enemies in a group. |
-| 8 | Shove [Starter] | 1 | skill, instant, ring_control, volatile | Push 1 enemy back 1 ring; barrier hit deals 2. |
-| 9 | Overclock [Starter] | 1 | skill, instant, engine_core | All deployed guns fire immediately for 75% damage; draw 1. |
-| 10 | Tag Infusion: Piercing [Starter] | 1 | skill, instant | Add `piercing` to a chosen gun: its shots continue through a stack to hit a second enemy; overflow applies. |
-| 11 | Mortar Team | 2 | gun, persistent, sniper, explosive | End of turn: 5 damage to Far, splash 2 to Mid; 3 ammo. Reload 2 scrap: restore 2 ammo. |
-| 12 | Arc Conductor | 2 | engine, persistent, beam | Gain 1 charge when you play a hex card. End of turn: expend all charges to deal 3 chaining damage to that many enemies (prefers hexed). |
-| 13 | Bulwark Drone | 2 | engine, persistent, fortress | End of turn: grant 2 armor. If you control 3+ barriers, also place a 2-damage, 1-use barrier in Close. |
-| 14 | Pulse Array | 2 | gun, persistent, aoe, shock | Before enemy phase: deal 1 to all enemies in a chosen ring; if they moved this turn, apply Slow. |
-| 15 | Ammo Foundry | 1 | engine, persistent, volatile | Every 2 kills: +1 damage to all deployed guns next turn; then lose 1 HP. |
-| 16 | Scrap Forge | 1 | engine, persistent | On kill: 20% chance to create a 1-cost "Shard Shot" (gun, instant, 4 damage) in next hand. |
-| 17 | Target Sync | 1 | skill, instant | Choose a ring; deployed guns prioritize it this turn and gain +2 damage against it. |
-| 18 | Explosive Primer | 1 | skill, instant, explosive | This turn: explosive attacks double splash; explosive hits restore 1 use/HP to any friendly barrier they damage. |
-| 19 | Hex Transfer | 1 | skill, instant, hex_ritual | Move all hex from one enemy to another; your next persistent gun applies 2 hex on hit this turn. |
-| 20 | Barrier Channel | 1 | skill, instant, fortress | Trigger all barriers once without consuming uses; gain 1 armor per trigger. |
-| 21 | Emergency Deploy | 1 | skill, instant, swarm_clear | Play top persistent gun from draw pile to lane at -1 cost; it fires once at 75% damage. |
-| 22 | Piercing Ammo | 1 | skill, instant, piercing | This turn, guns gain piercing: overkill flows to next enemy in stack/ring (50% overflow). |
-| 23 | Beam Splitter | 2 | gun, instant, beam, aoe | Deal 4 damage chaining to up to 3 enemies in the same ring; each hit spreads 1 hex if present. |
-| 24 | Shock Lattice | 1 | engine, persistent, shock | When you play a ring_control card, deal 1 shock damage to all enemies in that ring; 20% chance to Slow. |
-| 25 | Corrosive Rounds | 1 | skill, instant, corrosive | This turn, guns apply -2 armor shred on hit; if target has hex, shred doubles. |
-| 26 | Scatter Mines | 2 | barrier, engine, persistent, barrier_trap, explosive | Place 3 mines across random rings: 3 damage, 2 uses, splash 1 to adjacent ring on trigger. |
-| 27 | Kinetic Pulse | 1 | skill, instant, ring_control, shock | Push all Melee enemies to Close; deal 2 and apply Slow to pushed enemies. |
-| 28 | Twin Lances | 2 | gun, persistent, beam, single_target | End of turn: deal 2 damage to 2 enemies; if both hits land in same stack, spread 1 hex to the stack. |
-| 29 | Volley Rig | 2 | gun, persistent, shotgun, swarm_clear | End of turn: 1 damage 5 times in Melee/Close; each kill refunds 1 ammo charge (max 3 charges, +1 damage per charge). |
-| 30 | Rail Piercer | 2 | gun, instant, piercing, sniper | Deal 9 damage; overflow 50% continues to the next enemy in line or stack. |
-| 31 | Flame Coil | 1 | gun, instant, explosive, aoe | Deal 3 damage to a ring; splash 1 to adjacent rings; explosive hits add 1 hex. |
-| 32 | Hex Lance Turret | 2 | engine, persistent, hex, beam | End of turn: deal 2 damage to a hexed enemy; if it survives, increase its hex by 1. |
-| 33 | Barrier Siphon | 1 | skill, instant, lifedrain, fortress | Drain 2 HP from each barrier you control; heal equal to total drained; barriers keep uses. |
-| 34 | Shock Net | 1 | barrier, instant, shock, ring_control | Place barrier: 0 damage, 2 uses; enemies crossing are Slowed and take +1 damage from shock this turn. |
-| 35 | Pulse Repeater | 1 | engine, persistent, engine_core | At turn start, choose one: draw 1, or your next Overclock this turn costs 0. |
-| 36 | Focused Salvo | 1 | gun, instant, single_target, engine_core | Deal 5 damage; if a deployed gun shares a tag with this (gun, explosive, beam, shock, piercing), it fires at the same target for +2 damage. |
-| 37 | Fracture Rounds | 1 | skill, instant, piercing, swarm_clear | Next shotgun/piercing attack this turn repeats on a second random target for 50% damage. |
-| 38 | Hex Capacitor | 1 | engine, persistent, hex_ritual | Whenever hex is consumed, gain 1 charge (max 3); spend a charge: next gun applies 2 hex. |
-| 39 | Sentinel Barrier | 2 | barrier, engine, persistent, fortress | Place barrier with 3 HP, 2 damage; when it triggers, your weakest gun gains +1 damage this turn. |
-| 40 | Overwatch Drone | 1 | engine, persistent, sniper | When you play a skill, deal 2 damage to a Far/Mid enemy. If none, hit a random enemy. |
-| 41 | Ricochet Disk | 1 | gun, instant, piercing, shotgun | Deal 2 damage bouncing up to 4 times among enemies in Close/Mid; cannot hit same enemy twice. |
-| 42 | Hex Bloom | 2 | hex, instant, aoe | Apply 1 hex to all enemies; if an enemy already has hex, apply +2 more to it. |
-| 43 | Runic Overload | 1 | skill, instant, fortress, volatile | Gain 4 armor; if you have 3+ barriers, Overclock costs 0 this turn. |
-| 44 | Barrier Bloom | 1 | skill, instant, barrier_trap | Choose a ring; duplicate each barrier there with 1 use and 1 damage. |
-| 45 | Scrap Vents | 0 | skill, instant, volatile | Lose 2 HP; your next explosive or piercing card this turn gains +3 damage. |
-| 46 | Shockwave Gauntlet | 1 | gun, instant, shock, ring_control | Deal 3 damage and push target 1 ring; if it hits a barrier, stun it for 1 turn. |
-| 47 | Inferno Stack | 2 | gun, persistent, explosive, sniper | End of turn: deal 4 to Far/Mid; splash 2 to adjacent ring; each kill adds +1 splash (resets after firing if no kill). |
-| 48 | Chain Reactor | 2 | engine, persistent, beam, explosive | First time you play a gun each turn, deal 2 beam damage to two enemies. If either dies, deal 2 explosive splash to its ring. |
-| 49 | Glass Shards | 1 | gun, instant, piercing, volatile | Deal 6 damage; lose 2 armor. If target dies, gain 1 energy next turn. |
-| 50 | Null Field | 1 | defense, instant, fortress | Gain 5 armor. This turn, enemies in Melee deal -2 damage; if you control a barrier, also slow Melee enemies. |
+Brotato's magic:
+1. **Wave 1 is trivially easy** - just survive and collect
+2. **Start with 1 weapon** - gives immediate agency and synergy direction
+3. **Interest system** - saving money is rewarded, creates meaningful tension between buying now vs. banking
+4. **Build identity emerges from choices**, not character selection
 
 ---
 
-## New Artifacts (synergy with new card mechanics)
+## Core Changes to Make
 
-The existing 26 artifacts (listed in DESIGN.md) focus on the original build families and stat scaling. These new artifacts hook into the **damage-type tags**, **deployed gun/engine synergies**, **kill chains**, and **cross-tag combos** introduced above. Together with the originals, this creates ~48 artifacts for rich Brotato-style buildcraft.
+### 1. Starter Weapon Selection (Pre-Run)
 
-### Damage-Type Tag Artifacts (8)
+Instead of starting with a 10-card deck, player picks **1 starting weapon** from a selection of ~7 options:
 
-| Artifact | Rarity | Stackable | Effect |
-|----------|--------|-----------|--------|
-| Blast Shielding | Common | ✓ | Explosive damage +15% |
-| Piercing Scope | Common | ✓ | Piercing attacks deal +2 overflow damage |
-| Arc Coil | Common | ✓ | Beam attacks chain to +1 additional target |
-| Static Buildup | Uncommon | ✗ | Shock attacks have +20% chance to apply Slow |
-| Corrosive Residue | Uncommon | ✗ | Corrosive attacks shred 1 additional armor |
-| Unstable Payload | Uncommon | ✓ | Explosive splash damage +50%. Max HP -3 |
-| Rifling Upgrade | Uncommon | ✓ | Piercing attacks ignore 1 armor per hit |
-| Chain Lightning Module | Rare | ✗ | Beam attacks deal +1 damage per enemy already hit in the chain |
+| Weapon | Cost | Tags | Effect | Synergy Direction |
+|--------|------|------|--------|-------------------|
+| Rusty Pistol | 1 | gun, persistent, single_target | End of turn: deal 3 damage to random enemy | Generic gun scaling |
+| Worn Hex Staff | 1 | hex, persistent, hex_ritual | End of turn: apply 2 hex to random enemy | Hex/ritual builds |
+| Cracked Barrier Gem | 1 | barrier, persistent, barrier_trap | End of turn: place 1-damage barrier in random ring | Fortress/trap builds |
+| Leaky Siphon | 1 | gun, persistent, lifedrain | End of turn: deal 2 damage, heal 1 HP | Lifedrain sustain |
+| Volatile Handgun | 1 | gun, persistent, volatile | End of turn: deal 4 damage, lose 1 HP | High-risk/high-reward |
+| Mini Turret | 1 | gun, engine, persistent, aoe | End of turn: deal 1 damage to 2 random enemies | Engine/board builds |
+| Barrier Mine Layer | 1 | barrier, engine, persistent, barrier_trap | End of turn: 20% chance to place a 2-damage barrier | Passive trap generation |
 
-### Deployed Gun/Engine Artifacts (7)
+**All are weak** - barely enough to clear Wave 1 - but telegraph different synergy paths.
 
-| Artifact | Rarity | Stackable | Effect |
-|----------|--------|-----------|--------|
-| Turret Oil | Common | ✓ | Deployed guns and engines deal +10% damage |
-| Firing Solution | Uncommon | ✗ | Deployed guns deal +1 damage per other gun on the board (max +3) |
-| Ammo Belts | Common | ✓ | Guns with limited ammo have +1 max ammo |
-| Quick Draw | Uncommon | ✗ | First gun you play each turn costs 1 less |
-| Autoloader | Rare | ✗ | When a gun runs out of ammo, 30% chance to fully reload it |
-| Engine Sync | Uncommon | ✗ | When you play an engine, all deployed guns fire once at 50% damage |
-| Lane Commander | Rare | ✗ | Start of turn: if 4+ cards deployed in lane, gain 1 energy |
+### 2. Starting Resources
 
-### Kill Chain / On-Kill Artifacts (6)
+**Instead of:**
+- 10 cards
+- 3 energy/turn
+- 5 draw/turn
+- 0 scrap
 
-| Artifact | Rarity | Stackable | Effect |
-|----------|--------|-----------|--------|
-| Hunter's Quota | Common | ✓ | On kill: gain 1 scrap |
-| Rampage Core | Uncommon | ✗ | On kill: next gun this turn deals +2 damage (stacks up to 3 kills) |
-| Salvage Frame | Uncommon | ✓ | On kill: 15% chance to draw a card |
-| Execution Protocol | Rare | ✗ | Kill 4+ enemies in a single turn: gain 1 energy next turn |
-| Overkill Catalyst | Uncommon | ✗ | On kill with overkill: deal overkill amount to a random enemy in the same ring |
-| Blood Harvest | Uncommon | ✗ | On kill: heal 1 HP. Max HP -5 |
+**Start with:**
+- **1 card** (the chosen weapon)
+- **1 energy/turn** (enough to play your 1 weapon)
+- **1 draw/turn** (you always draw your 1 card)
+- **0 scrap**
+- **50 HP** (lower stakes early, scales with upgrades)
 
-### Cross-Tag Synergy Artifacts (6)
+### 3. Wave Count Discussion
 
-These reward mixing damage types and build families, Brotato-style.
+**Current game:** 12 waves
+**Brotato:** 20 waves
 
-| Artifact | Rarity | Stackable | Effect |
-|----------|--------|-----------|--------|
-| Detonation Matrix | Rare | ✗ | Explosive damage to barriers restores 1 barrier use instead of consuming it |
-| Hex Conductor | Rare | ✗ | Beam attacks spread hex to chained targets instead of consuming hex |
-| Tesla Casing | Uncommon | ✗ | Shotgun attacks with shock apply Slow to all targets hit |
-| Overflow Transfusion | Rare | ✗ | Piercing overflow damage heals you for 50% of overflow dealt |
-| Corrosive Resonance | Uncommon | ✗ | Corrosive armor shred on hexed enemies is doubled |
-| Volatile Reactor | Rare | ✗ | When you take self-damage, deal that damage to a random enemy in Melee/Close |
+With a Brotato economy, more waves = more value:
+- More shop visits for build development
+- Interest has time to compound
+- Power curve can be smoother (not rushing to "online" by wave 3)
+- Each individual wave lower stakes
 
-### Tempo / Overclock Artifacts (5)
+**Possible wave structures:**
 
-| Artifact | Rarity | Stackable | Effect |
-|----------|--------|-----------|--------|
-| Overclock Capacitor | Uncommon | ✗ | First Overclock you play each turn costs 0 |
-| Burst Amplifier | Common | ✓ | "Fire immediately" effects deal +2 damage |
-| Coolant System | Uncommon | ✗ | After playing 3 skill cards in a turn, draw 1 card |
-| Rapid Deployment | Common | ✓ | Persistent guns deploy with +1 damage for their first firing |
-| Infusion Anchor | Uncommon | ✗ | Tag Infusion cards also grant +1 permanent damage to the infused gun |
+| Waves | Pros | Cons |
+|-------|------|------|
+| 12 (current) | Faster runs (~15 min?) | Feels rushed with 1-weapon start |
+| 16 | Middle ground | Might be awkward pacing |
+| 20 (Brotato) | Full economy experience, ~25 min runs | Could feel grindy if content is thin |
+
+**Recommendation:** Try 20 waves but with faster individual waves. Brotato waves are ~30-60 seconds. If our combat drags, trim enemy counts rather than wave count.
+
+### 4. Resource Scaling Per Wave
+
+Energy and draw scale up as the run progresses (assuming 20 waves):
+
+| Wave | Energy/Turn | Draw/Turn | Notes |
+|------|-------------|-----------|-------|
+| 1-2 | 1 | 1 | Tutorial phase |
+| 3-5 | 1 | 2 | Early build |
+| 6-8 | 2 | 3 | Build taking shape |
+| 9-12 | 2 | 4 | Mid-game |
+| 13-16 | 3 | 5 | Late-game |
+| 17-20 | 3 | 5 | Final stretch |
+
+**Alternative: Buy-Your-Stats**
+Keep energy/draw static at 1/1, but let players buy upgrades:
+- +1 Energy: 50 scrap (can buy multiple)
+- +1 Draw: 40 scrap (can buy multiple)
+
+This makes resource scaling a **choice** rather than automatic. More Brotato-authentic.
 
 ---
 
-### Artifact Design Notes
+## Buy-Your-Stats Deep Dive
 
-**Existing artifacts to keep unchanged:**
-All 26 original artifacts (Sharpened Rounds, Hex Lens, Leech Core, Occult Focus, Trap Engineer, etc.) work fine with the new cards. They provide baseline stat scaling and build-family hooks.
+### Approach A: Brotato Direct (Stats Mixed in Shop)
 
-**New stats needed in PlayerStats:**
-- `explosive_damage_percent` (default 100)
-- `piercing_damage_percent` (default 100)
-- `beam_damage_percent` (default 100)
-- `shock_damage_percent` (default 100)
-- `corrosive_damage_percent` (default 100)
-- `deployed_gun_damage_percent` (default 100)
-- `engine_damage_percent` (default 100)
+Stats appear **mixed with weapons and items** in the same shop pool. RNG determines which stats show up.
 
-**New trigger types needed in ArtifactDefinition:**
-- `on_explosive_hit`
-- `on_piercing_overflow`
-- `on_beam_chain`
-- `on_shock_hit`
-- `on_corrosive_hit`
-- `on_gun_deploy`
-- `on_gun_fire`
-- `on_gun_out_of_ammo`
-- `on_engine_trigger`
-- `on_self_damage`
-- `on_overkill`
+| Stat | Price | Effect | Stackable? |
+|------|-------|--------|------------|
+| +1 Max Energy | 60 | Energy per turn +1 | Yes (cap 5) |
+| +1 Draw | 50 | Cards drawn per turn +1 | Yes (cap 7) |
+| +10 Max HP | 25 | Increase max HP | Yes |
+| +5% Gun Damage | 20 | All gun damage +5% | Yes |
+| +5% Hex Damage | 20 | All hex damage +5% | Yes |
+| +10% Armor Gain | 15 | Armor from cards +10% | Yes |
+| +1 Weapon Slot | 80 | Deploy 1 more weapon | Yes (cap 8) |
+| +10% Scrap Gain | 30 | More scrap from kills | Yes |
+| -5% Shop Prices | 40 | Everything cheaper | Yes (cap -30%) |
 
-**Priority order for implementation:**
-1. Damage-type tag artifacts (enable the new tags)
-2. Deployed gun artifacts (enable board-centric play)
-3. Kill chain artifacts (reward clearing efficiently)
-4. Cross-tag artifacts (reward hybrid builds)
-5. Tempo artifacts (reward Overclock/skill chains)
+**Pros:** Simple, proven (it's Brotato), variety every shop
+**Cons:** RNG on which stats appear, shop gets crowded
+
+---
+
+### Approach B: Dedicated Upgrade Tab
+
+Shop has **two tabs**: Weapons/Items and Upgrades.
+
+Upgrades tab shows **all stats always available**, prices scale with purchases:
+
+| Upgrade | 1st | 2nd | 3rd | 4th | 5th |
+|---------|-----|-----|-----|-----|-----|
+| Energy +1 | 40 | 60 | 90 | 130 | 180 |
+| Draw +1 | 35 | 50 | 75 | 110 | 150 |
+| Max HP +10 | 20 | 25 | 30 | 35 | 40 |
+| Damage +5% | 25 | 35 | 50 | 70 | 95 |
+| Weapon Slots +1 | 60 | 100 | 150 | 220 | -- |
+
+**Pros:** No RNG, always know what's available, clear progression
+**Cons:** Less exciting (same every time), two tabs = more UI
+
+---
+
+### Approach C: Stat Crates (Bundled Random)
+
+After each wave, offered **1 upgrade crate** with 2-3 themed stats:
+
+- "Scavenger Crate" (40 scrap): +5% Scrap, +5 Max HP, +1 Draw
+- "Assault Crate" (50 scrap): +10% Gun Damage, +5% vs Melee
+- "Ritualist Crate" (45 scrap): +10% Hex Damage, +5 Max HP
+- "Fortress Crate" (45 scrap): +15% Armor, +10 Max HP
+- "Tempo Crate" (55 scrap): +1 Energy, +1 Draw
+
+One crate offered per wave (random), alongside normal shop.
+
+**Pros:** Simple decision (buy crate or not), themed synergies
+**Cons:** Less control over specific stats, feels random
+
+---
+
+### Approach D: Passive Stat Growth + Choice Points
+
+Stats grow **automatically** in small increments, but you get **choice points** at milestones:
+
+**Auto-growth:** Every 3 waves: +5 Max HP, +2% all damage
+**Choice points:** Waves 5, 10, 15, 20 - pick one major upgrade:
+- +1 Energy
+- +2 Draw  
+- +1 Weapon Slot
+- +15% damage type of choice
+- +30 Max HP
+
+**Pros:** Guaranteed progression, meaningful big choices
+**Cons:** Less Brotato, more "level up" RPG feel
+
+---
+
+### Approach E: Investment Pools
+
+**Invest** scrap into stat pools. Investments grow 10% per wave. Cash out anytime.
+
+Example:
+- Wave 3: Invest 30 scrap into "Damage Pool"
+- Wave 8: Pool has grown to ~48 value
+- Cash out: Get +24% damage (2 scrap value = +1%)
+
+Can have multiple pools growing simultaneously.
+
+**Pros:** Interesting long-term planning, rewards patience
+**Cons:** Complex, math-heavy, UI challenge
+
+---
+
+### Approach F: Upgrade Artifacts Only
+
+**Remove direct stat purchases.** All stats come from artifacts, which are more common/cheap.
+
+Artifacts like:
+- Rusty Cog (Common, 15 scrap): +1 Draw
+- Power Cell (Common, 20 scrap): +1 Energy  
+- Thick Skin (Common, 15 scrap): +10 Max HP
+- Sharp Rounds (Common, 20 scrap): +5% Gun Damage
+
+Artifacts ARE the stat system. Makes artifacts feel more impactful.
+
+**Pros:** Unified system (no separate "stats"), artifacts matter more
+**Cons:** More RNG dependent, can't guarantee core stats
+
+---
+
+### Approach G: Hybrid - Core Always, Extras Random
+
+**Core stats** (Energy, Draw, Weapon Slots) are ALWAYS available in a side panel.
+**Extra stats** (damage %, HP, etc.) appear randomly in normal shop pool.
+
+Side Panel (always visible):
+```
+┌─────────────────────┐
+│ UPGRADES            │
+│ +1 Energy    [60]   │
+│ +1 Draw      [50]   │
+│ +1 Slot      [80]   │
+└─────────────────────┘
+```
+
+This ensures you can always buy the "must-have" progression stats, while minor stats add shop variety.
+
+**Pros:** Best of both - reliability for core, variety for extras
+**Cons:** Slightly more complex UI
+
+---
+
+## Pricing Philosophy
+
+**First purchases should be cheap** (getting from 1→2 energy is huge)
+**Later purchases should be expensive** (4→5 energy is marginal)
+
+### Scaling Options:
+
+**Linear:** `base + (level × increment)`
+```
+Energy: 40, 60, 80, 100, 120
+```
+
+**Exponential:** `base × 1.5^level`
+```
+Energy: 40, 60, 90, 135, 200
+```
+
+**Tiered jumps:**
+```
+Energy: 40, 50, 75, 120, 200
+```
+
+**Recommendation:** Exponential feels most Brotato - early is accessible, late is a luxury you only buy if swimming in scrap.
+
+---
+
+## My Take
+
+**If you want true Brotato feel:** Approach A or G
+- Stats compete with weapons for scrap
+- Sometimes you see Energy upgrade, sometimes you don't
+- Creates tension and variety
+
+**If you want player control:** Approach B
+- Always know Energy is available
+- Can plan around guaranteed access
+- More strategic, less chaotic
+
+**If you want simplicity:** Approach F
+- Artifacts ARE stats
+- One system, not two
+- But more RNG-dependent
+
+---
+
+### 5. Wave 1 Design (Trivially Easy)
+
+**Current Wave 1:** 6 Husks (8 HP, 4 damage each) - actually quite threatening
+
+**Brotato Wave 1:** 2-3 Weaklings
+- 3 HP, 2 damage
+- Ensures any starter weapon can clear them
+- Drops ~15 scrap total
+
+Purpose: **Not a challenge** - just an introduction to your weapon working. The "game" starts at the shop.
+
+### 5. Interest System
+
+**After each wave, before shopping:**
+1. Gain base scrap from kills (~10-15 per wave early, scales up)
+2. **Interest bonus**: +5% of current scrap, capped at +25 scrap (so 500 scrap = max interest)
+
+This creates the classic Brotato tension:
+- **Spend now**: Get stronger immediately
+- **Save**: Hit interest thresholds for long-term value
+
+| Scrap Saved | Interest Earned |
+|-------------|-----------------|
+| 0-20 | +0 |
+| 20-40 | +1 |
+| 40-60 | +2 |
+| 60-80 | +3 |
+| ... | ... |
+| 500+ | +25 (cap) |
+
+### 6. Shop Restructure
+
+**Current shop:** Cards, artifacts, services
+
+**Brotato-style shop:**
+- **Weapons** (cards) - still the core
+- **Items** (artifacts) - passive stat boosts
+- **Upgrades** (new!) - permanent stat increases:
+  - +1 Max Energy: 50 scrap
+  - +1 Draw/Turn: 50 scrap  
+  - +10 Max HP: 30 scrap
+  - +10% Gun Damage: 40 scrap
+  - +1 Weapon Slot (if capped): 100 scrap
+
+**Lock/Unlock mechanic:**
+- Pay 1 scrap to lock an item until next wave
+- Lets you save for expensive items while banking interest
+
+### 7. Weapon Slot Limit
+
+Currently: 7 deployed weapons max
+
+**Brotato approach:**
+- Start with **4 weapon slots**
+- Can buy more slots in shop (expensive)
+- Creates meaningful "deck size" without actual deck management
+
+---
+
+## What This Changes
+
+### Removes
+- Fixed starter decks per warden
+- Early deck-building complexity
+- "Which cards to mulligan" decisions
+
+### Adds
+- **Shop as THE game** - every wave is just "survive then shop"
+- **Banking vs. spending** tension
+- **Build identity from item 1** - your starter weapon sets the trajectory
+- **Power curve clarity** - you're weak then strong, not "medium" the whole time
+
+### Keeps
+- Wardens (as stat/passive modifiers, not deck definers)
+- Ring battlefield
+- Tag system and synergies
+- Artifacts
+- Wave pressure
+
+---
+
+## Questions to Resolve
+
+### Q1: What about the deck/draw system?
+
+**Option A: Keep traditional deck**
+- Your 1 starter weapon + shop purchases form a deck
+- Draw normally, shuffle, etc.
+- Issue: With 1-2 cards, "deck" feels weird
+
+**Option B: Brotato pure (no deck)**
+- Weapons are just "equipped" - always available
+- Hand = all owned weapons
+- Energy limits what you play per turn
+- Simpler, more Brotato-authentic
+
+**Option C: Hybrid**
+- Persistent weapons stay deployed (no re-draw needed)
+- Instant cards go to a mini-deck
+- Best of both?
+
+### Q2: How do Wardens fit?
+
+**Option A: Wardens as passive modifiers only**
+- Pick warden, then pick starter weapon
+- Warden gives stat bonuses (+HP, +damage%, etc.)
+- No starter deck influence
+
+**Option B: Warden determines starter weapon pool**
+- Each warden has 3 "themed" starter weapons
+- More variety, but limits choice
+
+**Option C: Remove wardens entirely**
+- Starter weapon IS your identity
+- Simpler, more Brotato-like
+
+### Q3: Where do instant cards fit?
+
+Brotato is all passive weapons. Our game has instant spells.
+
+**Option A: Instants are consumables**
+- Buy them, use them once, gone
+- Like Brotato's consumable items
+
+**Option B: Instants recharge**
+- Use once per wave
+- More value, fits card-game feel
+
+**Option C: Keep deck for instants only**
+- Persistent weapons = always available
+- Instant cards = drawn from small deck
+- Could work, adds depth
+
+### Q4: What about card upgrades / merges?
+
+**Option A: Keep triple-merge**
+- Buy 3 of same weapon → upgrades
+- Works naturally with shop focus
+
+**Option B: Direct upgrades in shop**
+- "Upgrade Rusty Pistol → Iron Pistol" appears as shop option
+- More direct progression
+
+---
+
+## Minimum Viable Changes (Phase 1)
+
+If we want to TEST this concept quickly:
+
+1. **New scene: StarterWeaponSelect.tscn**
+   - Shows 7 weapon options
+   - Player picks 1
+   - Sets `RunManager.current_deck = [chosen_weapon]`
+
+2. **Modify RunManager**
+   - `energy_per_turn = 1` (was 3)
+   - `draw_per_turn = 1` (was 5)
+   - `max_hp = 50` (was 70)
+   - `scrap = 0`
+
+3. **Add interest calculation**
+   - In post-wave reward screen
+   - `interest = min(floor(scrap * 0.05), 25)`
+   - Show "+X interest" in UI
+
+4. **Nerf Wave 1**
+   - Create new wave definition with 2-3 weak enemies
+   - 3 HP, 2 damage, no abilities
+
+5. **Keep everything else the same**
+   - Shop still works
+   - Combat still works
+   - Just different starting state
+
+This gets us playing with the core loop change fast.
+
+---
+
+## Open Design Space
+
+Things that could be cool but aren't essential:
+
+- **Character unlock system** - beat runs to unlock more starter weapons
+- **Weapon "evolutions"** - certain combos create special weapons
+- **Challenge modifiers** - Brotato-style run modifiers
+- **Endless mode** - how long can you survive?
+- **Leaderboards** - score tracking
+
+---
+
+## Next Steps
+
+1. Decide on Q1-Q4 above
+2. Implement Phase 1 minimal changes
+3. Playtest the feel
+4. Iterate on economy numbers
+

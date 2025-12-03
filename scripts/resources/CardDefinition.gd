@@ -42,7 +42,13 @@ const TagConstantsClass = preload("res://scripts/constants/TagConstants.gd")
 @export var buff_value: int = 0
 
 # Duration (for persistent effects)
-@export var duration: int = -1  # -1 = rest of wave
+@export var duration: int = -1  # -1 = rest of wave (legacy, use duration_type now)
+
+# V2 Duration System - flexible weapon lifespans
+@export_enum("infinite", "turns", "kills", "burn_out") var duration_type: String = "infinite"
+@export var duration_turns: int = -1  # Number of turns weapon lasts (-1 = infinite)
+@export var duration_kills: int = -1  # Number of kills before weapon expires (-1 = infinite)
+@export_enum("discard", "banish", "destroy") var on_expire: String = "discard"  # What happens when weapon expires
 
 # Targeting
 @export_enum("self", "ring", "all_rings", "random_enemy", "all_enemies") var target_type: String = "ring"
@@ -70,6 +76,9 @@ const TagConstantsClass = preload("res://scripts/constants/TagConstants.gd")
 # Tier scaling - defines how values change per tier
 # Format: {tier_number: {property_name: value}}
 @export var tier_scaling: Dictionary = {}
+
+# Brotato Economy: Starter weapon flag
+@export var is_starter_weapon: bool = false
 
 
 func get_scaled_value(property: String, tier: int) -> Variant:
@@ -183,4 +192,46 @@ func is_engine() -> bool:
 func get_tags_display() -> String:
 	"""Get tags formatted for UI display."""
 	return TagConstantsClass.format_tags_for_display(tags)
+
+
+# =============================================================================
+# V2 DURATION HELPERS
+# =============================================================================
+
+func is_persistent() -> bool:
+	"""Check if this card is a persistent weapon that stays deployed."""
+	return has_tag("persistent") or effect_type == "weapon_persistent"
+
+
+func has_duration_limit() -> bool:
+	"""Check if this weapon has a limited duration."""
+	if duration_type == "infinite":
+		return false
+	if duration_type == "turns" and duration_turns > 0:
+		return true
+	if duration_type == "kills" and duration_kills > 0:
+		return true
+	if duration_type == "burn_out":
+		return true
+	return false
+
+
+func get_duration_display() -> String:
+	"""Get human-readable duration text for UI."""
+	match duration_type:
+		"infinite":
+			return "Permanent"
+		"turns":
+			if duration_turns > 0:
+				return "%d turn%s" % [duration_turns, "s" if duration_turns > 1 else ""]
+			return "Permanent"
+		"kills":
+			if duration_kills > 0:
+				return "%d kill%s" % [duration_kills, "s" if duration_kills > 1 else ""]
+			return "Permanent"
+		"burn_out":
+			var turns: int = duration_turns if duration_turns > 0 else 2
+			return "%d turns then banished" % turns
+		_:
+			return "Permanent"
 

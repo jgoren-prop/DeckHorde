@@ -12,9 +12,11 @@ signal armor_changed(amount: int)
 signal scrap_changed(amount: int)
 signal wave_changed(wave: int)
 signal stats_changed()  # V2: Emitted when player stats change
+signal xp_changed(current: int, required: int, level: int)  # XP system
+signal level_up(new_level: int, hp_gained: int)  # Level up notification
 
-# Constants
-const MAX_WAVES: int = 12
+# Constants (Brotato Economy: 20 waves for full economy experience)
+const MAX_WAVES: int = 20
 
 # Run state
 var current_wave: int = 1
@@ -76,6 +78,25 @@ var hand_size_max: int:
 	get:
 		return player_stats.hand_size_max
 
+## Get max weapon slots (Brotato Economy)
+var weapon_slots_max: int:
+	get:
+		return player_stats.weapon_slots_max
+
+## Get current XP
+var current_xp: int:
+	get:
+		return player_stats.current_xp
+
+## Get current level
+var current_level: int:
+	get:
+		return player_stats.current_level
+
+# XP tracking for wave summary
+var xp_gained_this_wave: int = 0
+var levels_gained_this_wave: int = 0
+
 
 func _ready() -> void:
 	print("[RunManager] V2 Initialized with PlayerStats")
@@ -91,34 +112,37 @@ func reset_run() -> void:
 	enemies_killed = 0
 	essence_earned = 0
 	cheat_death_available = true
+	
+	# XP tracking
+	xp_gained_this_wave = 0
+	levels_gained_this_wave = 0
+	
+	# Brotato Economy: Reset shop state
+	ShopGenerator.reset_shop_state()
+	
 	stats_changed.emit()
 
 
 func set_warden(warden) -> void:
 	"""Set the current warden and apply their stat modifiers.
-	V2: Wardens must be WardenDefinition resources with stat_modifiers.
+	Brotato Economy: Wardens apply MODIFIERS on top of base stats, not replace them.
 	"""
 	current_warden = warden
 	
-	# Reset to defaults first
+	# Reset to Brotato Economy defaults first (50 HP, 1 energy, 1 draw)
 	player_stats.reset_to_defaults()
 	cheat_death_available = true
 	
 	if warden and warden is WardenDefinition:
-		# Apply warden's base stats
-		player_stats.max_hp = warden.max_hp
-		player_stats.energy_per_turn = warden.base_energy
-		if warden.hand_size > 0:
-			player_stats.draw_per_turn = warden.hand_size
-		
-		# V2: Apply stat modifiers from warden (additive bonuses)
+		# Brotato Economy: Apply stat modifiers from warden (additive bonuses)
+		# Wardens no longer set base stats directly - they modify the defaults
 		if warden.stat_modifiers.size() > 0:
 			player_stats.apply_modifiers(warden.stat_modifiers)
 		
 		current_hp = player_stats.max_hp
 		armor = warden.base_armor
 		
-		# V2 Passive check: Glass Warden cheat_death (temporary until V2 passive system)
+		# Passive check: Glass Warden cheat_death
 		if warden.passive_id == "cheat_death":
 			cheat_death_available = true
 	
@@ -300,6 +324,42 @@ func record_enemy_kill() -> void:
 	essence_earned = enemies_killed * 2 + current_wave * 5
 
 
+# =============================================================================
+# BROTATO ECONOMY: INTEREST SYSTEM
+# =============================================================================
+
+signal interest_applied(amount: int)
+
+func calculate_interest() -> int:
+	"""Calculate interest on current scrap holdings.
+	Returns 5% of scrap, capped at 25.
+	"""
+	var interest: int = int(floor(float(scrap) * 0.05))
+	return mini(interest, 25)
+
+
+func apply_interest() -> int:
+	"""Apply interest to scrap and return the amount added."""
+	var interest: int = calculate_interest()
+	if interest > 0:
+		scrap += interest
+		scrap_changed.emit(scrap)
+		interest_applied.emit(interest)
+		print("[RunManager] Interest applied: +%d scrap (total: %d)" % [interest, scrap])
+	return interest
+
+
+func get_interest_preview() -> Dictionary:
+	"""Get interest preview for UI display."""
+	var interest: int = calculate_interest()
+	return {
+		"current_scrap": scrap,
+		"interest": interest,
+		"max_interest": 25,
+		"interest_rate": 5  # 5%
+	}
+
+
 func add_card_to_deck(card_id: String, tier: int) -> void:
 	deck.append({"card_id": card_id, "tier": tier})
 	print("[RunManager] Added card to deck: ", card_id)
@@ -328,3 +388,67 @@ func reset_wave_state() -> void:
 	# Reset cheat_death if warden has the passive
 	if _has_cheat_death_passive():
 		cheat_death_available = true
+	
+	# Reset XP tracking for this wave
+	xp_gained_this_wave = 0
+	levels_gained_this_wave = 0
+
+
+# =============================================================================
+# BROTATO ECONOMY: XP / LEVELING SYSTEM
+# =============================================================================
+
+func add_xp(base_amount: int) -> void:
+	"""Add XP with scaling from xp_gain_percent. Checks for level up."""
+	# Apply XP gain multiplier
+	var scaled_xp: int = int(float(base_amount) * player_stats.get_xp_gain_multiplier())
+	player_stats.current_xp += scaled_xp
+	xp_gained_this_wave += scaled_xp
+	
+	# Check for level up(s)
+	_check_level_up()
+	
+	# Emit XP changed signal
+	xp_changed.emit(player_stats.current_xp, player_stats.get_xp_for_next_level(), player_stats.current_level)
+
+
+func _check_level_up() -> void:
+	"""Check if player has enough XP to level up. Can level multiple times."""
+	var leveled: bool = true
+	while leveled:
+		var required: int = player_stats.get_xp_for_next_level()
+		if player_stats.current_xp >= required:
+			_perform_level_up()
+		else:
+			leveled = false
+
+
+func _perform_level_up() -> void:
+	"""Perform a level up: increase level, add max HP, heal that amount."""
+	player_stats.current_level += 1
+	levels_gained_this_wave += 1
+	
+	# Brotato-style: +1 Max HP per level, and heal that amount
+	var hp_gained: int = 1
+	player_stats.max_hp += hp_gained
+	current_hp = mini(current_hp + hp_gained, player_stats.max_hp)
+	
+	print("[RunManager] LEVEL UP! Now level %d. Max HP: %d" % [player_stats.current_level, player_stats.max_hp])
+	
+	level_up.emit(player_stats.current_level, hp_gained)
+	hp_changed.emit(current_hp, max_hp)
+	health_changed.emit(current_hp, max_hp)
+	stats_changed.emit()
+
+
+func get_xp_info() -> Dictionary:
+	"""Get XP info for UI display."""
+	return {
+		"current_xp": player_stats.current_xp,
+		"required_xp": player_stats.get_xp_for_next_level(),
+		"level": player_stats.current_level,
+		"progress": player_stats.get_xp_progress(),
+		"xp_gain_percent": player_stats.xp_gain_percent,
+		"xp_this_wave": xp_gained_this_wave,
+		"levels_this_wave": levels_gained_this_wave
+	}

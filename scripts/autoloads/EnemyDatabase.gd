@@ -25,6 +25,24 @@ func _create_default_enemies() -> void:
 func _create_grunt_enemies() -> void:
 	# === GRUNT ENEMIES ===
 	
+	# Weakling - Brotato Economy: trivially easy Wave 1 enemy
+	var weakling := EnemyDef.new()
+	weakling.enemy_id = "weakling"
+	weakling.enemy_name = "Weakling"
+	weakling.description = "Barely a threat. Perfect for learning your starter weapon."
+	weakling.enemy_type = "grunt"
+	weakling.behavior_type = EnemyDef.BehaviorType.RUSHER
+	weakling.base_hp = 3
+	weakling.base_damage = 2
+	weakling.movement_speed = 1
+	weakling.target_ring = 0  # Goes to Melee
+	weakling.attack_type = "melee"
+	weakling.scrap_value = 5  # Good scrap for early economy
+	weakling.xp_value = 1  # Minimal XP
+	weakling.icon_color = Color(0.5, 0.5, 0.4)
+	weakling.display_icon = "🐀"
+	_register_enemy(weakling)
+	
 	# Husk - basic melee enemy
 	var husk := EnemyDef.new()
 	husk.enemy_id = "husk"
@@ -38,6 +56,7 @@ func _create_grunt_enemies() -> void:
 	husk.target_ring = 0  # Goes to Melee
 	husk.attack_type = "melee"
 	husk.scrap_value = 2
+	husk.xp_value = 2  # Basic grunt
 	husk.icon_color = Color(0.8, 0.3, 0.3)
 	husk.display_icon = "💀"
 	_register_enemy(husk)
@@ -56,6 +75,7 @@ func _create_grunt_enemies() -> void:
 	spitter.attack_type = "ranged"
 	spitter.attack_range = 2  # Can attack from Mid
 	spitter.scrap_value = 2
+	spitter.xp_value = 2  # Basic ranged
 	spitter.icon_color = Color(0.4, 0.7, 0.3)
 	spitter.display_icon = "🦎"
 	_register_enemy(spitter)
@@ -73,6 +93,7 @@ func _create_grunt_enemies() -> void:
 	spinecrawler.target_ring = 0
 	spinecrawler.attack_type = "melee"
 	spinecrawler.scrap_value = 3
+	spinecrawler.xp_value = 3  # Fast threat
 	spinecrawler.icon_color = Color(0.6, 0.2, 0.6)
 	spinecrawler.display_icon = "🕷️"
 	_register_enemy(spinecrawler)
@@ -93,6 +114,7 @@ func _create_grunt_enemies() -> void:
 	bomber.buff_amount = 6  # Explosion damage to player
 	bomber.aoe_damage = 4  # V2: Explosion damage to other enemies in ring
 	bomber.scrap_value = 3
+	bomber.xp_value = 3  # Risky target
 	bomber.icon_color = Color(0.9, 0.5, 0.1)
 	bomber.display_icon = "💣"
 	_register_enemy(bomber)
@@ -110,6 +132,7 @@ func _create_grunt_enemies() -> void:
 	cultist.target_ring = 0
 	cultist.attack_type = "melee"
 	cultist.scrap_value = 1
+	cultist.xp_value = 1  # Fodder
 	cultist.icon_color = Color(0.4, 0.3, 0.5)
 	cultist.display_icon = "👤"
 	_register_enemy(cultist)
@@ -133,6 +156,7 @@ func _create_elite_enemies() -> void:
 	titan.target_ring = 0
 	titan.attack_type = "melee"
 	titan.scrap_value = 8
+	titan.xp_value = 8  # Elite tank
 	titan.icon_color = Color(0.5, 0.5, 0.6)
 	titan.display_icon = "🛡️"
 	_register_enemy(titan)
@@ -153,6 +177,7 @@ func _create_elite_enemies() -> void:
 	torchbearer.special_ability = "buff_allies"
 	torchbearer.buff_amount = 2
 	torchbearer.scrap_value = 6
+	torchbearer.xp_value = 6  # Elite buffer
 	torchbearer.icon_color = Color(0.9, 0.7, 0.2)
 	torchbearer.display_icon = "🔥"
 	_register_enemy(torchbearer)
@@ -174,6 +199,7 @@ func _create_elite_enemies() -> void:
 	channeler.spawn_enemy_id = "husk"
 	channeler.spawn_count = 1
 	channeler.scrap_value = 8
+	channeler.xp_value = 8  # Elite spawner
 	channeler.icon_color = Color(0.3, 0.3, 0.8)
 	channeler.display_icon = "🧙"
 	_register_enemy(channeler)
@@ -192,6 +218,7 @@ func _create_elite_enemies() -> void:
 	stalker.target_ring = 0
 	stalker.attack_type = "melee"
 	stalker.scrap_value = 5
+	stalker.xp_value = 5  # Mid-tier threat
 	stalker.icon_color = Color(0.2, 0.2, 0.3)
 	stalker.display_icon = "👁️"
 	_register_enemy(stalker)
@@ -213,6 +240,7 @@ func _create_elite_enemies() -> void:
 	reaver.attack_type = "melee"
 	reaver.special_ability = "armor_shred"
 	reaver.scrap_value = 6
+	reaver.xp_value = 6  # Elite shredder
 	reaver.icon_color = Color(0.7, 0.2, 0.2)
 	reaver.display_icon = "🪓"
 	_register_enemy(reaver)
@@ -240,6 +268,7 @@ func _create_boss_enemies() -> void:
 	ember_saint.spawn_enemy_id = "bomber"
 	ember_saint.spawn_count = 1
 	ember_saint.scrap_value = 50
+	ember_saint.xp_value = 50  # Boss - massive XP
 	ember_saint.icon_color = Color(1.0, 0.3, 0.1)
 	ember_saint.display_icon = "👹"
 	_register_enemy(ember_saint)

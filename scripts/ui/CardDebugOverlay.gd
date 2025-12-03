@@ -40,7 +40,7 @@ func track_card(card: Control) -> void:
 	
 	debug_labels[card] = label
 	
-  	var card_name_for_log: String = "unknown"
+	var card_name_for_log: String = "unknown"
 	if card.get("card_def") != null and card.card_def:
 		card_name_for_log = card.card_def.card_name
 	print("[CardDebugOverlay] Now tracking card: ", card_name_for_log)

@@ -778,8 +778,8 @@ static func _resolve_beam_damage(card_def, tier: int, target_ring: int, combat: 
 	
 	# Sort by hex status (prefer hexed enemies first)
 	candidates.sort_custom(func(a, b): 
-		var a_hex: int = a.get_status("hex")
-		var b_hex: int = b.get_status("hex")
+		var a_hex: int = a.get_status_value("hex")
+		var b_hex: int = b.get_status_value("hex")
 		return a_hex > b_hex
 	)
 	
@@ -938,7 +938,7 @@ static func _resolve_corrosive_damage(card_def, tier: int, target_ring: int, com
 	
 	for target in candidates:
 		# Check if target is hexed (double armor shred)
-		var hex_status: int = target.get_status("hex")
+		var hex_status: int = target.get_status_value("hex")
 		var actual_shred: int = armor_shred
 		if hex_status > 0:
 			actual_shred *= 2
@@ -979,7 +979,7 @@ static func _resolve_hex_transfer(card_def, _tier: int, combat: Node) -> void:
 	var source = null
 	var max_hex: int = 0
 	for enemy in candidates:
-		var hex_val: int = enemy.get_status("hex")
+		var hex_val: int = enemy.get_status_value("hex")
 		if hex_val > max_hex:
 			max_hex = hex_val
 			source = enemy

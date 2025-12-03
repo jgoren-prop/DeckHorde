@@ -7,7 +7,28 @@
 - ⏳ Future/Planned
 - 🔄 In Progress
 
-## Current Status: V2 Brainstorm System Implementation 🔄
+## Current Status: V2 Weapon Duration System ✅
+
+### Brotato Economy Implementation Status
+| Phase | Name | Status |
+|-------|------|--------|
+| Phase 1 | Starter Weapon Selection | ✅ COMPLETE |
+| Phase 2 | Starting Resources (1 energy, 1 draw, 50 HP) | ✅ COMPLETE |
+| Phase 3 | Interest System (5% scrap, max 25) | ✅ COMPLETE |
+| Phase 4 | Wave System (20 waves, Weakling enemy) | ✅ COMPLETE |
+| Phase 5 | Stat Upgrades in Shop | ✅ COMPLETE |
+| Phase 6 | Weapon Slot Limit | ❌ REMOVED (V2) |
+| Phase 7 | Documentation | ✅ COMPLETE |
+
+### V2 Weapon Duration System (NEW)
+| Phase | Name | Status |
+|-------|------|--------|
+| Phase 1 | Duration types on CardDefinition | ✅ COMPLETE |
+| Phase 2 | DeckManager deployed/banished zones | ✅ COMPLETE |
+| Phase 3 | CombatManager duration countdown | ✅ COMPLETE |
+| Phase 4 | Remove weapon slot limit | ✅ COMPLETE |
+| Phase 5 | Update starter weapons with durations | ✅ COMPLETE |
+| Phase 6 | Warden starter bundles | ✅ COMPLETE |
 
 ### V2 Brainstorm Implementation Status
 | Phase | Name | Status |
@@ -23,6 +44,59 @@
 | Phase 9 | Tempo Artifacts (5) | ✅ COMPLETE |
 | Phase 10 | CombatManager Wiring | ✅ COMPLETE |
 | Phase 11 | Balance & Testing | 🔄 IN PROGRESS |
+
+---
+
+## Brotato Economy Content Summary
+
+### Starter Weapons (CardDatabase.gd)
+| Weapon | Duration | On Expire |
+|--------|----------|-----------|
+| Rusty Pistol | Infinite | - |
+| Worn Hex Staff | Infinite | - |
+| Shock Prod | 5 turns | Discard |
+| Leaky Siphon | Infinite | - |
+| Volatile Handgun | 4 kills | Banish |
+| Mini Turret | Infinite | - |
+| Spark Coil | 3 turns | Banish |
+
+### Warden Starter Bundles
+| Warden | Bundle Cards |
+|--------|--------------|
+| Veteran | Guard Stance + Ammo Cache |
+| Ash | Minor Hex + Guard Stance |
+| Gloom | Minor Hex + Guard Stance |
+| Glass | Guard Stance + Minor Barrier |
+
+### New Enemy (EnemyDatabase.gd)
+- Weakling: 3 HP, 2 damage - trivially easy Wave 1 enemy
+
+### CardDefinition V2 Duration Fields
+- `duration_type`: infinite, turns, kills, burn_out
+- `duration_turns`: Number of turns before expiry
+- `duration_kills`: Number of kills before expiry
+- `on_expire`: discard, banish, destroy
+
+### DeckManager V2 Zones
+- `deployed`: Cards currently on the battlefield (out of deck)
+- `banished`: Cards removed for rest of wave
+
+### New Scene
+- StarterWeaponSelect.tscn - pick starter weapon after warden
+
+### Shop Stat Upgrades (ShopGenerator.gd)
+- +1 Energy, +1 Draw, +10 HP
+- +5% Gun Damage, +5% Hex Damage, +10% Armor Gain
+- +10% Scrap Gain, -5% Shop Prices, +10% XP Gain
+- ~~+1 Weapon Slot~~ (REMOVED in V2)
+
+### System Changes
+- 20 waves (was 12), 6 wave bands (was 4)
+- Wardens use stat_modifiers instead of setting absolute stats
+- Interest system: 5% of scrap after each wave (max 25)
+- **V2**: No weapon slot limit - unlimited deployed weapons
+- **V2**: Weapons are DEPLOYED (out of deck while in play)
+- **V2**: Weapon durations: infinite, turns, kills, burn_out
 
 ---
 
@@ -71,6 +145,10 @@
 ## In Progress
 
 ### Phase 11: Balance & Testing
+- [ ] Test weapon duration system (turns, kills, burn_out)
+- [ ] Test deployed weapon tracking (cards out of deck while deployed)
+- [ ] Test weapon expiry behavior (discard, banish, destroy)
+- [ ] Test warden starter bundles
 - [ ] Test explosive damage and splash mechanics
 - [ ] Test beam chaining with hex spread
 - [ ] Test piercing overflow mechanics
@@ -91,20 +169,24 @@
 | Main Menu | ✅ Working | Title, buttons functional |
 | Settings | ✅ Working | Audio/Gameplay/Display settings with persistence |
 | Warden Select | ✅ Working | 4 wardens (Ash, Gloom, Glass, Veteran) |
-| Combat | ✅ Working | V2 system, 90+ cards, 10 enemies |
-| Shop | ✅ Working | V2 structure (4 cards, 3 artifacts, 2 services) |
-| Post-Wave Reward | ✅ Working | Card/Scrap/Heal choices |
+| Starter Weapon Select | ✅ Working | 7 starter weapons (Brotato Economy) |
+| Combat | ✅ Working | V2 system, 90+ cards, 12 enemies |
+| Shop | ✅ Working | Cards, artifacts, stat upgrades (Brotato Economy) |
+| Post-Wave Reward | ✅ Working | Card/Scrap/Heal choices + interest display |
 | Run End | ✅ Working | Victory/Defeat screens |
 | Meta Menu | ❓ Untested | Scene exists |
 
 ### Full Content Summary
 | Content | Count | Notes |
 |---------|-------|-------|
-| Cards | 90+ | V1 cards + 51 V2 brainstorm cards |
+| Cards | 97+ | V1 cards + 51 V2 brainstorm + 7 starter weapons |
 | Artifacts | 58+ | V1 artifacts + 32 V2 brainstorm artifacts |
-| Enemies | 11 | Husk, Spitter, Spinecrawler, Bomber, etc. |
-| Wardens | 4 | Ash, Gloom, Glass, Veteran |
+| Stat Upgrades | 8 | Energy, Draw, HP, Gun%, Hex%, Armor%, Scrap%, Shop% (Slots REMOVED) |
+| Enemies | 12 | Weakling, Husk, Spitter, Spinecrawler, Bomber, etc. |
+| Wardens | 4 | Ash, Gloom, Glass, Veteran (each with starter bundle) |
+| Waves | 20 | Brotato Economy (was 12) |
 | Build Families | 6 | Gun Board, Hex Ritualist, Barrier Fortress, Lifedrain, + damage-type builds |
+| Weapon Durations | 4 | infinite, turns, kills, burn_out |
 
 ---
 

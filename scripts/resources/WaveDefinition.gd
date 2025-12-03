@@ -1,7 +1,10 @@
 extends Resource
 class_name WaveDefinition
-## WaveDefinition - V2 Wave Generation with Wave Bands
-## Waves 1-3: Onboarding, Waves 4-6: Build Check, Waves 7-9: Stress, Waves 10-12: Boss
+## WaveDefinition - Brotato Economy Wave Generation with Wave Bands
+## 20 waves total:
+## Waves 1-3: Onboarding (trivially easy start)
+## Waves 4-6: Build Check, Waves 7-9: Stress Mix
+## Waves 10-12: Late Game, Waves 13-16: Endgame, Waves 17-20: Boss Rush
 
 const BattlefieldStateScript = preload("res://scripts/combat/BattlefieldState.gd")
 
@@ -51,9 +54,15 @@ static func create_basic_wave(wave_num: int) -> WaveDefinition:
 	wave.hp_multiplier = 1.0 + (wave_num - 1) * 0.12  # V2: slightly reduced scaling
 	wave.damage_multiplier = 1.0 + (wave_num - 1) * 0.08
 	
-	# Determine wave band and generate spawns
-	if wave_num >= 10:
-		# Band 4: Boss & Pre-Boss (waves 10-12)
+	# Determine wave band and generate spawns (Brotato Economy: 20 waves)
+	if wave_num >= 17:
+		# Band 6: Boss Rush (waves 17-20)
+		_generate_band6_wave(wave, wave_num)
+	elif wave_num >= 13:
+		# Band 5: Endgame (waves 13-16)
+		_generate_band5_wave(wave, wave_num)
+	elif wave_num >= 10:
+		# Band 4: Late Game (waves 10-12)
 		_generate_band4_wave(wave, wave_num)
 	elif wave_num >= 7:
 		# Band 3: Stress Mix (waves 7-9)
@@ -62,16 +71,16 @@ static func create_basic_wave(wave_num: int) -> WaveDefinition:
 		# Band 2: Build Check (waves 4-6)
 		_generate_band2_wave(wave, wave_num)
 	else:
-		# Band 1: Onboarding (waves 1-3)
+		# Band 1: Onboarding (waves 1-3) - trivially easy
 		_generate_band1_wave(wave, wave_num)
 	
 	return wave
 
 
 # ============================================================
-# BAND 1: ONBOARDING & EARLY COMMIT (Waves 1-3)
-# Goals: Teach ring movement, allow shops to push into a family
-# Enemies: Husks, Cultists, occasional Spitter/Bomber by wave 3
+# BAND 1: ONBOARDING (Waves 1-3)
+# Brotato Economy: Wave 1 is TRIVIALLY EASY - just survive and collect
+# Goals: Learn your starter weapon, collect scrap for first shop visit
 # ============================================================
 static func _generate_band1_wave(wave: WaveDefinition, wave_num: int) -> void:
 	wave.wave_name = "Wave " + str(wave_num) + " - Onboarding"
@@ -80,20 +89,19 @@ static func _generate_band1_wave(wave: WaveDefinition, wave_num: int) -> void:
 	
 	match wave_num:
 		1:
-			# Wave 1: Pure husks, learn the basics
-			wave.initial_spawns.append({"enemy_id": "husk", "count": 4, "ring": BattlefieldStateScript.Ring.FAR})
+			# Wave 1: Brotato Economy - TRIVIALLY EASY
+			# Just 2-3 Weaklings - any starter weapon can clear them
+			wave.wave_name = "Wave 1 - Tutorial"
+			wave.initial_spawns.append({"enemy_id": "weakling", "count": 3, "ring": BattlefieldStateScript.Ring.FAR})
 		2:
-			# Wave 2: Husks + cultists (swarm)
-			wave.initial_spawns.append({"enemy_id": "husk", "count": 3, "ring": BattlefieldStateScript.Ring.FAR})
-			wave.initial_spawns.append({"enemy_id": "cultist", "count": 4, "ring": BattlefieldStateScript.Ring.MID})
-		3:
-			# Wave 3: First Spitter (ranged), possible Bomber
-			wave.initial_spawns.append({"enemy_id": "husk", "count": 4, "ring": BattlefieldStateScript.Ring.FAR})
+			# Wave 2: Still easy - Weaklings + a few Cultists
+			wave.initial_spawns.append({"enemy_id": "weakling", "count": 2, "ring": BattlefieldStateScript.Ring.FAR})
 			wave.initial_spawns.append({"enemy_id": "cultist", "count": 3, "ring": BattlefieldStateScript.Ring.MID})
-			wave.initial_spawns.append({"enemy_id": "spitter", "count": 1, "ring": BattlefieldStateScript.Ring.FAR})
-			# 50% chance for an early Bomber
-			if randf() < 0.5:
-				wave.initial_spawns.append({"enemy_id": "bomber", "count": 1, "ring": BattlefieldStateScript.Ring.MID})
+		3:
+			# Wave 3: Transition - First real enemies
+			wave.initial_spawns.append({"enemy_id": "husk", "count": 3, "ring": BattlefieldStateScript.Ring.FAR})
+			wave.initial_spawns.append({"enemy_id": "cultist", "count": 3, "ring": BattlefieldStateScript.Ring.MID})
+			wave.initial_spawns.append({"enemy_id": "weakling", "count": 2, "ring": BattlefieldStateScript.Ring.FAR})
 
 
 # ============================================================
@@ -174,9 +182,9 @@ static func _generate_band3_wave(wave: WaveDefinition, wave_num: int) -> void:
 
 
 # ============================================================
-# BAND 4: BOSS & PRE-BOSS (Waves 10-12)
-# Goals: Show off build patterns, climactic fights
-# Enemies: Concentrated archetypes, final boss
+# BAND 4: LATE GAME (Waves 10-12)
+# Goals: Build should be strong now, test synergies
+# Enemies: Mixed elites, heavier pressure
 # ============================================================
 static func _generate_band4_wave(wave: WaveDefinition, wave_num: int) -> void:
 	wave.initial_spawns = []
@@ -184,7 +192,7 @@ static func _generate_band4_wave(wave: WaveDefinition, wave_num: int) -> void:
 	
 	match wave_num:
 		10:
-			# Wave 10: Pre-boss - Ambush Assault
+			# Wave 10: Ambush Assault
 			wave.is_elite_wave = true
 			wave.wave_name = "Wave 10 - Ambush Assault"
 			wave.initial_spawns.append({"enemy_id": "stalker", "count": 2, "ring": BattlefieldStateScript.Ring.CLOSE})
@@ -192,32 +200,123 @@ static func _generate_band4_wave(wave: WaveDefinition, wave_num: int) -> void:
 			wave.initial_spawns.append({"enemy_id": "husk", "count": 4, "ring": BattlefieldStateScript.Ring.FAR})
 			wave.initial_spawns.append({"enemy_id": "armor_reaver", "count": 1, "ring": BattlefieldStateScript.Ring.MID})
 		11:
-			# Wave 11: Pre-boss - Last Stand (armor shredders + mixed)
+			# Wave 11: Mixed Elite
 			wave.is_elite_wave = true
-			wave.wave_name = "Wave 11 - Last Stand"
+			wave.wave_name = "Wave 11 - Elite Mix"
 			wave.initial_spawns.append({"enemy_id": "armor_reaver", "count": 2, "ring": BattlefieldStateScript.Ring.MID})
 			wave.initial_spawns.append({"enemy_id": "shell_titan", "count": 1, "ring": BattlefieldStateScript.Ring.FAR})
 			wave.initial_spawns.append({"enemy_id": "torchbearer", "count": 1, "ring": BattlefieldStateScript.Ring.FAR})
 			wave.initial_spawns.append({"enemy_id": "channeler", "count": 1, "ring": BattlefieldStateScript.Ring.FAR})
 			wave.initial_spawns.append({"enemy_id": "bomber", "count": 2, "ring": BattlefieldStateScript.Ring.MID})
 		12:
-			# Wave 12: EMBER SAINT BOSS
+			# Wave 12: Heavy Horde
+			wave.is_elite_wave = true
+			wave.wave_name = "Wave 12 - Heavy Horde"
+			wave.initial_spawns.append({"enemy_id": "shell_titan", "count": 2, "ring": BattlefieldStateScript.Ring.FAR})
+			wave.initial_spawns.append({"enemy_id": "husk", "count": 5, "ring": BattlefieldStateScript.Ring.FAR})
+			wave.initial_spawns.append({"enemy_id": "bomber", "count": 2, "ring": BattlefieldStateScript.Ring.MID})
+			wave.initial_spawns.append({"enemy_id": "spitter", "count": 2, "ring": BattlefieldStateScript.Ring.FAR})
+
+
+# ============================================================
+# BAND 5: ENDGAME (Waves 13-16)
+# Goals: Build is complete, survive the onslaught
+# Enemies: Heavy elites, themed waves, intense pressure
+# ============================================================
+static func _generate_band5_wave(wave: WaveDefinition, wave_num: int) -> void:
+	wave.initial_spawns = []
+	wave.phase_spawns = []
+	
+	match wave_num:
+		13:
+			# Wave 13: Shredder Rush
+			wave.is_elite_wave = true
+			wave.wave_name = "Wave 13 - Shredder Rush"
+			wave.initial_spawns.append({"enemy_id": "armor_reaver", "count": 3, "ring": BattlefieldStateScript.Ring.MID})
+			wave.initial_spawns.append({"enemy_id": "spinecrawler", "count": 4, "ring": BattlefieldStateScript.Ring.FAR})
+			wave.initial_spawns.append({"enemy_id": "stalker", "count": 2, "ring": BattlefieldStateScript.Ring.CLOSE})
+		14:
+			# Wave 14: Double Buffer
+			wave.is_elite_wave = true
+			wave.wave_name = "Wave 14 - Double Buffer"
+			wave.initial_spawns.append({"enemy_id": "torchbearer", "count": 2, "ring": BattlefieldStateScript.Ring.FAR})
+			wave.initial_spawns.append({"enemy_id": "husk", "count": 6, "ring": BattlefieldStateScript.Ring.FAR})
+			wave.initial_spawns.append({"enemy_id": "channeler", "count": 1, "ring": BattlefieldStateScript.Ring.FAR})
+			wave.initial_spawns.append({"enemy_id": "bomber", "count": 2, "ring": BattlefieldStateScript.Ring.MID})
+		15:
+			# Wave 15: Tank Line
+			wave.is_elite_wave = true
+			wave.wave_name = "Wave 15 - Tank Line"
+			wave.initial_spawns.append({"enemy_id": "shell_titan", "count": 3, "ring": BattlefieldStateScript.Ring.FAR})
+			wave.initial_spawns.append({"enemy_id": "torchbearer", "count": 1, "ring": BattlefieldStateScript.Ring.FAR})
+			wave.initial_spawns.append({"enemy_id": "husk", "count": 4, "ring": BattlefieldStateScript.Ring.MID})
+		16:
+			# Wave 16: All-Out Assault
+			wave.is_elite_wave = true
+			wave.wave_name = "Wave 16 - All-Out"
+			wave.initial_spawns.append({"enemy_id": "stalker", "count": 3, "ring": BattlefieldStateScript.Ring.CLOSE})
+			wave.initial_spawns.append({"enemy_id": "shell_titan", "count": 2, "ring": BattlefieldStateScript.Ring.FAR})
+			wave.initial_spawns.append({"enemy_id": "bomber", "count": 3, "ring": BattlefieldStateScript.Ring.MID})
+			wave.initial_spawns.append({"enemy_id": "channeler", "count": 2, "ring": BattlefieldStateScript.Ring.FAR})
+
+
+# ============================================================
+# BAND 6: BOSS RUSH (Waves 17-20)
+# Goals: Final stretch, culminating in boss
+# Enemies: Everything thrown at you, boss wave at 20
+# ============================================================
+static func _generate_band6_wave(wave: WaveDefinition, wave_num: int) -> void:
+	wave.initial_spawns = []
+	wave.phase_spawns = []
+	
+	match wave_num:
+		17:
+			# Wave 17: Pre-Boss 1
+			wave.is_elite_wave = true
+			wave.wave_name = "Wave 17 - Gauntlet I"
+			wave.initial_spawns.append({"enemy_id": "armor_reaver", "count": 2, "ring": BattlefieldStateScript.Ring.MID})
+			wave.initial_spawns.append({"enemy_id": "shell_titan", "count": 2, "ring": BattlefieldStateScript.Ring.FAR})
+			wave.initial_spawns.append({"enemy_id": "spinecrawler", "count": 4, "ring": BattlefieldStateScript.Ring.FAR})
+			wave.initial_spawns.append({"enemy_id": "bomber", "count": 2, "ring": BattlefieldStateScript.Ring.MID})
+		18:
+			# Wave 18: Pre-Boss 2
+			wave.is_elite_wave = true
+			wave.wave_name = "Wave 18 - Gauntlet II"
+			wave.initial_spawns.append({"enemy_id": "torchbearer", "count": 2, "ring": BattlefieldStateScript.Ring.FAR})
+			wave.initial_spawns.append({"enemy_id": "channeler", "count": 2, "ring": BattlefieldStateScript.Ring.FAR})
+			wave.initial_spawns.append({"enemy_id": "stalker", "count": 3, "ring": BattlefieldStateScript.Ring.CLOSE})
+			wave.initial_spawns.append({"enemy_id": "husk", "count": 5, "ring": BattlefieldStateScript.Ring.FAR})
+		19:
+			# Wave 19: Pre-Boss 3 - Last Stand
+			wave.is_elite_wave = true
+			wave.wave_name = "Wave 19 - Last Stand"
+			wave.initial_spawns.append({"enemy_id": "shell_titan", "count": 3, "ring": BattlefieldStateScript.Ring.FAR})
+			wave.initial_spawns.append({"enemy_id": "armor_reaver", "count": 3, "ring": BattlefieldStateScript.Ring.MID})
+			wave.initial_spawns.append({"enemy_id": "bomber", "count": 4, "ring": BattlefieldStateScript.Ring.MID})
+			wave.initial_spawns.append({"enemy_id": "torchbearer", "count": 1, "ring": BattlefieldStateScript.Ring.FAR})
+		20:
+			# Wave 20: EMBER SAINT BOSS
 			wave.is_boss_wave = true
 			wave.wave_name = "Final Wave - Ember Saint"
 			wave.initial_spawns.append({"enemy_id": "ember_saint", "count": 1, "ring": BattlefieldStateScript.Ring.FAR})
-			wave.initial_spawns.append({"enemy_id": "husk", "count": 3, "ring": BattlefieldStateScript.Ring.MID})
-			wave.initial_spawns.append({"enemy_id": "bomber", "count": 1, "ring": BattlefieldStateScript.Ring.FAR})
-			# Boss phase spawns: alternating Bomber + Husk (per V2 spec)
+			wave.initial_spawns.append({"enemy_id": "husk", "count": 4, "ring": BattlefieldStateScript.Ring.MID})
+			wave.initial_spawns.append({"enemy_id": "bomber", "count": 2, "ring": BattlefieldStateScript.Ring.FAR})
+			wave.initial_spawns.append({"enemy_id": "torchbearer", "count": 1, "ring": BattlefieldStateScript.Ring.FAR})
+			# Boss phase spawns: alternating Bomber + Husk
 			wave.phase_spawns.append({"enemy_id": "bomber", "count": 1, "ring": BattlefieldStateScript.Ring.FAR})
-			wave.phase_spawns.append({"enemy_id": "husk", "count": 1, "ring": BattlefieldStateScript.Ring.MID})
+			wave.phase_spawns.append({"enemy_id": "husk", "count": 2, "ring": BattlefieldStateScript.Ring.MID})
 
 
 # ============================================================
-# HELPER: Get wave band for a wave number
+# HELPER: Get wave band for a wave number (Brotato Economy: 6 bands)
 # ============================================================
 static func get_wave_band(wave_num: int) -> int:
-	"""Returns 1-4 based on which band the wave is in."""
-	if wave_num >= 10:
+	"""Returns 1-6 based on which band the wave is in."""
+	if wave_num >= 17:
+		return 6
+	elif wave_num >= 13:
+		return 5
+	elif wave_num >= 10:
 		return 4
 	elif wave_num >= 7:
 		return 3
@@ -237,6 +336,10 @@ static func get_wave_band_name(wave_num: int) -> String:
 		3:
 			return "Stress Test"
 		4:
-			return "Boss Phase"
+			return "Late Game"
+		5:
+			return "Endgame"
+		6:
+			return "Boss Rush"
 		_:
 			return "Unknown"
