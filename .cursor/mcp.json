@@ -3,7 +3,7 @@
        "godot": {
             "command": "node",
             "args": [
-                "C:\\Users\\Jgoren\\Documents\\gamedev-tools\\mcp\\godot-mcp\\build\\index.js"        
+                "~/Documents/gamedev-tools/mcp/godot-mcp/build/index.js"
             ]
         }
     }

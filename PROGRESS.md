@@ -171,10 +171,16 @@
 | Warden Select | ✅ Working | 4 wardens (Ash, Gloom, Glass, Veteran) |
 | Starter Weapon Select | ✅ Working | 7 starter weapons (Brotato Economy) |
 | Combat | ✅ Working | V2 system, 90+ cards, 12 enemies |
-| Shop | ✅ Working | Cards, artifacts, stat upgrades (Brotato Economy) |
-| Post-Wave Reward | ✅ Working | Card/Scrap/Heal choices + interest display |
+| Shop | ✅ Working | Cards, artifacts, stat upgrades, interest/XP, owned artifacts display, card collection view |
+| Post-Wave Reward | ❌ Removed | Skipped - go directly from combat to shop |
 | Run End | ✅ Working | Victory/Defeat screens |
 | Meta Menu | ❓ Untested | Scene exists |
+
+### Economy Changes (Latest)
+- **Healing removed** - No heal service in shop
+- **HP restores to full** after each successful wave
+- **No reward screen** - Combat goes directly to Shop
+- **Interest/XP display** moved to Shop screen
 
 ### Full Content Summary
 | Content | Count | Notes |

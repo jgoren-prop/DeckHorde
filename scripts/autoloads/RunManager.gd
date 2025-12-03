@@ -274,12 +274,13 @@ func add_armor(amount: int) -> void:
 	AudioManager.play_armor_gain()
 
 
-func heal(amount: int) -> void:
-	# V2: Apply heal power multiplier
-	var scaled_amount: int = int(float(amount) * get_heal_power_multiplier())
-	current_hp = min(max_hp, current_hp + scaled_amount)
-	hp_changed.emit(current_hp, max_hp)
-	AudioManager.play_heal()
+func restore_hp_to_full() -> void:
+	"""Restore HP to full. Called after each successful wave."""
+	if current_hp < max_hp:
+		current_hp = max_hp
+		hp_changed.emit(current_hp, max_hp)
+		health_changed.emit(current_hp, max_hp)
+		print("[RunManager] HP restored to full: %d/%d" % [current_hp, max_hp])
 
 
 func add_scrap(amount: int) -> void:

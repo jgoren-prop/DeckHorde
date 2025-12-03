@@ -408,3 +408,6 @@ func morph_from_emoji(emoji_position: Vector2, duration: float = 0.4) -> void:
 	tween.tween_property(pistol_container, "position", -pistol_container.pivot_offset, duration)
 
 
+
+
+

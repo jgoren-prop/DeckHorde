@@ -62,11 +62,15 @@ var is_being_played: bool = false  # Flag to prevent return animation if card is
 var active_tween: Tween = null  # Track active tween to kill if needed
 var hover_tween: Tween = null  # Track hover tween separately
 
-# Hover expansion settings
-const HOVER_SCALE: Vector2 = Vector2(1.5, 1.5)  # Bigger on hover for readability
-const HOVER_LIFT: float = 80.0  # Lift card up
+# Hover expansion settings (defaults for combat hand)
+const DEFAULT_HOVER_SCALE: Vector2 = Vector2(1.5, 1.5)  # Bigger on hover for readability
+const DEFAULT_HOVER_LIFT: float = 80.0  # Lift card up
 const HOVER_DURATION: float = 0.12  # Animation speed
 const DEFAULT_SCALE: Vector2 = Vector2(1.0, 1.0)
+
+# Per-instance hover settings (can be overridden for different contexts like shop)
+var hover_scale_amount: Vector2 = DEFAULT_HOVER_SCALE
+var hover_lift_amount: float = DEFAULT_HOVER_LIFT
 
 const TYPE_ICONS: Dictionary = {
 	"weapon": "⚔️",
@@ -551,9 +555,18 @@ func _on_button_down() -> void:
 
 func _on_button_up() -> void:
 	if not is_dragging:
-		# Simple click - show hint to drag
+		# Simple click - emit signal
 		if card_def:
 			card_clicked.emit(card_def, tier, hand_index)
+		
+		# Fix for stuck hover: Button press can prevent mouse_exited from firing
+		# Check if mouse is actually still over this card, reset hover if not
+		await get_tree().process_frame  # Wait for any position changes to settle
+		if is_instance_valid(self) and enable_hover_scale:
+			var mouse_pos: Vector2 = get_global_mouse_position()
+			var rect: Rect2 = click_area.get_global_rect()
+			if not rect.has_point(mouse_pos):
+				_force_reset_hover()
 		return
 	
 	# End dragging
@@ -634,8 +647,8 @@ func _on_mouse_entered() -> void:
 	hover_tween.set_ease(Tween.EASE_OUT)
 	hover_tween.set_trans(Tween.TRANS_BACK)
 	hover_tween.set_parallel(true)
-	hover_tween.tween_property(self, "scale", HOVER_SCALE, HOVER_DURATION)
-	hover_tween.tween_property(self, "position:y", base_pos.y - HOVER_LIFT, HOVER_DURATION)
+	hover_tween.tween_property(self, "scale", hover_scale_amount, HOVER_DURATION)
+	hover_tween.tween_property(self, "position:y", base_pos.y - hover_lift_amount, HOVER_DURATION)
 	hover_tween.tween_property(self, "rotation", 0.0, HOVER_DURATION)  # Straighten card
 	hover_tween.finished.connect(func(): hover_tween = null)
 	
@@ -654,6 +667,11 @@ func _on_mouse_exited() -> void:
 	if not enable_hover_scale:
 		return
 	
+	_animate_hover_reset()
+
+
+func _animate_hover_reset() -> void:
+	"""Animate the card back to its base (non-hovered) state."""
 	# Kill any existing hover tween
 	if hover_tween and hover_tween.is_valid():
 		hover_tween.kill()
@@ -673,6 +691,23 @@ func _on_mouse_exited() -> void:
 	hover_tween.finished.connect(func(): hover_tween = null)
 	
 	z_index = fan_index  # Use fan index for z-ordering
+
+
+func _force_reset_hover() -> void:
+	"""Immediately reset hover state without animation (for stuck hover fix)."""
+	# Kill any existing hover tween
+	if hover_tween and hover_tween.is_valid():
+		hover_tween.kill()
+		hover_tween = null
+	
+	# Reset to base state immediately
+	var base_pos: Vector2 = get_meta("hover_base_pos", position)
+	var base_rotation: float = get_meta("hover_base_rotation", fan_rotation)
+	
+	scale = DEFAULT_SCALE
+	position.y = base_pos.y
+	rotation = base_rotation
+	z_index = fan_index
 
 
 func set_fan_position(index: int, total: int, pos: Vector2, rot: float) -> void:

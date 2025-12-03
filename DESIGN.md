@@ -16,9 +16,10 @@
 1. **Select Warden** - Choose from 4 characters with stat modifiers
 2. **Select Starter Weapon** - Pick 1 of 7 starter weapons (your only starting card!)
 3. **Combat** - Survive waves of enemies using your deck
-4. **Reward** - Pick new cards, scrap, or healing (with interest on scrap)
-5. **Shop** - Buy cards, artifacts, stat upgrades, services (primary build driver)
-6. **Repeat** - Progress through 20 waves to victory
+4. **Shop** - Buy cards, artifacts, stat upgrades, services (primary build driver)
+5. **Repeat** - Progress through 20 waves to victory
+
+**Note:** Health restores to full after each wave. Scrap comes from killing enemies during combat.
 
 ### Brotato Economy Overview
 
@@ -157,7 +158,6 @@ Stats that artifacts and wardens can modify:
 ### Defense & Sustain
 - `max_hp` (e.g., 70 for Veteran)
 - `armor_gain_percent` (scales armor card values)
-- `heal_power_percent` (scales HP gain)
 - `barrier_strength_percent` (duration/HP of barriers)
 
 ### Economy / Tempo
@@ -286,6 +286,35 @@ Trade damage for sustain. Constantly healing and converting sustain into armor/d
 
 ---
 
+## Rarity System
+
+Both cards and artifacts use a 4-tier rarity system:
+
+| Rarity | Tier | Color | Shop Weight | Notes |
+|--------|------|-------|-------------|-------|
+| Common | 1 | Gray | High | All starter weapons, basic cards |
+| Uncommon | 2 | Green | Medium | Solid upgrades |
+| Rare | 3 | Blue | Low | Powerful synergy pieces |
+| Legendary | 4 | Gold | Very Low | Build-defining power |
+
+### Rarity Distribution
+
+- **Common (17 cards)**: Starter weapons, basic skills, foundation pieces
+- **Uncommon (25 cards)**: Most instant skills, mid-tier engines
+- **Rare (15 cards)**: Persistent weapons, powerful AoE, synergy payoffs
+- **Legendary (TBD)**: Reserved for future powerful cards
+
+### Shop Appearance Rates (by wave)
+
+| Wave | Common | Uncommon | Rare | Legendary |
+|------|--------|----------|------|-----------|
+| 1-3 | 70% | 25% | 5% | 0% |
+| 4-8 | 50% | 35% | 13% | 2% |
+| 9-14 | 30% | 40% | 25% | 5% |
+| 15-20 | 20% | 35% | 35% | 10% |
+
+---
+
 ## Artifact System (26 Artifacts)
 
 Artifacts are **Brotato-style items**: small, often stackable stat and tag boosts with clear tradeoffs.
@@ -374,8 +403,39 @@ Per wave, when you open the shop:
 
 | Service | Effect | Cost |
 |---------|--------|------|
-| Heal | Restore 30% of missing HP | `10 + 2 * wave` scrap |
 | Remove Card | Remove chosen card from deck | `10 + 3 * wave` scrap |
+
+**Note:** No heal service - HP restores to full after each wave.
+
+### Shop UI Panels
+
+The shop screen displays several information panels:
+
+| Panel | Position | Content |
+|-------|----------|---------|
+| Stats Panel | Left side | Full player stats (HP, Armor, damage %, etc.) |
+| Tag Tracker | Center-left | Count of each tag in your deck (Gun, Hex, etc.) |
+| Owned Artifacts | Center-left (below tags) | Grid of all artifacts you own with hover tooltips |
+| Card Collection | Bottom | All cards in your deck organized by category (fan layout) |
+| Dev Panel | Top-right | Debug buttons (+scrap, skip wave, full heal) |
+
+**Owned Artifacts Panel:**
+- Shows icon grid (4 columns) of all artifacts owned
+- Stackable artifacts show "x2", "x3" badge
+- Border color indicates rarity (gray/blue/purple/gold)
+- Hovering shows tooltip with artifact name and effect
+
+**Card Collection Panel:**
+- Displays all deck cards at bottom of screen in a single horizontal row
+- Cards sorted by core type (gun → hex → barrier → defense → skill → engine)
+- Cards overlap slightly (45px spacing) and are scaled to 50%
+- Horizontally centered in the visible area
+- **Hover behavior**: When hovering a card:
+  - The hovered card pops up (lifts 40px) and scales larger (65%)
+  - Neighboring cards spread apart (60px extra spacing)
+  - Hovered card comes to front (z-index 100)
+  - Smooth tween animation (0.15s) for all movements
+- Scrollable horizontally for large decks
 
 ---
 
@@ -745,7 +805,6 @@ A Hearthstone-style "board" for deployed persistent weapons, positioned between 
 | Starter Weapon Select | `scenes/StarterWeaponSelect.tscn` |
 | Combat | `scenes/Combat.tscn` |
 | Shop | `scenes/Shop.tscn` |
-| Post-Wave Reward | `scenes/PostWaveReward.tscn` |
 | Run End | `scenes/RunEnd.tscn` |
 | Meta Menu | `scenes/MetaMenu.tscn` |
 
@@ -860,7 +919,7 @@ DeckHorde/
 │   ├── Combat.tscn
 │   ├── BattlefieldArena.tscn
 │   ├── Shop.tscn
-│   ├── PostWaveReward.tscn
+│   ├── PostWaveReward.tscn  # Unused - kept for reference
 │   ├── RunEnd.tscn
 │   ├── MetaMenu.tscn
 │   ├── Settings.tscn
@@ -902,7 +961,6 @@ DeckHorde/
 │       ├── CombatScreen.gd
 │       ├── CardUI.gd
 │       ├── Shop.gd
-│       ├── PostWaveReward.gd
 │       ├── RunEnd.gd
 │       ├── MetaMenu.gd
 │       ├── Settings.gd

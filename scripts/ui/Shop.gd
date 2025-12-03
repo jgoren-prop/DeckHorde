@@ -7,10 +7,15 @@ extends Control
 @onready var merge_section: Control = $MarginContainer/VBox/MergeSection
 @onready var merge_slots: HBoxContainer = $MarginContainer/VBox/MergeSection/MergeSlots
 @onready var remove_cost_label: Label = $MarginContainer/VBox/ServicesSection/ServiceButtons/RemoveCard/Cost
-@onready var heal_cost_label: Label = $MarginContainer/VBox/ServicesSection/ServiceButtons/Heal/Cost
 @onready var reroll_cost_label: Label = $MarginContainer/VBox/ServicesSection/ServiceButtons/Reroll/Cost
 @onready var deck_view_panel: PanelContainer = $DeckViewPanel
 @onready var deck_grid: GridContainer = $DeckViewPanel/VBox/ScrollContainer/DeckGrid
+
+# Card collection panel (editable in scene)
+@onready var card_collection_panel: PanelContainer = $CardCollectionPanel
+@onready var collection_title: Label = $CardCollectionPanel/VBox/CollectionTitle
+@onready var card_scroll: ScrollContainer = $CardCollectionPanel/VBox/CardScroll
+@onready var cards_container: Control = $CardCollectionPanel/VBox/CardScroll/CardsContainer
 
 # Deck viewer overlay (view-only, created dynamically)
 var deck_viewer_overlay: CanvasLayer = null
@@ -23,6 +28,12 @@ var stats_panel: PanelContainer = null
 # Tag tracker panel
 var tag_tracker_panel: PanelContainer = null
 
+# Owned artifacts panel (shows all artifacts player owns)
+var owned_artifacts_panel: PanelContainer = null
+
+# Tooltip for artifacts
+var artifact_tooltip: PanelContainer = null
+
 # Merge popup (optional - created dynamically if needed)
 var merge_popup: PanelContainer = null
 var merge_card_name: Label = null
@@ -33,16 +44,10 @@ var card_ui_scene: PackedScene = preload("res://scenes/ui/CardUI.tscn")
 
 var shop_cards: Array = []  # Array of CardDefinition (can't type due to preload issues)
 var shop_artifacts: Array = []  # Array of artifact data dictionaries
-var shop_stat_upgrades: Array = []  # Brotato Economy: stat upgrades
 
 # V2: Service costs calculated by ShopGenerator
 var remove_cost: int = 10
-var heal_cost: int = 10
 var reroll_cost: int = 3
-
-# Stat upgrades UI
-var stat_upgrades_panel: PanelContainer = null
-var stat_upgrades_container: HBoxContainer = null
 
 var pending_merge_card_id: String = ""
 var pending_merge_tier: int = 0
@@ -52,11 +57,16 @@ const CARD_BASE_PRICE: int = 30  # Fallback only
 
 
 func _ready() -> void:
+	# Apply interest and show XP summary when entering shop
+	_apply_wave_rewards()
+	
 	_create_deck_viewer_overlay()
 	_create_dev_panel()
 	_create_stats_panel()
 	_create_tag_tracker_panel()
-	_create_stat_upgrades_panel()  # Brotato Economy
+	_create_owned_artifacts_panel()
+	_create_card_collection_panel()
+	_create_artifact_tooltip()
 	_refresh_shop()
 	_update_ui()
 	_check_merges()
@@ -69,6 +79,61 @@ func _ready() -> void:
 		merge_popup.visible = false
 
 
+func _apply_wave_rewards() -> void:
+	"""Apply interest and show XP/level-up info when entering shop."""
+	# Apply interest
+	var interest_data: Dictionary = RunManager.get_interest_preview()
+	var interest_amount: int = RunManager.apply_interest()
+	
+	if interest_amount > 0:
+		_show_interest_popup(interest_data, interest_amount)
+	
+	# Show XP summary
+	var xp_info: Dictionary = RunManager.get_xp_info()
+	if xp_info.xp_this_wave > 0 or xp_info.levels_this_wave > 0:
+		_show_xp_popup(xp_info)
+
+
+func _show_interest_popup(data: Dictionary, earned: int) -> void:
+	"""Show a brief interest popup."""
+	var popup: Label = Label.new()
+	popup.text = "💰 +%d Scrap (Interest: %d%% of %d)" % [earned, data.interest_rate, data.current_scrap]
+	popup.add_theme_font_size_override("font_size", 20)
+	popup.add_theme_color_override("font_color", Color(0.5, 1.0, 0.5))
+	popup.add_theme_color_override("font_outline_color", Color(0, 0, 0))
+	popup.add_theme_constant_override("outline_size", 3)
+	popup.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	popup.position = Vector2(get_viewport_rect().size.x / 2 - 180, 80)
+	add_child(popup)
+	
+	var tween: Tween = create_tween()
+	tween.tween_interval(2.0)
+	tween.tween_property(popup, "modulate:a", 0.0, 0.5)
+	tween.tween_callback(popup.queue_free)
+
+
+func _show_xp_popup(xp_info: Dictionary) -> void:
+	"""Show XP/level-up popup."""
+	var popup: Label = Label.new()
+	if xp_info.levels_this_wave > 0:
+		popup.text = "⭐ LEVEL UP! Level %d (+%d Max HP)" % [xp_info.level, xp_info.levels_this_wave]
+		popup.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
+	else:
+		popup.text = "✨ +%d XP (%d/%d to Level %d)" % [xp_info.xp_this_wave, xp_info.current_xp, xp_info.required_xp, xp_info.level + 1]
+		popup.add_theme_color_override("font_color", Color(0.5, 0.8, 1.0))
+	popup.add_theme_font_size_override("font_size", 18)
+	popup.add_theme_color_override("font_outline_color", Color(0, 0, 0))
+	popup.add_theme_constant_override("outline_size", 3)
+	popup.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	popup.position = Vector2(get_viewport_rect().size.x / 2 - 180, 110)
+	add_child(popup)
+	
+	var tween: Tween = create_tween()
+	tween.tween_interval(2.5)
+	tween.tween_property(popup, "modulate:a", 0.0, 0.5)
+	tween.tween_callback(popup.queue_free)
+
+
 func _refresh_shop() -> void:
 	# V2: Use ShopGenerator for biased card/artifact generation
 	var wave: int = RunManager.current_wave
@@ -79,17 +144,12 @@ func _refresh_shop() -> void:
 	# Generate biased artifacts (3 slots in V2)
 	shop_artifacts = ShopGenerator.generate_shop_artifacts(wave)
 	
-	# Brotato Economy: Generate stat upgrades
-	shop_stat_upgrades = ShopGenerator.generate_shop_stat_upgrades()
-	
 	# Update service costs based on wave
-	heal_cost = ShopGenerator.get_heal_cost(wave)
 	remove_cost = ShopGenerator.get_remove_card_cost(wave)
 	reroll_cost = ShopGenerator.get_reroll_cost(wave)
 	
 	_populate_card_slots()
 	_populate_artifact_slots()
-	_populate_stat_upgrades()
 
 
 # V2: Artifact generation moved to ShopGenerator for family biasing
@@ -124,6 +184,9 @@ func _create_shop_card_slot(card, index: int) -> VBoxContainer:  # card: CardDef
 	# Card - use same size as combat (225x338 from CardUI.tscn)
 	var card_ui: Control = card_ui_scene.instantiate()
 	card_ui.check_playability = false  # Don't dim cards in shop
+	# Minimal hover effect for shop (subtle scale, no lift)
+	card_ui.hover_scale_amount = Vector2(1.03, 1.03)
+	card_ui.hover_lift_amount = 5.0
 	card_ui.setup(card, 1, index)
 	card_ui.card_clicked.connect(_on_shop_card_clicked)
 	# Don't override minimum size - let it use its natural size from the scene
@@ -170,56 +233,80 @@ func _populate_artifact_slots() -> void:
 
 func _create_artifact_slot(artifact: Dictionary, index: int) -> PanelContainer:
 	var panel: PanelContainer = PanelContainer.new()
-	panel.custom_minimum_size = Vector2(160, 120)
+	# Fixed size panel - large enough to fit all content without text changing size
+	panel.custom_minimum_size = Vector2(180, 200)
+	panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	panel.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	panel.clip_contents = true  # Clip any overflow
 	
 	var style: StyleBoxFlat = StyleBoxFlat.new()
 	style.bg_color = Color(0.12, 0.1, 0.18)
 	style.set_corner_radius_all(6)
 	style.set_border_width_all(2)
+	# Add padding inside the panel
+	style.content_margin_left = 8.0
+	style.content_margin_right = 8.0
+	style.content_margin_top = 8.0
+	style.content_margin_bottom = 8.0
 	
-	# Border color by rarity
+	# Border color by rarity (1=common, 2=uncommon, 3=rare, 4=legendary)
 	match artifact.rarity:
-		0: style.border_color = Color(0.5, 0.5, 0.5)  # Common
-		1: style.border_color = Color(0.3, 0.6, 1.0)  # Uncommon
-		2: style.border_color = Color(0.8, 0.5, 1.0)  # Rare
-		_: style.border_color = Color(1.0, 0.8, 0.3)  # Legendary
+		1: style.border_color = Color(0.5, 0.5, 0.5)  # Common - Gray
+		2: style.border_color = Color(0.3, 0.8, 0.3)  # Uncommon - Green
+		3: style.border_color = Color(0.3, 0.6, 1.0)  # Rare - Blue
+		4: style.border_color = Color(1.0, 0.8, 0.3)  # Legendary - Gold
+		_: style.border_color = Color(0.5, 0.5, 0.5)  # Default to common
 	
 	panel.add_theme_stylebox_override("panel", style)
 	
 	var vbox: VBoxContainer = VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 4)
+	vbox.add_theme_constant_override("separation", 6)
+	vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	panel.add_child(vbox)
 	
 	# Icon
 	var icon: Label = Label.new()
 	icon.text = artifact.get("icon", "💎")
 	icon.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	icon.add_theme_font_size_override("font_size", 28)
+	icon.add_theme_font_size_override("font_size", 32)
 	vbox.add_child(icon)
 	
 	# Name
 	var name_label: Label = Label.new()
 	name_label.text = artifact.artifact_name
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	name_label.add_theme_font_size_override("font_size", 12)
+	name_label.add_theme_font_size_override("font_size", 13)
 	name_label.add_theme_color_override("font_color", Color(1, 0.9, 0.7))
 	vbox.add_child(name_label)
 	
-	# Description
+	# Description - fixed height container to prevent expansion
+	var desc_container: Control = Control.new()
+	desc_container.custom_minimum_size = Vector2(160, 55)  # Fixed height for description area
+	desc_container.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	desc_container.clip_contents = true
+	vbox.add_child(desc_container)
+	
 	var desc_label: Label = Label.new()
 	desc_label.text = artifact.description
 	desc_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	desc_label.add_theme_font_size_override("font_size", 10)
+	desc_label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+	desc_label.add_theme_font_size_override("font_size", 11)
 	desc_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
 	desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	desc_label.custom_minimum_size.x = 150
-	vbox.add_child(desc_label)
+	desc_label.set_anchors_preset(Control.PRESET_FULL_RECT)
+	desc_container.add_child(desc_label)
+	
+	# Spacer to push price and button to bottom
+	var spacer: Control = Control.new()
+	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	vbox.add_child(spacer)
 	
 	# Price
 	var price: int = artifact.cost
 	var price_label: Label = Label.new()
 	price_label.text = "%d ⚙️" % price
 	price_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	price_label.add_theme_font_size_override("font_size", 14)
 	if RunManager.scrap >= price:
 		price_label.add_theme_color_override("font_color", Color(1, 0.9, 0.5))
 	else:
@@ -229,6 +316,7 @@ func _create_artifact_slot(artifact: Dictionary, index: int) -> PanelContainer:
 	# Buy button
 	var buy_btn: Button = Button.new()
 	buy_btn.text = "Buy"
+	buy_btn.custom_minimum_size = Vector2(80, 30)
 	buy_btn.pressed.connect(_on_artifact_buy_pressed.bind(artifact, index))
 	vbox.add_child(buy_btn)
 	
@@ -329,12 +417,15 @@ func _update_ui() -> void:
 	scrap_label.text = str(RunManager.scrap)
 	
 	remove_cost_label.text = "%d Scrap" % remove_cost
-	heal_cost_label.text = "%d Scrap" % heal_cost
 	reroll_cost_label.text = "%d Scrap" % reroll_cost
 	
 	# Refresh card/artifact displays to update price colors
 	_populate_card_slots()
 	_populate_artifact_slots()
+	
+	# Refresh owned artifacts and card collection displays
+	_update_owned_artifacts()
+	_update_card_collection()
 
 
 func _on_scrap_changed(_amount: int) -> void:
@@ -355,6 +446,7 @@ func _on_shop_card_clicked(card_def, _tier: int, index: int) -> void:  # card_de
 		_populate_card_slots()
 		_check_merges()  # Check if new card enables merge
 		_update_tag_tracker()  # Update tag counts
+		_update_card_collection()  # Update card collection display
 	else:
 		print("[Shop] Not enough scrap!")
 		_show_not_enough_scrap()
@@ -372,6 +464,7 @@ func _on_artifact_buy_pressed(artifact: Dictionary, index: int) -> void:
 		# Remove from shop
 		shop_artifacts.remove_at(index)
 		_populate_artifact_slots()
+		_update_owned_artifacts()  # Update owned artifacts display
 	else:
 		print("[Shop] Not enough scrap for artifact!")
 		_show_not_enough_scrap()
@@ -383,6 +476,7 @@ func _on_merge_pressed(card_id: String, tier: int) -> void:
 		AudioManager.play_merge_complete()
 		_check_merges()  # Refresh merge options
 		_update_tag_tracker()  # Update tag counts (deck changed)
+		_update_card_collection()  # Update card collection display
 		_show_merge_success(card_id, tier + 1)
 
 
@@ -452,6 +546,9 @@ func _show_deck_for_removal() -> void:
 		if card_def:
 			var card_ui: Control = card_ui_scene.instantiate()
 			card_ui.check_playability = false  # Don't dim cards in deck removal view
+			# Minimal hover effect (subtle scale, no lift)
+			card_ui.hover_scale_amount = Vector2(1.03, 1.03)
+			card_ui.hover_lift_amount = 5.0
 			card_ui.setup(card_def, entry.tier, i)
 			card_ui.card_clicked.connect(_on_remove_card_selected)
 			deck_grid.add_child(card_ui)
@@ -466,24 +563,13 @@ func _on_remove_card_selected(card_def, _tier: int, index: int) -> void:  # card
 		print("[Shop] Removed card: ", card_def.card_name)
 		_check_merges()
 		_update_tag_tracker()  # Update tag counts
+		_update_card_collection()  # Update card collection display
 	
 	deck_view_panel.visible = false
 
 
 func _on_deck_view_close() -> void:
 	deck_view_panel.visible = false
-
-
-func _on_heal_pressed() -> void:
-	if RunManager.spend_scrap(heal_cost):
-		# V2: Heal 30% of missing HP
-		var missing_hp: int = RunManager.player_stats.max_hp - RunManager.current_hp
-		var heal_amount: int = maxi(1, int(missing_hp * 0.3))
-		RunManager.heal(heal_amount)
-		_update_ui()
-		print("[Shop] Healed %d HP (30%% of missing)" % heal_amount)
-	else:
-		_show_not_enough_scrap()
 
 
 func _on_reroll_pressed() -> void:
@@ -653,9 +739,9 @@ func _create_dev_panel() -> void:
 	dev_panel.anchor_top = 0.0
 	dev_panel.anchor_bottom = 0.0
 	dev_panel.offset_left = -180
-	dev_panel.offset_top = 10
+	dev_panel.offset_top = 80
 	dev_panel.offset_right = -10
-	dev_panel.offset_bottom = 165
+	dev_panel.offset_bottom = 235
 	
 	# Style the panel
 	var style: StyleBoxFlat = StyleBoxFlat.new()
@@ -721,9 +807,8 @@ func _dev_add_scrap() -> void:
 func _dev_full_heal() -> void:
 	"""Fully heal the player."""
 	print("[DEV] Full Heal triggered")
-	var heal_amount: int = RunManager.max_hp - RunManager.current_hp
-	if heal_amount > 0:
-		RunManager.heal(heal_amount)
+	RunManager.current_hp = RunManager.max_hp
+	RunManager.hp_changed.emit(RunManager.current_hp, RunManager.max_hp)
 
 
 # === Stats Panel Functions ===
@@ -853,7 +938,6 @@ func _update_stats_panel() -> void:
 	# Defense stats
 	text += "[color=#66ccff]━━ DEFENSE ━━[/color]\n"
 	text += "Armor Gain: [color=#%s]%.0f%%[/color]\n" % [_get_stat_color(stats.armor_gain_percent), stats.armor_gain_percent]
-	text += "Heal Power: [color=#%s]%.0f%%[/color]\n" % [_get_stat_color(stats.heal_power_percent), stats.heal_power_percent]
 	text += "Barrier Strength: [color=#%s]%.0f%%[/color]\n" % [_get_stat_color(stats.barrier_strength_percent), stats.barrier_strength_percent]
 	text += "\n"
 	
@@ -1063,161 +1147,481 @@ func _get_family_tag_icon(tag: String) -> String:
 			return "•"
 
 
-# === Stat Upgrades Panel Functions (Brotato Economy) ===
+# === Owned Artifacts Panel Functions ===
 
-func _create_stat_upgrades_panel() -> void:
-	"""Create the stat upgrades panel above the cards section."""
-	stat_upgrades_panel = PanelContainer.new()
-	stat_upgrades_panel.name = "StatUpgradesPanel"
+func _create_owned_artifacts_panel() -> void:
+	"""Create a panel showing all artifacts the player owns."""
+	owned_artifacts_panel = PanelContainer.new()
+	owned_artifacts_panel.name = "OwnedArtifactsPanel"
 	
-	# Position above the main content
-	stat_upgrades_panel.anchor_left = 0.5
-	stat_upgrades_panel.anchor_right = 0.5
-	stat_upgrades_panel.anchor_top = 0.0
-	stat_upgrades_panel.anchor_bottom = 0.0
-	stat_upgrades_panel.offset_left = -400
-	stat_upgrades_panel.offset_top = 60
-	stat_upgrades_panel.offset_right = 400
-	stat_upgrades_panel.offset_bottom = 180
+	# Position below the tag tracker panel
+	owned_artifacts_panel.anchor_left = 0.0
+	owned_artifacts_panel.anchor_right = 0.0
+	owned_artifacts_panel.anchor_top = 0.0
+	owned_artifacts_panel.anchor_bottom = 0.0
+	owned_artifacts_panel.offset_left = 270
+	owned_artifacts_panel.offset_top = 420
+	owned_artifacts_panel.offset_right = 470
+	owned_artifacts_panel.offset_bottom = 620
 	
+	# Style the panel
 	var style: StyleBoxFlat = StyleBoxFlat.new()
 	style.bg_color = Color(0.1, 0.08, 0.15, 0.95)
-	style.border_color = Color(0.6, 0.8, 0.4)
-	style.set_border_width_all(2)
-	style.set_corner_radius_all(8)
-	style.content_margin_left = 15.0
-	style.content_margin_right = 15.0
+	style.border_width_left = 2
+	style.border_width_top = 2
+	style.border_width_right = 2
+	style.border_width_bottom = 2
+	style.border_color = Color(1.0, 0.8, 0.3, 0.9)
+	style.corner_radius_top_left = 8
+	style.corner_radius_top_right = 8
+	style.corner_radius_bottom_right = 8
+	style.corner_radius_bottom_left = 8
+	style.content_margin_left = 10.0
+	style.content_margin_right = 10.0
 	style.content_margin_top = 10.0
 	style.content_margin_bottom = 10.0
-	stat_upgrades_panel.add_theme_stylebox_override("panel", style)
+	owned_artifacts_panel.add_theme_stylebox_override("panel", style)
 	
+	# Content container
 	var vbox: VBoxContainer = VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 8)
-	stat_upgrades_panel.add_child(vbox)
+	owned_artifacts_panel.add_child(vbox)
 	
 	# Title
 	var title: Label = Label.new()
-	title.text = "📈 STAT UPGRADES"
+	title.text = "💎 OWNED ARTIFACTS"
+	title.add_theme_color_override("font_color", Color(1.0, 0.85, 0.4))
+	title.add_theme_font_size_override("font_size", 14)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 16)
-	title.add_theme_color_override("font_color", Color(0.6, 0.9, 0.5))
 	vbox.add_child(title)
 	
-	# Container for upgrade slots
-	stat_upgrades_container = HBoxContainer.new()
-	stat_upgrades_container.name = "UpgradeSlots"
-	stat_upgrades_container.add_theme_constant_override("separation", 15)
-	stat_upgrades_container.alignment = BoxContainer.ALIGNMENT_CENTER
-	vbox.add_child(stat_upgrades_container)
+	# Separator
+	var sep: HSeparator = HSeparator.new()
+	vbox.add_child(sep)
 	
-	add_child(stat_upgrades_panel)
+	# Scroll container for artifacts grid
+	var scroll: ScrollContainer = ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	vbox.add_child(scroll)
+	
+	# Grid for artifact icons
+	var grid: GridContainer = GridContainer.new()
+	grid.name = "ArtifactGrid"
+	grid.columns = 4
+	grid.add_theme_constant_override("h_separation", 8)
+	grid.add_theme_constant_override("v_separation", 8)
+	scroll.add_child(grid)
+	
+	add_child(owned_artifacts_panel)
+	
+	# Initial update
+	_update_owned_artifacts()
 
 
-func _populate_stat_upgrades() -> void:
-	"""Populate the stat upgrades container."""
-	if not stat_upgrades_container:
+func _update_owned_artifacts() -> void:
+	"""Update the owned artifacts display."""
+	if not owned_artifacts_panel:
+		return
+	
+	var grid: GridContainer = owned_artifacts_panel.find_child("ArtifactGrid", true, false) as GridContainer
+	if not grid:
 		return
 	
 	# Clear existing
-	for child: Node in stat_upgrades_container.get_children():
+	for child: Node in grid.get_children():
 		child.queue_free()
 	
-	if shop_stat_upgrades.size() == 0:
-		stat_upgrades_panel.visible = false
+	# Get unique equipped artifacts with counts
+	var unique_artifacts: Array = ArtifactManager.get_unique_equipped_artifacts()
+	
+	if unique_artifacts.size() == 0:
+		var empty_label: Label = Label.new()
+		empty_label.text = "No artifacts yet"
+		empty_label.add_theme_font_size_override("font_size", 12)
+		empty_label.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5))
+		grid.add_child(empty_label)
 		return
 	
-	stat_upgrades_panel.visible = true
-	
-	for i: int in range(shop_stat_upgrades.size()):
-		var upgrade: Dictionary = shop_stat_upgrades[i]
-		var slot: PanelContainer = _create_stat_upgrade_slot(upgrade, i)
-		stat_upgrades_container.add_child(slot)
+	# Create artifact icons
+	for data: Dictionary in unique_artifacts:
+		var artifact = data.artifact
+		var count: int = data.count
+		var icon_container: Control = _create_artifact_icon(artifact, count)
+		grid.add_child(icon_container)
 
 
-func _create_stat_upgrade_slot(upgrade: Dictionary, index: int) -> PanelContainer:
-	"""Create a UI slot for a stat upgrade."""
-	var panel: PanelContainer = PanelContainer.new()
-	panel.custom_minimum_size = Vector2(180, 80)
+func _create_artifact_icon(artifact, count: int) -> Button:
+	"""Create an artifact icon with hover functionality using Button for reliable mouse events."""
+	var btn: Button = Button.new()
+	btn.custom_minimum_size = Vector2(44, 44)
+	btn.flat = true
+	btn.focus_mode = Control.FOCUS_NONE
 	
+	# Create a stylebox for the button
+	var style_normal: StyleBoxFlat = StyleBoxFlat.new()
+	style_normal.bg_color = Color(0.15, 0.12, 0.2)
+	style_normal.set_corner_radius_all(4)
+	style_normal.set_border_width_all(2)
+	
+	# Border color by rarity
+	match artifact.rarity:
+		1: style_normal.border_color = Color(0.5, 0.5, 0.5)
+		2: style_normal.border_color = Color(0.3, 0.6, 1.0)
+		3: style_normal.border_color = Color(0.8, 0.5, 1.0)
+		4: style_normal.border_color = Color(1.0, 0.8, 0.3)
+		_: style_normal.border_color = Color(0.5, 0.5, 0.5)
+	
+	btn.add_theme_stylebox_override("normal", style_normal)
+	btn.add_theme_stylebox_override("hover", style_normal)
+	btn.add_theme_stylebox_override("pressed", style_normal)
+	btn.add_theme_stylebox_override("focus", style_normal)
+	
+	# Set the icon as text
+	var icon_text: String = artifact.icon
+	if count > 1:
+		icon_text += "\nx%d" % count
+	btn.text = icon_text
+	btn.add_theme_font_size_override("font_size", 18)
+	
+	# Store artifact data for tooltip
+	btn.set_meta("artifact", artifact)
+	btn.set_meta("count", count)
+	
+	# Connect hover signals
+	btn.mouse_entered.connect(_on_artifact_icon_hover.bind(btn))
+	btn.mouse_exited.connect(_on_artifact_icon_exit)
+	
+	return btn
+
+
+func _create_artifact_tooltip() -> void:
+	"""Create the floating tooltip for artifact hover."""
+	artifact_tooltip = PanelContainer.new()
+	artifact_tooltip.name = "ArtifactTooltip"
+	artifact_tooltip.visible = false
+	artifact_tooltip.z_index = 100
+	
+	# Style
 	var style: StyleBoxFlat = StyleBoxFlat.new()
-	style.bg_color = Color(0.08, 0.12, 0.08)
-	style.border_color = Color(0.4, 0.7, 0.4)
-	style.set_border_width_all(2)
+	style.bg_color = Color(0.08, 0.06, 0.12, 0.98)
 	style.set_corner_radius_all(6)
-	panel.add_theme_stylebox_override("panel", style)
+	style.set_border_width_all(2)
+	style.border_color = Color(0.8, 0.7, 0.5)
+	style.content_margin_left = 10.0
+	style.content_margin_right = 10.0
+	style.content_margin_top = 8.0
+	style.content_margin_bottom = 8.0
+	artifact_tooltip.add_theme_stylebox_override("panel", style)
 	
-	var hbox: HBoxContainer = HBoxContainer.new()
-	hbox.add_theme_constant_override("separation", 10)
-	panel.add_child(hbox)
+	# Content
+	var vbox: VBoxContainer = VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 4)
+	artifact_tooltip.add_child(vbox)
 	
-	# Icon
-	var icon: Label = Label.new()
-	icon.text = upgrade.icon
-	icon.add_theme_font_size_override("font_size", 32)
-	icon.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	hbox.add_child(icon)
-	
-	# Info column
-	var info_vbox: VBoxContainer = VBoxContainer.new()
-	info_vbox.add_theme_constant_override("separation", 2)
-	hbox.add_child(info_vbox)
-	
-	# Name
+	# Name label
 	var name_label: Label = Label.new()
-	name_label.text = upgrade.name
+	name_label.name = "NameLabel"
 	name_label.add_theme_font_size_override("font_size", 14)
-	name_label.add_theme_color_override("font_color", Color(0.9, 0.95, 0.8))
-	info_vbox.add_child(name_label)
+	name_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.6))
+	vbox.add_child(name_label)
 	
-	# Current value
-	var current_label: Label = Label.new()
-	var value_str: String = ""
-	if upgrade.stat in ["gun_damage_percent", "hex_damage_percent", "armor_gain_percent", "scrap_gain_percent", "shop_price_percent"]:
-		value_str = "Current: %.0f%%" % upgrade.current_value
-	else:
-		value_str = "Current: %d" % int(upgrade.current_value)
-	current_label.text = value_str
-	current_label.add_theme_font_size_override("font_size", 10)
-	current_label.add_theme_color_override("font_color", Color(0.6, 0.7, 0.6))
-	info_vbox.add_child(current_label)
+	# Description label
+	var desc_label: Label = Label.new()
+	desc_label.name = "DescLabel"
+	desc_label.add_theme_font_size_override("font_size", 11)
+	desc_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8))
+	desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	desc_label.custom_minimum_size.x = 180
+	vbox.add_child(desc_label)
 	
-	# Price + Buy button
-	var buy_hbox: HBoxContainer = HBoxContainer.new()
-	buy_hbox.add_theme_constant_override("separation", 5)
-	info_vbox.add_child(buy_hbox)
-	
-	var price_label: Label = Label.new()
-	price_label.text = "%d ⚙️" % upgrade.price
-	price_label.add_theme_font_size_override("font_size", 12)
-	if RunManager.scrap >= upgrade.price:
-		price_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.4))
-	else:
-		price_label.add_theme_color_override("font_color", Color(0.6, 0.4, 0.4))
-	buy_hbox.add_child(price_label)
-	
-	var buy_btn: Button = Button.new()
-	buy_btn.text = "Buy"
-	buy_btn.custom_minimum_size = Vector2(50, 25)
-	buy_btn.pressed.connect(_on_stat_upgrade_buy_pressed.bind(upgrade.upgrade_id, index))
-	buy_hbox.add_child(buy_btn)
-	
-	panel.set_meta("upgrade", upgrade)
-	panel.set_meta("index", index)
-	
-	return panel
+	add_child(artifact_tooltip)
 
 
-func _on_stat_upgrade_buy_pressed(upgrade_id: String, index: int) -> void:
-	"""Handle stat upgrade purchase."""
-	if ShopGenerator.purchase_stat_upgrade(upgrade_id):
-		AudioManager.play_shop_purchase()
-		print("[Shop] Bought stat upgrade: %s" % upgrade_id)
+func _on_artifact_icon_hover(container: Control) -> void:
+	"""Show tooltip when hovering over an artifact icon."""
+	if not artifact_tooltip:
+		return
+	
+	var artifact = container.get_meta("artifact")
+	if not artifact:
+		return
+	
+	var count: int = container.get_meta("count")
+	
+	# Update tooltip content
+	var name_label: Label = artifact_tooltip.find_child("NameLabel", true, false) as Label
+	var desc_label: Label = artifact_tooltip.find_child("DescLabel", true, false) as Label
+	
+	if name_label:
+		var count_text: String = " (x%d)" % count if count > 1 else ""
+		name_label.text = "%s %s%s" % [artifact.icon, artifact.artifact_name, count_text]
+	
+	if desc_label:
+		desc_label.text = artifact.description
+	
+	# Position tooltip near the icon
+	var global_pos: Vector2 = container.global_position
+	artifact_tooltip.global_position = global_pos + Vector2(50, -20)
+	artifact_tooltip.visible = true
+
+
+func _on_artifact_icon_exit() -> void:
+	"""Hide tooltip when leaving an artifact icon."""
+	if artifact_tooltip:
+		artifact_tooltip.visible = false
+
+
+# === Card Collection Panel Functions ===
+
+# Store references to card UIs for hover effects
+var collection_card_uis: Array[Control] = []
+var hovered_card_index: int = -1
+
+func _create_card_collection_panel() -> void:
+	"""Style the card collection panel (panel itself is defined in scene for easy editing)."""
+	if not card_collection_panel:
+		return
+	
+	# Style the panel
+	var style: StyleBoxFlat = StyleBoxFlat.new()
+	style.bg_color = Color(0.03, 0.02, 0.06, 0.95)
+	style.border_width_top = 2
+	style.border_color = Color(0.4, 0.5, 0.7, 0.9)
+	style.corner_radius_top_left = 10
+	style.corner_radius_top_right = 10
+	style.content_margin_left = 15.0
+	style.content_margin_right = 15.0
+	style.content_margin_top = 8.0
+	style.content_margin_bottom = 8.0
+	card_collection_panel.add_theme_stylebox_override("panel", style)
+	
+	# Initial update
+	_update_card_collection()
+
+
+func _update_card_collection() -> void:
+	"""Update the card collection display - all cards in a horizontal row."""
+	if not card_collection_panel or not cards_container:
+		return
+	
+	var container: Control = cards_container
+	var title_label: Label = collection_title
+	var scroll: ScrollContainer = card_scroll
+	
+	if not container:
+		return
+	
+	# Clear existing
+	for child: Node in container.get_children():
+		child.queue_free()
+	collection_card_uis.clear()
+	hovered_card_index = -1
+	
+	# Update title
+	if title_label:
+		title_label.text = "📚 YOUR DECK (%d cards)" % RunManager.deck.size()
+	
+	if RunManager.deck.size() == 0:
+		var empty_label: Label = Label.new()
+		empty_label.text = "Your deck is empty!"
+		empty_label.add_theme_font_size_override("font_size", 16)
+		empty_label.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5))
+		empty_label.position = Vector2(400, 70)
+		container.add_child(empty_label)
+		return
+	
+	# Sort cards by core type for visual grouping
+	var sorted_cards: Array[Dictionary] = []
+	var type_order: Array[String] = ["gun", "hex", "barrier", "defense", "skill", "engine", ""]
+	
+	for type_tag: String in type_order:
+		for i: int in range(RunManager.deck.size()):
+			var entry: Dictionary = RunManager.deck[i]
+			var card_def = CardDatabase.get_card(entry.card_id)
+			if card_def:
+				var core_type: String = card_def.get_core_type()
+				if core_type == type_tag or (type_tag == "" and core_type not in type_order):
+					sorted_cards.append({"card": card_def, "tier": entry.tier, "index": i})
+	
+	# Calculate card sizing - 90% of scroll container height (not panel, which includes title)
+	var scroll_height: float = scroll.size.y if scroll.size.y > 0.0 else 280.0
+	var target_card_height: float = scroll_height * 0.9
+	var base_card_height: float = 325.0  # CardUI base height
+	var base_card_width: float = 225.0   # CardUI base width
+	var card_scale: float = target_card_height / base_card_height
+	
+	var card_count: int = sorted_cards.size()
+	var card_width: float = base_card_width * card_scale
+	var card_height: float = base_card_height * card_scale
+	var card_spacing: float = card_width * 0.4  # Overlap amount (40% of card width)
+	
+	# Calculate total width: first card full width + remaining cards overlap
+	var total_width: float = card_width + (card_count - 1) * card_spacing if card_count > 0 else 0.0
+	
+	# Set container width to ensure proper scrolling
+	container.custom_minimum_size.x = total_width + 100
+	
+	# Calculate starting X so the center of all cards aligns with screen center
+	var viewport_width: float = get_viewport_rect().size.x
+	var start_x: float = (viewport_width - total_width) / 2.0
+	
+	# Calculate Y to position cards with bottoms just above the scroll container bottom
+	var bottom_margin: float = 8.0  # Small margin above bottom
+	var base_y: float = scroll_height - card_height - bottom_margin
+	
+	# Create all cards
+	for i: int in range(card_count):
+		var card_data: Dictionary = sorted_cards[i]
+		var card_def = card_data.card
+		var tier: int = card_data.tier
+		var deck_index: int = card_data.index
 		
-		# Remove from shop
-		shop_stat_upgrades.remove_at(index)
-		_populate_stat_upgrades()
-		_update_stats_panel()  # Refresh stats display
-		_update_ui()
-	else:
-		print("[Shop] Cannot buy stat upgrade: %s" % upgrade_id)
-		_show_not_enough_scrap()
+		# Create card UI
+		var card_ui: Control = card_ui_scene.instantiate()
+		card_ui.check_playability = false
+		# IMPORTANT: Fully disable CardUI's internal hover - we handle it ourselves
+		card_ui.enable_hover_scale = false
+		
+		# Scale down the cards
+		card_ui.scale = Vector2(card_scale, card_scale)
+		
+		# Position cards in a row with overlap, vertically centered
+		var x_pos: float = start_x + i * card_spacing
+		var y_pos: float = base_y
+		
+		card_ui.position = Vector2(x_pos, y_pos)
+		card_ui.z_index = i  # Stack order
+		
+		container.add_child(card_ui)
+		card_ui.setup(card_def, tier, deck_index)
+		
+		# Store reference for hover effects
+		collection_card_uis.append(card_ui)
+		
+		# Connect to click_area's mouse signals for reliable hover detection
+		# (CardUI's own mouse signals can be blocked by the click_area button)
+		card_ui.click_area.mouse_entered.connect(_on_collection_card_hover.bind(i))
+		card_ui.click_area.mouse_exited.connect(_on_collection_card_exit.bind(i))
+	
+	# Call deferred to ensure panel sizes are ready, then position cards correctly
+	_position_collection_cards_deferred.call_deferred()
+
+
+func _position_collection_cards_deferred() -> void:
+	"""Position cards after layout is ready (called deferred from _update_card_collection)."""
+	# Wait one more frame to ensure all sizes are finalized
+	await get_tree().process_frame
+	# Position cards in their correct initial positions
+	_animate_collection_cards()
+
+
+func _on_collection_card_hover(card_index: int) -> void:
+	"""Handle hovering over a card in the collection."""
+	if hovered_card_index == card_index:
+		return
+	
+	hovered_card_index = card_index
+	_animate_collection_cards()
+
+
+func _on_collection_card_exit(_card_index: int) -> void:
+	"""Handle mouse leaving a card in the collection."""
+	# Small delay before resetting to handle rapid mouse movement between cards
+	await get_tree().create_timer(0.05).timeout
+	
+	# Check if we're now hovering a different card (user moved to another card)
+	if hovered_card_index != _card_index:
+		return
+	
+	# Before resetting, verify mouse is actually outside all cards
+	# This prevents the stuck hover bug caused by position animations moving the card
+	# Use click_area's rect since that's what actually receives mouse events
+	var mouse_pos: Vector2 = get_global_mouse_position()
+	for i: int in range(collection_card_uis.size()):
+		if i >= collection_card_uis.size():
+			break  # Safety check in case array changed
+		var card: Control = collection_card_uis[i]
+		if is_instance_valid(card) and card.click_area:
+			# Get the click_area's global rect (accounts for parent transforms including scale)
+			var click_rect: Rect2 = card.click_area.get_global_rect()
+			if click_rect.has_point(mouse_pos):
+				# Mouse is actually still over a card - update hover to that card
+				hovered_card_index = i
+				_animate_collection_cards()
+				return
+	
+	# Mouse is truly outside all cards - reset hover state
+	hovered_card_index = -1
+	_animate_collection_cards()
+
+
+func _animate_collection_cards() -> void:
+	"""Animate cards to spread/contract based on hovered card."""
+	if collection_card_uis.size() == 0:
+		return
+	
+	var scroll: ScrollContainer = card_scroll
+	if not scroll or not card_collection_panel:
+		return
+	
+	# Calculate card sizing - 90% of scroll container height (same as _update_card_collection)
+	var scroll_height: float = scroll.size.y if scroll.size.y > 0.0 else 280.0
+	var target_card_height: float = scroll_height * 0.9
+	var base_card_height: float = 325.0
+	var base_card_width: float = 225.0
+	var card_scale: float = target_card_height / base_card_height
+	
+	var card_count: int = collection_card_uis.size()
+	var card_width: float = base_card_width * card_scale
+	var card_height: float = base_card_height * card_scale
+	var card_spacing: float = card_width * 0.4  # Overlap amount (40% of card width)
+	var hover_spread: float = card_width * 0.5  # Extra space for hovered card
+	var hover_lift: float = -card_height * 0.02  # Lift hovered card up (2% of height - subtle)
+	var hover_scale: float = card_scale * 1.15  # Scale up hovered card by 15%
+	
+	# Calculate total width WITHOUT hover spread - keeps cards centered consistently
+	var total_width: float = card_width + (card_count - 1) * card_spacing
+	
+	# Calculate starting X so the center of all cards aligns with screen center
+	var viewport_width: float = get_viewport_rect().size.x
+	var start_x: float = (viewport_width - total_width) / 2.0
+	
+	# Calculate Y to position cards with bottoms just above the scroll container bottom
+	var bottom_margin: float = 8.0  # Small margin above bottom
+	var base_y: float = scroll_height - card_height - bottom_margin
+	
+	for i: int in range(card_count):
+		var card_ui: Control = collection_card_uis[i]
+		
+		# Calculate target position
+		# Non-hovered cards spread away from hovered card, hovered card stays in place (only moves up)
+		var x_offset: float = 0.0
+		if hovered_card_index >= 0:
+			if i < hovered_card_index:
+				x_offset = -hover_spread * 0.5
+			elif i > hovered_card_index:
+				x_offset = hover_spread * 0.5
+			# Hovered card (i == hovered_card_index) gets x_offset = 0
+		
+		var x_pos: float = start_x + i * card_spacing + x_offset
+		var y_pos: float = base_y
+		var current_scale: float = card_scale
+		var target_z: int = i
+		
+		# Hovered card gets special treatment - only lift up, no horizontal shift
+		if i == hovered_card_index:
+			y_pos += hover_lift
+			current_scale = hover_scale
+			target_z = 100  # Bring to front
+		
+		# Animate with tween
+		var tween: Tween = card_ui.create_tween()
+		tween.set_parallel(true)
+		tween.set_ease(Tween.EASE_OUT)
+		tween.set_trans(Tween.TRANS_QUAD)
+		tween.tween_property(card_ui, "position", Vector2(x_pos, y_pos), 0.15)
+		tween.tween_property(card_ui, "scale", Vector2(current_scale, current_scale), 0.15)
+		card_ui.z_index = target_z
+
+

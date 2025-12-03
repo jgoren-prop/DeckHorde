@@ -38,11 +38,38 @@ const SYNERGY_HINTS: Dictionary = {
 
 
 func _ready() -> void:
+	# Auto-initialize with Veteran Warden if no warden is set (for direct scene launch)
+	if RunManager.current_warden == null:
+		_auto_select_veteran_warden()
+	
 	_load_starter_weapons()
 	_create_weapon_cards()
 	_update_warden_info()
 	continue_button.disabled = true
 	weapon_preview.visible = false
+
+
+func _auto_select_veteran_warden() -> void:
+	"""Create and set Veteran Warden for quick-start flow."""
+	print("[StarterWeaponSelect] No warden set, auto-selecting Veteran Warden")
+	
+	var veteran: WardenDefinition = WardenDefinition.new()
+	veteran.warden_id = "veteran_warden"
+	veteran.warden_name = "Veteran Warden"
+	veteran.description = "Battle-hardened generalist who has seen every horror."
+	veteran.passive_description = "Balanced stats. +20 HP, +2 energy. No special bonuses."
+	veteran.base_armor = 0
+	veteran.stat_modifiers = {
+		"max_hp": 20,
+		"energy_per_turn": 2
+	}
+	veteran.passive_id = ""
+	veteran.portrait_color = Color(0.6, 0.6, 0.7)
+	veteran.icon = "⚔️"
+	veteran.is_unlocked_by_default = true
+	
+	RunManager.reset_run()
+	RunManager.set_warden(veteran)
 
 
 func _load_starter_weapons() -> void:

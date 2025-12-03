@@ -8,7 +8,7 @@ class_name ArtifactDefinition
 @export_multiline var description: String = ""
 
 # Rarity affects shop price and appearance rate
-@export var rarity: int = 1  # 1 = common, 2 = uncommon, 3 = rare
+@export var rarity: int = 1  # 1 = common, 2 = uncommon, 3 = rare, 4 = legendary
 
 # Cost in shop
 @export var base_cost: int = 50

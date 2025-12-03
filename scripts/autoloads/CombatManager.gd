@@ -166,35 +166,43 @@ func _trigger_persistent_weapons() -> void:
 		var card_def = weapon.card_def
 		var tier: int = weapon.tier
 		
-		print("[CombatManager] Triggering persistent weapon: ", card_def.card_name)
+		# Get how many shots this weapon fires
+		var target_count: int = CardResolver.get_weapon_target_count(card_def, tier)
+		
+		print("[CombatManager] Triggering persistent weapon: ", card_def.card_name, " (", target_count, " shots)")
 		
 		# Track which weapon INDEX is firing (for BattlefieldArena to get projectile origin)
 		# The index in active_weapons matches the index in CombatLane.deployed_weapons
 		current_firing_weapon_index = i
 		
-		# Emit signal for visual feedback (flash icon) - include index for correct card targeting
-		var damage: int = card_def.get_scaled_value("damage", tier)
-		weapon_triggered.emit(card_def.card_name, damage, i)
+		# Fire each shot with proper animation timing
+		for shot: int in range(target_count):
+			# Emit signal for visual feedback (flash icon) - include index for correct card targeting
+			var damage: int = card_def.get_scaled_value("damage", tier)
+			weapon_triggered.emit(card_def.card_name, damage, i)
+			
+			# Small delay before firing (Slay the Spire style)
+			await get_tree().create_timer(0.15).timeout
+			
+			# Fire a single shot using the CardResolver
+			# deal_damage_to_random_enemy will emit enemy_targeted and handle the await internally
+			CardResolver.resolve_weapon_effect_single_shot(card_def, tier, self)
+			
+			# Wait for projectile animation to complete before next shot
+			await get_tree().create_timer(0.5).timeout
+			
+			# Shorter delay between shots from the same weapon
+			if shot < target_count - 1:
+				await get_tree().create_timer(0.15).timeout
 		
-		# Small delay for visual clarity between weapons (Slay the Spire style)
-		await get_tree().create_timer(0.15).timeout
-		
-		# Use the CardResolver to trigger the weapon effect
-		# Note: resolve_weapon_effect -> deal_damage_to_random_enemy handles enemy_targeted emit
-		CardResolver.resolve_weapon_effect(card_def, tier, self)
-		
-		# Wait for projectile animation to complete before clearing weapon index
-		# (The projectile fires asynchronously via signal handlers that may have awaits)
-		await get_tree().create_timer(0.5).timeout
-		
-		# Clear weapon tracking after firing animation completes
+		# Clear weapon tracking after all shots complete
 		current_firing_weapon_index = -1
 		
 		# Decrement triggers remaining if not infinite (-1)
 		if weapon.triggers_remaining > 0:
 			weapon.triggers_remaining -= 1
 		
-		# Delay between weapons
+		# Delay between different weapons
 		if i < active_weapons.size() - 1:
 			await get_tree().create_timer(0.3).timeout
 	

@@ -906,11 +906,14 @@ func _on_wave_ended(success: bool) -> void:
 	print("[CombatScreen] Wave ended. Success: ", success)
 	
 	if success and RunManager.current_wave < RunManager.MAX_WAVES:
-		# Go to post-wave reward
+		# Restore HP to full after each successful wave
+		RunManager.restore_hp_to_full()
+		# Go directly to shop (skip reward screen)
 		await get_tree().create_timer(1.0).timeout
-		GameManager.go_to_post_wave_reward()
+		GameManager.go_to_shop()
 	elif success:
 		# Run victory!
+		RunManager.restore_hp_to_full()
 		await get_tree().create_timer(1.0).timeout
 		GameManager.end_run(true)
 	else:

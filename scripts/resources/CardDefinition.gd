@@ -16,7 +16,7 @@ const TagConstantsClass = preload("res://scripts/constants/TagConstants.gd")
 # Card classification
 @export_enum("weapon", "skill", "hex", "defense", "curse") var card_type: String = "weapon"
 @export var tags: Array = []  # Array[String]
-@export var rarity: int = 1  # 1 = common, 2 = uncommon, 3 = rare
+@export var rarity: int = 1  # 1 = common, 2 = uncommon, 3 = rare, 4 = legendary
 
 # Cost
 @export var base_cost: int = 1

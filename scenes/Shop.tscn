@@ -1,6 +1,6 @@
 [gd_scene load_steps=2 format=3 uid="uid://cqw4r8ml2x5p3"]
 
-[ext_resource type="Script" path="res://scripts/ui/Shop.gd" id="1_shop"]
+[ext_resource type="Script" uid="uid://c3kcjpl5fcfep" path="res://scripts/ui/Shop.gd" id="1_shop"]
 
 [node name="Shop" type="Control"]
 layout_mode = 3
@@ -75,7 +75,7 @@ theme_override_font_sizes/font_size = 16
 text = "Cards for Sale"
 
 [node name="CardSlots" type="HBoxContainer" parent="MarginContainer/VBox/CardsSection"]
-custom_minimum_size = Vector2(0, 180)
+custom_minimum_size = Vector2(0, 320)
 layout_mode = 2
 theme_override_constants/separation = 20
 alignment = 1
@@ -91,7 +91,7 @@ theme_override_font_sizes/font_size = 16
 text = "Artifacts"
 
 [node name="ArtifactSlots" type="HBoxContainer" parent="MarginContainer/VBox/ArtifactsSection"]
-custom_minimum_size = Vector2(0, 140)
+custom_minimum_size = Vector2(0, 220)
 layout_mode = 2
 theme_override_constants/separation = 20
 alignment = 1
@@ -141,21 +141,6 @@ layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.9, 0.5, 1)
 theme_override_font_sizes/font_size = 12
 text = "50 Scrap"
-horizontal_alignment = 1
-
-[node name="Heal" type="VBoxContainer" parent="MarginContainer/VBox/ServicesSection/ServiceButtons"]
-layout_mode = 2
-
-[node name="Button" type="Button" parent="MarginContainer/VBox/ServicesSection/ServiceButtons/Heal"]
-custom_minimum_size = Vector2(120, 50)
-layout_mode = 2
-text = "❤️ Heal 10"
-
-[node name="Cost" type="Label" parent="MarginContainer/VBox/ServicesSection/ServiceButtons/Heal"]
-layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.9, 0.5, 1)
-theme_override_font_sizes/font_size = 12
-text = "30 Scrap"
 horizontal_alignment = 1
 
 [node name="Reroll" type="VBoxContainer" parent="MarginContainer/VBox/ServicesSection/ServiceButtons"]
@@ -237,13 +222,43 @@ columns = 5
 layout_mode = 2
 text = "Cancel"
 
+[node name="CardCollectionPanel" type="PanelContainer" parent="."]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 10.0
+offset_top = -360.0
+offset_right = -10.0
+offset_bottom = -10.0
+grow_horizontal = 2
+grow_vertical = 0
+
+[node name="VBox" type="VBoxContainer" parent="CardCollectionPanel"]
+layout_mode = 2
+theme_override_constants/separation = 5
+
+[node name="CollectionTitle" type="Label" parent="CardCollectionPanel/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.85, 1, 1)
+theme_override_font_sizes/font_size = 14
+text = "📚 YOUR DECK (0 cards)"
+horizontal_alignment = 1
+
+[node name="CardScroll" type="ScrollContainer" parent="CardCollectionPanel/VBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+vertical_scroll_mode = 0
+
+[node name="CardsContainer" type="Control" parent="CardCollectionPanel/VBox/CardScroll"]
+custom_minimum_size = Vector2(0, 280)
+layout_mode = 2
+size_flags_horizontal = 3
+
 [connection signal="pressed" from="MarginContainer/VBox/ServicesSection/ServiceButtons/RemoveCard/Button" to="." method="_on_remove_card_pressed"]
-[connection signal="pressed" from="MarginContainer/VBox/ServicesSection/ServiceButtons/Heal/Button" to="." method="_on_heal_pressed"]
 [connection signal="pressed" from="MarginContainer/VBox/ServicesSection/ServiceButtons/Reroll/Button" to="." method="_on_reroll_pressed"]
 [connection signal="pressed" from="MarginContainer/VBox/ServicesSection/ServiceButtons/ViewDeck/Button" to="." method="_on_view_deck_pressed"]
 [connection signal="pressed" from="MarginContainer/VBox/ContinueButton" to="." method="_on_continue_pressed"]
 [connection signal="pressed" from="DeckViewPanel/VBox/CloseButton" to="." method="_on_deck_view_close"]
-
-
-
-

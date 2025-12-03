@@ -50,7 +50,7 @@ func _create_brotato_starter_weapons() -> void:
 	worn_hex_staff.target_type = "random_enemy"
 	worn_hex_staff.target_rings = [0, 1, 2, 3]
 	worn_hex_staff.weapon_trigger = "turn_end"
-	worn_hex_staff.rarity = 0
+	worn_hex_staff.rarity = 1
 	worn_hex_staff.is_starter_weapon = true
 	worn_hex_staff.duration_type = "infinite"  # V2: Permanent - core hex build weapon
 	_register_card(worn_hex_staff)
@@ -69,7 +69,7 @@ func _create_brotato_starter_weapons() -> void:
 	shock_prod.target_type = "closest_enemy"
 	shock_prod.target_rings = [0, 1, 2, 3]
 	shock_prod.weapon_trigger = "turn_end"
-	shock_prod.rarity = 0
+	shock_prod.rarity = 1
 	shock_prod.is_starter_weapon = true
 	shock_prod.duration_type = "turns"  # V2: Timed weapon
 	shock_prod.duration_turns = 5
@@ -91,7 +91,7 @@ func _create_brotato_starter_weapons() -> void:
 	leaky_siphon.target_type = "random_enemy"
 	leaky_siphon.target_rings = [0, 1, 2, 3]
 	leaky_siphon.weapon_trigger = "turn_end"
-	leaky_siphon.rarity = 0
+	leaky_siphon.rarity = 1
 	leaky_siphon.is_starter_weapon = true
 	leaky_siphon.duration_type = "infinite"  # V2: Permanent - sustain build core
 	_register_card(leaky_siphon)
@@ -111,7 +111,7 @@ func _create_brotato_starter_weapons() -> void:
 	volatile_handgun.target_type = "random_enemy"
 	volatile_handgun.target_rings = [0, 1, 2, 3]
 	volatile_handgun.weapon_trigger = "turn_end"
-	volatile_handgun.rarity = 0
+	volatile_handgun.rarity = 1
 	volatile_handgun.is_starter_weapon = true
 	volatile_handgun.duration_type = "kills"  # V2: Expires after kills
 	volatile_handgun.duration_kills = 4
@@ -133,7 +133,7 @@ func _create_brotato_starter_weapons() -> void:
 	mini_turret.target_type = "random_enemy"
 	mini_turret.target_rings = [0, 1, 2, 3]
 	mini_turret.weapon_trigger = "turn_end"
-	mini_turret.rarity = 0
+	mini_turret.rarity = 1
 	mini_turret.is_starter_weapon = true
 	mini_turret.duration_type = "infinite"  # V2: Permanent - engine build core
 	_register_card(mini_turret)
@@ -152,7 +152,7 @@ func _create_brotato_starter_weapons() -> void:
 	spark_coil.target_type = "all_in_ring"
 	spark_coil.target_rings = [0]  # Close ring only (changed to Melee for more defensive)
 	spark_coil.weapon_trigger = "turn_end"
-	spark_coil.rarity = 0
+	spark_coil.rarity = 1
 	spark_coil.is_starter_weapon = true
 	spark_coil.duration_type = "burn_out"  # V2: Strong but burns out
 	spark_coil.duration_turns = 3
@@ -181,7 +181,7 @@ func _create_v2_starter_cards() -> void:
 	rusty_pistol.target_type = "random_enemy"
 	rusty_pistol.target_rings = [0, 1, 2, 3]  # ALL rings
 	rusty_pistol.weapon_trigger = "turn_end"
-	rusty_pistol.rarity = 0
+	rusty_pistol.rarity = 1
 	rusty_pistol.is_starter_weapon = true
 	rusty_pistol.duration_type = "infinite"  # V2: Permanent - reliable baseline
 	_register_card(rusty_pistol)
@@ -201,7 +201,7 @@ func _create_v2_starter_cards() -> void:
 	storm_carbine.target_rings = [1, 2]  # Close/Mid
 	storm_carbine.target_count = 2
 	storm_carbine.weapon_trigger = "turn_end"
-	storm_carbine.rarity = 0
+	storm_carbine.rarity = 1
 	_register_card(storm_carbine)
 	
 	# Ammo Cache [Starter] - draw + gun cost reduction
@@ -217,7 +217,7 @@ func _create_v2_starter_cards() -> void:
 	ammo_cache.buff_type = "cost_reduction"
 	ammo_cache.buff_value = 1
 	ammo_cache.target_type = "self"
-	ammo_cache.rarity = 0
+	ammo_cache.rarity = 1
 	_register_card(ammo_cache)
 	
 	# Minor Hex - basic hex to single enemy
@@ -233,7 +233,7 @@ func _create_v2_starter_cards() -> void:
 	minor_hex.target_type = "random_enemy"
 	minor_hex.target_rings = [0, 1, 2, 3]
 	minor_hex.target_count = 1
-	minor_hex.rarity = 0
+	minor_hex.rarity = 1
 	_register_card(minor_hex)
 	
 	# Minor Barrier - weak barrier trap
@@ -250,7 +250,7 @@ func _create_v2_starter_cards() -> void:
 	minor_barrier.target_type = "ring"
 	minor_barrier.target_rings = [1, 2, 3]
 	minor_barrier.requires_target = true
-	minor_barrier.rarity = 0
+	minor_barrier.rarity = 1
 	_register_card(minor_barrier)
 	
 	# Guard Stance - basic armor
@@ -264,7 +264,7 @@ func _create_v2_starter_cards() -> void:
 	guard_stance.base_cost = 1
 	guard_stance.armor_amount = 4
 	guard_stance.target_type = "self"
-	guard_stance.rarity = 0
+	guard_stance.rarity = 1
 	_register_card(guard_stance)
 	
 	# Precision Strike - AoE damage to all enemies in a group/stack
@@ -280,7 +280,7 @@ func _create_v2_starter_cards() -> void:
 	precision_strike.target_type = "random_enemy"
 	precision_strike.target_rings = [0, 1, 2, 3]  # ALL rings
 	precision_strike.requires_target = false  # Picks random then hits group
-	precision_strike.rarity = 0
+	precision_strike.rarity = 1
 	_register_card(precision_strike)
 	
 	# Shove - push enemy back
@@ -297,7 +297,7 @@ func _create_v2_starter_cards() -> void:
 	shove.target_type = "random_enemy"
 	shove.target_rings = [0, 1]
 	shove.target_count = 1
-	shove.rarity = 0
+	shove.rarity = 1
 	_register_card(shove)
 	
 	# Overclock [Starter] - all guns fire at 75% damage
@@ -312,7 +312,7 @@ func _create_v2_starter_cards() -> void:
 	overclock.effect_params = {"damage_percent": 75.0}
 	overclock.cards_to_draw = 1
 	overclock.target_type = "self"
-	overclock.rarity = 0
+	overclock.rarity = 1
 	_register_card(overclock)
 	
 	# Tag Infusion: Piercing [Starter] - add piercing tag to a gun
@@ -326,7 +326,7 @@ func _create_v2_starter_cards() -> void:
 	tag_infusion_piercing.base_cost = 1
 	tag_infusion_piercing.effect_params = {"tag": "piercing", "bonus_damage": 0}
 	tag_infusion_piercing.target_type = "self"
-	tag_infusion_piercing.rarity = 0
+	tag_infusion_piercing.rarity = 1
 	_register_card(tag_infusion_piercing)
 
 
@@ -353,7 +353,7 @@ func _create_v2_brainstorm_persistent_cards() -> void:
 	mortar_team.target_type = "ring"
 	mortar_team.target_rings = [3]
 	mortar_team.weapon_trigger = "turn_end"
-	mortar_team.rarity = 2
+	mortar_team.rarity = 3
 	_register_card(mortar_team)
 	
 	# #12 Arc Conductor - beam engine with charge mechanic
@@ -372,7 +372,7 @@ func _create_v2_brainstorm_persistent_cards() -> void:
 	arc_conductor.target_type = "random_enemy"
 	arc_conductor.target_rings = [0, 1, 2, 3]
 	arc_conductor.weapon_trigger = "turn_end"
-	arc_conductor.rarity = 2
+	arc_conductor.rarity = 3
 	_register_card(arc_conductor)
 	
 	# #13 Bulwark Drone - fortress engine
@@ -391,7 +391,7 @@ func _create_v2_brainstorm_persistent_cards() -> void:
 	bulwark_drone.effect_params = {"barrier_threshold": 3, "barrier_ring": 1}
 	bulwark_drone.target_type = "self"
 	bulwark_drone.weapon_trigger = "turn_end"
-	bulwark_drone.rarity = 2
+	bulwark_drone.rarity = 3
 	_register_card(bulwark_drone)
 	
 	# #14 Pulse Array - shock AoE gun
@@ -410,7 +410,7 @@ func _create_v2_brainstorm_persistent_cards() -> void:
 	pulse_array.target_rings = [0, 1, 2, 3]
 	pulse_array.requires_target = true
 	pulse_array.weapon_trigger = "before_enemy_phase"
-	pulse_array.rarity = 2
+	pulse_array.rarity = 3
 	_register_card(pulse_array)
 	
 	# #15 Ammo Foundry - volatile gun buff engine
@@ -427,7 +427,7 @@ func _create_v2_brainstorm_persistent_cards() -> void:
 	ammo_foundry.effect_params = {"kills_needed": 2, "damage_buff": 1}
 	ammo_foundry.target_type = "self"
 	ammo_foundry.weapon_trigger = "on_kill"
-	ammo_foundry.rarity = 1
+	ammo_foundry.rarity = 2
 	_register_card(ammo_foundry)
 	
 	# #16 Scrap Forge - on-kill card generation
@@ -443,7 +443,7 @@ func _create_v2_brainstorm_persistent_cards() -> void:
 	scrap_forge.effect_params = {"spawn_chance": 20, "spawn_card": "shard_shot"}
 	scrap_forge.target_type = "self"
 	scrap_forge.weapon_trigger = "on_kill"
-	scrap_forge.rarity = 1
+	scrap_forge.rarity = 2
 	_register_card(scrap_forge)
 	
 	# Shard Shot - generated card from Scrap Forge
@@ -458,7 +458,7 @@ func _create_v2_brainstorm_persistent_cards() -> void:
 	shard_shot.base_damage = 4
 	shard_shot.target_type = "random_enemy"
 	shard_shot.target_rings = [0, 1, 2, 3]
-	shard_shot.rarity = 0
+	shard_shot.rarity = 1
 	_register_card(shard_shot)
 	
 	# #24 Shock Lattice - shock engine
@@ -476,7 +476,7 @@ func _create_v2_brainstorm_persistent_cards() -> void:
 	shock_lattice.target_type = "ring"
 	shock_lattice.target_rings = [0, 1, 2, 3]
 	shock_lattice.weapon_trigger = "on_tag_play"
-	shock_lattice.rarity = 1
+	shock_lattice.rarity = 2
 	_register_card(shock_lattice)
 	
 	# #26 Scatter Mines - explosive barrier engine
@@ -493,7 +493,7 @@ func _create_v2_brainstorm_persistent_cards() -> void:
 	scatter_mines.duration = 2
 	scatter_mines.effect_params = {"mine_count": 3, "random_rings": true}
 	scatter_mines.target_type = "all_rings"
-	scatter_mines.rarity = 2
+	scatter_mines.rarity = 3
 	_register_card(scatter_mines)
 	
 	# #28 Twin Lances - beam persistent gun
@@ -512,7 +512,7 @@ func _create_v2_brainstorm_persistent_cards() -> void:
 	twin_lances.target_type = "random_enemy"
 	twin_lances.target_rings = [0, 1, 2, 3]
 	twin_lances.weapon_trigger = "turn_end"
-	twin_lances.rarity = 2
+	twin_lances.rarity = 3
 	_register_card(twin_lances)
 	
 	# #29 Volley Rig - shotgun with ammo refund
@@ -531,7 +531,7 @@ func _create_v2_brainstorm_persistent_cards() -> void:
 	volley_rig.target_type = "random_enemy"
 	volley_rig.target_rings = [0, 1]
 	volley_rig.weapon_trigger = "turn_end"
-	volley_rig.rarity = 2
+	volley_rig.rarity = 3
 	_register_card(volley_rig)
 	
 	# #32 Hex Lance Turret - hex beam engine
@@ -550,7 +550,7 @@ func _create_v2_brainstorm_persistent_cards() -> void:
 	hex_lance_turret.target_type = "random_enemy"
 	hex_lance_turret.target_rings = [0, 1, 2, 3]
 	hex_lance_turret.weapon_trigger = "turn_end"
-	hex_lance_turret.rarity = 2
+	hex_lance_turret.rarity = 3
 	_register_card(hex_lance_turret)
 	
 	# #35 Pulse Repeater - engine core
@@ -567,7 +567,7 @@ func _create_v2_brainstorm_persistent_cards() -> void:
 	pulse_repeater.effect_params = {"choice_mode": true, "free_card": "overclock"}
 	pulse_repeater.target_type = "self"
 	pulse_repeater.weapon_trigger = "turn_start"
-	pulse_repeater.rarity = 1
+	pulse_repeater.rarity = 2
 	_register_card(pulse_repeater)
 	
 	# #38 Hex Capacitor - hex ritual engine
@@ -584,7 +584,7 @@ func _create_v2_brainstorm_persistent_cards() -> void:
 	hex_capacitor.effect_params = {"max_charges": 3, "charge_on_hex_consume": true}
 	hex_capacitor.target_type = "self"
 	hex_capacitor.weapon_trigger = "on_hex_consumed"
-	hex_capacitor.rarity = 1
+	hex_capacitor.rarity = 2
 	_register_card(hex_capacitor)
 	
 	# #39 Sentinel Barrier - fortress barrier engine
@@ -602,7 +602,7 @@ func _create_v2_brainstorm_persistent_cards() -> void:
 	sentinel_barrier.target_type = "ring"
 	sentinel_barrier.target_rings = [1, 2, 3]
 	sentinel_barrier.requires_target = true
-	sentinel_barrier.rarity = 2
+	sentinel_barrier.rarity = 3
 	_register_card(sentinel_barrier)
 	
 	# #40 Overwatch Drone - sniper engine
@@ -620,7 +620,7 @@ func _create_v2_brainstorm_persistent_cards() -> void:
 	overwatch_drone.target_type = "random_enemy"
 	overwatch_drone.target_rings = [2, 3]
 	overwatch_drone.weapon_trigger = "on_skill_play"
-	overwatch_drone.rarity = 1
+	overwatch_drone.rarity = 2
 	_register_card(overwatch_drone)
 	
 	# #47 Inferno Stack - explosive sniper
@@ -639,7 +639,7 @@ func _create_v2_brainstorm_persistent_cards() -> void:
 	inferno_stack.target_type = "random_enemy"
 	inferno_stack.target_rings = [2, 3]
 	inferno_stack.weapon_trigger = "turn_end"
-	inferno_stack.rarity = 2
+	inferno_stack.rarity = 3
 	_register_card(inferno_stack)
 	
 	# #48 Chain Reactor - beam + explosive engine
@@ -659,7 +659,7 @@ func _create_v2_brainstorm_persistent_cards() -> void:
 	chain_reactor.target_type = "random_enemy"
 	chain_reactor.target_rings = [0, 1, 2, 3]
 	chain_reactor.weapon_trigger = "on_gun_play"
-	chain_reactor.rarity = 2
+	chain_reactor.rarity = 3
 	_register_card(chain_reactor)
 
 
@@ -683,7 +683,7 @@ func _create_v2_brainstorm_instant_cards() -> void:
 	target_sync.target_type = "ring"
 	target_sync.target_rings = [0, 1, 2, 3]
 	target_sync.requires_target = true
-	target_sync.rarity = 1
+	target_sync.rarity = 2
 	_register_card(target_sync)
 	
 	# #18 Explosive Primer - explosive buff
@@ -699,7 +699,7 @@ func _create_v2_brainstorm_instant_cards() -> void:
 	explosive_primer.buff_value = 2
 	explosive_primer.effect_params = {"double_splash": true, "barrier_restore": 1}
 	explosive_primer.target_type = "self"
-	explosive_primer.rarity = 1
+	explosive_primer.rarity = 2
 	_register_card(explosive_primer)
 	
 	# #19 Hex Transfer - move hex between enemies
@@ -715,7 +715,7 @@ func _create_v2_brainstorm_instant_cards() -> void:
 	hex_transfer.effect_params = {"gun_hex_buff": 2}
 	hex_transfer.target_type = "random_enemy"
 	hex_transfer.target_rings = [0, 1, 2, 3]
-	hex_transfer.rarity = 1
+	hex_transfer.rarity = 2
 	_register_card(hex_transfer)
 	
 	# #20 Barrier Channel - trigger all barriers
@@ -730,7 +730,7 @@ func _create_v2_brainstorm_instant_cards() -> void:
 	barrier_channel.armor_amount = 1
 	barrier_channel.effect_params = {"armor_per_trigger": 1}
 	barrier_channel.target_type = "self"
-	barrier_channel.rarity = 1
+	barrier_channel.rarity = 2
 	_register_card(barrier_channel)
 	
 	# #21 Emergency Deploy - play gun from deck
@@ -744,7 +744,7 @@ func _create_v2_brainstorm_instant_cards() -> void:
 	emergency_deploy.base_cost = 1
 	emergency_deploy.effect_params = {"cost_reduction": 1, "fire_percent": 75}
 	emergency_deploy.target_type = "self"
-	emergency_deploy.rarity = 1
+	emergency_deploy.rarity = 2
 	_register_card(emergency_deploy)
 	
 	# #22 Piercing Ammo - this turn buff
@@ -759,7 +759,7 @@ func _create_v2_brainstorm_instant_cards() -> void:
 	piercing_ammo.buff_type = "piercing_buff"
 	piercing_ammo.effect_params = {"overflow_percent": 50}
 	piercing_ammo.target_type = "self"
-	piercing_ammo.rarity = 1
+	piercing_ammo.rarity = 2
 	_register_card(piercing_ammo)
 	
 	# #23 Beam Splitter - beam instant
@@ -778,7 +778,7 @@ func _create_v2_brainstorm_instant_cards() -> void:
 	beam_splitter.target_type = "ring"
 	beam_splitter.target_rings = [0, 1, 2, 3]
 	beam_splitter.requires_target = true
-	beam_splitter.rarity = 2
+	beam_splitter.rarity = 3
 	_register_card(beam_splitter)
 	
 	# #25 Corrosive Rounds - corrosive buff
@@ -794,7 +794,7 @@ func _create_v2_brainstorm_instant_cards() -> void:
 	corrosive_rounds.buff_type = "corrosive_buff"
 	corrosive_rounds.effect_params = {"double_on_hex": true}
 	corrosive_rounds.target_type = "self"
-	corrosive_rounds.rarity = 1
+	corrosive_rounds.rarity = 2
 	_register_card(corrosive_rounds)
 	
 	# #27 Kinetic Pulse - shock ring control
@@ -811,7 +811,7 @@ func _create_v2_brainstorm_instant_cards() -> void:
 	kinetic_pulse.effect_params = {"slow_chance": 100, "push_first": true}
 	kinetic_pulse.target_type = "ring"
 	kinetic_pulse.target_rings = [0]
-	kinetic_pulse.rarity = 1
+	kinetic_pulse.rarity = 2
 	_register_card(kinetic_pulse)
 	
 	# #30 Rail Piercer - piercing sniper
@@ -827,7 +827,7 @@ func _create_v2_brainstorm_instant_cards() -> void:
 	rail_piercer.effect_params = {"overflow_percent": 50}
 	rail_piercer.target_type = "random_enemy"
 	rail_piercer.target_rings = [0, 1, 2, 3]
-	rail_piercer.rarity = 2
+	rail_piercer.rarity = 3
 	_register_card(rail_piercer)
 	
 	# #31 Flame Coil - explosive instant
@@ -846,7 +846,7 @@ func _create_v2_brainstorm_instant_cards() -> void:
 	flame_coil.target_type = "ring"
 	flame_coil.target_rings = [0, 1, 2, 3]
 	flame_coil.requires_target = true
-	flame_coil.rarity = 1
+	flame_coil.rarity = 2
 	_register_card(flame_coil)
 	
 	# #33 Barrier Siphon - lifedrain fortress
@@ -860,7 +860,7 @@ func _create_v2_brainstorm_instant_cards() -> void:
 	barrier_siphon.base_cost = 1
 	barrier_siphon.effect_params = {"drain_per_barrier": 2}
 	barrier_siphon.target_type = "self"
-	barrier_siphon.rarity = 1
+	barrier_siphon.rarity = 2
 	_register_card(barrier_siphon)
 	
 	# #34 Shock Net - shock barrier
@@ -878,7 +878,7 @@ func _create_v2_brainstorm_instant_cards() -> void:
 	shock_net.target_type = "ring"
 	shock_net.target_rings = [1, 2, 3]
 	shock_net.requires_target = true
-	shock_net.rarity = 1
+	shock_net.rarity = 2
 	_register_card(shock_net)
 	
 	# #36 Focused Salvo - synergy instant
@@ -894,7 +894,7 @@ func _create_v2_brainstorm_instant_cards() -> void:
 	focused_salvo.effect_params = {"synergy_fire": true, "synergy_bonus": 2}
 	focused_salvo.target_type = "random_enemy"
 	focused_salvo.target_rings = [0, 1, 2, 3]
-	focused_salvo.rarity = 1
+	focused_salvo.rarity = 2
 	_register_card(focused_salvo)
 	
 	# #37 Fracture Rounds - piercing swarm clear
@@ -909,7 +909,7 @@ func _create_v2_brainstorm_instant_cards() -> void:
 	fracture_rounds.buff_type = "fracture_buff"
 	fracture_rounds.effect_params = {"repeat_percent": 50, "trigger_tags": ["shotgun", "piercing"]}
 	fracture_rounds.target_type = "self"
-	fracture_rounds.rarity = 1
+	fracture_rounds.rarity = 2
 	_register_card(fracture_rounds)
 	
 	# #41 Ricochet Disk - piercing shotgun
@@ -926,7 +926,7 @@ func _create_v2_brainstorm_instant_cards() -> void:
 	ricochet_disk.effect_params = {"no_repeat_targets": true}
 	ricochet_disk.target_type = "random_enemy"
 	ricochet_disk.target_rings = [1, 2]
-	ricochet_disk.rarity = 1
+	ricochet_disk.rarity = 2
 	_register_card(ricochet_disk)
 	
 	# #42 Hex Bloom - hex AoE
@@ -941,7 +941,7 @@ func _create_v2_brainstorm_instant_cards() -> void:
 	hex_bloom.hex_damage = 1
 	hex_bloom.effect_params = {"bonus_if_hexed": 2}
 	hex_bloom.target_type = "all_enemies"
-	hex_bloom.rarity = 2
+	hex_bloom.rarity = 3
 	_register_card(hex_bloom)
 	
 	# #43 Runic Overload - fortress volatile
@@ -956,7 +956,7 @@ func _create_v2_brainstorm_instant_cards() -> void:
 	runic_overload.armor_amount = 4
 	runic_overload.effect_params = {"barrier_threshold": 3, "free_card": "overclock"}
 	runic_overload.target_type = "self"
-	runic_overload.rarity = 1
+	runic_overload.rarity = 2
 	_register_card(runic_overload)
 	
 	# #44 Barrier Bloom - duplicate barriers
@@ -973,7 +973,7 @@ func _create_v2_brainstorm_instant_cards() -> void:
 	barrier_bloom.target_type = "ring"
 	barrier_bloom.target_rings = [0, 1, 2, 3]
 	barrier_bloom.requires_target = true
-	barrier_bloom.rarity = 1
+	barrier_bloom.rarity = 2
 	_register_card(barrier_bloom)
 	
 	# #45 Scrap Vents - volatile buff
@@ -990,7 +990,7 @@ func _create_v2_brainstorm_instant_cards() -> void:
 	scrap_vents.buff_value = 3
 	scrap_vents.effect_params = {"buff_tags": ["explosive", "piercing"]}
 	scrap_vents.target_type = "self"
-	scrap_vents.rarity = 0
+	scrap_vents.rarity = 1
 	_register_card(scrap_vents)
 	
 	# #46 Shockwave Gauntlet - shock ring control
@@ -1007,7 +1007,7 @@ func _create_v2_brainstorm_instant_cards() -> void:
 	shockwave_gauntlet.effect_params = {"stun_on_barrier": true}
 	shockwave_gauntlet.target_type = "random_enemy"
 	shockwave_gauntlet.target_rings = [0, 1, 2]
-	shockwave_gauntlet.rarity = 1
+	shockwave_gauntlet.rarity = 2
 	_register_card(shockwave_gauntlet)
 	
 	# #49 Glass Shards - volatile piercing
@@ -1023,7 +1023,7 @@ func _create_v2_brainstorm_instant_cards() -> void:
 	glass_shards.effect_params = {"armor_cost": 2, "energy_on_kill": 1}
 	glass_shards.target_type = "random_enemy"
 	glass_shards.target_rings = [0, 1, 2, 3]
-	glass_shards.rarity = 1
+	glass_shards.rarity = 2
 	_register_card(glass_shards)
 	
 	# #50 Null Field - fortress defense
@@ -1038,7 +1038,7 @@ func _create_v2_brainstorm_instant_cards() -> void:
 	null_field.armor_amount = 5
 	null_field.effect_params = {"melee_damage_reduction": 2, "slow_if_barrier": true}
 	null_field.target_type = "self"
-	null_field.rarity = 1
+	null_field.rarity = 2
 	_register_card(null_field)
 
 

@@ -90,8 +90,10 @@ static func resolve(card_def, tier: int, target_ring: int, combat: Node) -> void
 			push_warning("[CardEffectResolver] Unknown effect type: " + card_def.effect_type)
 
 
-static func resolve_weapon_effect(card_def, tier: int, combat: Node) -> void:  # card_def: CardDefinition
-	"""Resolve a persistent weapon's triggered effect."""
+static func resolve_weapon_effect_single_shot(card_def, tier: int, combat: Node) -> void:  # card_def: CardDefinition
+	"""Resolve a single shot of a persistent weapon's triggered effect.
+	For multi-target weapons, CombatManager calls this multiple times with awaits.
+	"""
 	var damage: int = card_def.get_scaled_value("damage", tier)
 	
 	# Check for Ember Charm artifact bonus (gun cards deal +2 damage)
@@ -108,6 +110,14 @@ static func resolve_weapon_effect(card_def, tier: int, combat: Node) -> void:  #
 	
 	if ring_mask > 0:
 		combat.deal_damage_to_random_enemy(ring_mask, damage)
+
+
+static func get_weapon_target_count(card_def, tier: int) -> int:
+	"""Get how many targets a weapon should hit."""
+	var target_count: int = card_def.get_scaled_value("target_count", tier)
+	if target_count <= 0:
+		target_count = 1  # Default to single target if not specified
+	return target_count
 
 
 static func _resolve_instant_damage(card_def, tier: int, target_ring: int, combat: Node) -> void:  # card_def: CardDefinition
