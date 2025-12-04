@@ -29,7 +29,8 @@ signal card_drag_ended(card_def, tier: int, hand_index: int, drop_position: Vect
 
 # Target row
 @onready var target_row: Panel = $CardBackground/VBox/TargetRow
-@onready var target_label: Label = $CardBackground/VBox/TargetRow/TargetLabel
+@onready var target_label: Label = $CardBackground/VBox/TargetRow/TargetHBox/TargetLabel
+@onready var ring_indicator: Control = $CardBackground/VBox/TargetRow/TargetHBox/RingIndicator
 
 # Footer (tags only now)
 @onready var tags_label: Label = $CardBackground/VBox/Footer/TagsLabel
@@ -45,6 +46,11 @@ var check_playability: bool = true
 
 # When false, card does not scale/lift on hover (for deployed weapons that use external preview)
 var enable_hover_scale: bool = true
+
+# Buff tracking for visual display
+var applied_buffs: Dictionary = {}  # {buff_type: value} for visual display
+var base_damage_display: int = 0  # Original damage before buffs
+var buffed_damage_display: int = 0  # Damage after buffs
 
 # Fan layout support
 var fan_index: int = 0  # Position in the fan (0 = leftmost)
@@ -132,9 +138,6 @@ const TIER_COLORS: Array[Color] = [
 	Color(1.0, 0.8, 0.2)      # Tier 3 - Gold #ffcc33
 ]
 
-const RING_NAMES: Array[String] = ["M", "C", "D", "F"]
-
-
 func _ready() -> void:
 	click_area.button_down.connect(_on_button_down)
 	click_area.button_up.connect(_on_button_up)
@@ -199,7 +202,11 @@ func _update_display() -> void:
 
 
 func _update_stats_row() -> void:
-	"""Update the stats row - only show non-zero values."""
+	"""Update the stats row - only show non-zero values. Supports showing buffed stats."""
+	# Guard against being called before @onready vars are set
+	if not damage_label:
+		return
+	
 	var damage: int = card_def.get_scaled_value("damage", tier)
 	var hex_dmg: int = card_def.get_scaled_value("hex_damage", tier)
 	var heal: int = card_def.get_scaled_value("heal_amount", tier)
@@ -209,14 +216,38 @@ func _update_stats_row() -> void:
 	var duration: int = card_def.get_scaled_value("duration", tier)
 	var push: int = card_def.push_amount
 	
+	# Store base damage for buff comparison
+	base_damage_display = damage
+	
+	# Calculate buff bonuses from applied_buffs
+	var damage_buff: int = 0
+	var armor_buff: int = 0
+	for buff_key: String in applied_buffs.keys():
+		var buff_data: Dictionary = applied_buffs[buff_key]
+		if buff_data.type == "gun_damage" or buff_data.type == "all_damage":
+			damage_buff += buff_data.value
+		elif buff_data.type == "armor_gain":
+			armor_buff += buff_data.value
+	
+	# Apply buffs
+	var buffed_damage: int = damage + damage_buff
+	var buffed_armor: int = armor + armor_buff
+	buffed_damage_display = buffed_damage
+	
 	# Check for energy gain (from buff_value if effect is energy related)
 	if card_def.effect_type == "energy_and_draw":
 		energy_gain = card_def.buff_value
 	
 	# Show/hide each stat label based on value
-	damage_label.visible = damage > 0
-	if damage > 0:
-		damage_label.text = "⚔ " + str(damage)
+	damage_label.visible = damage > 0 or damage_buff > 0
+	if damage > 0 or damage_buff > 0:
+		if damage_buff > 0:
+			# Show buffed damage with green color and (+X) notation
+			damage_label.text = "⚔ %d (+%d)" % [buffed_damage, damage_buff]
+			damage_label.add_theme_color_override("font_color", Color(0.4, 1.0, 0.5))  # Bright green
+		else:
+			damage_label.text = "⚔ " + str(damage)
+			damage_label.remove_theme_color_override("font_color")  # Use default
 	
 	hex_label.visible = hex_dmg > 0
 	if hex_dmg > 0:
@@ -226,9 +257,15 @@ func _update_stats_row() -> void:
 	if heal > 0:
 		heal_label.text = "♥ " + str(heal)
 	
-	armor_label.visible = armor > 0
-	if armor > 0:
-		armor_label.text = "🛡 " + str(armor)
+	armor_label.visible = armor > 0 or armor_buff > 0
+	if armor > 0 or armor_buff > 0:
+		if armor_buff > 0:
+			# Show buffed armor with cyan color and (+X) notation
+			armor_label.text = "🛡 %d (+%d)" % [buffed_armor, armor_buff]
+			armor_label.add_theme_color_override("font_color", Color(0.4, 1.0, 0.9))  # Bright cyan
+		else:
+			armor_label.text = "🛡 " + str(armor)
+			armor_label.remove_theme_color_override("font_color")
 	
 	draw_label.visible = cards_draw > 0
 	if cards_draw > 0:
@@ -256,91 +293,111 @@ func _update_stats_row() -> void:
 
 
 func _update_target_row() -> void:
-	"""Update the target row with scope and ring info."""
+	"""Update the target row with scope text and visual ring indicator."""
 	var scope_text: String = ""
-	var rings_text: String = ""
+	var show_ring_indicator: bool = true
 	
 	# Determine scope based on target_type
 	match card_def.target_type:
 		"self":
 			scope_text = "Self"
+			show_ring_indicator = false
 		"random_enemy":
 			var count: int = card_def.target_count if card_def.target_count > 0 else 1
 			if count == 1:
-				scope_text = "1 Random"
+				scope_text = "Random"
 			else:
 				scope_text = str(count) + " Random"
 		"ring":
 			if card_def.requires_target:
-				scope_text = "Ring (choose)"
+				scope_text = "Choose Ring"
 			else:
-				scope_text = "Ring"
+				scope_text = "In Range"
 		"all_rings":
 			scope_text = "All Rings"
 		"all_enemies":
 			scope_text = "All Enemies"
+			show_ring_indicator = false
 		_:
 			# Default for cards without targeting (self-targeting skills)
 			scope_text = "Self"
+			show_ring_indicator = false
 	
-	# Determine rings text
-	if card_def.target_type != "self" and card_def.target_type != "all_enemies":
-		rings_text = _get_rings_text(card_def.target_rings)
+	# Update scope label
+	target_label.text = "🎯 " + scope_text
 	
-	# Combine into compact format
-	if rings_text != "" and rings_text != "ALL":
-		target_label.text = "🎯 " + scope_text + " │ " + rings_text
-	elif rings_text == "ALL" and card_def.target_type != "all_enemies":
-		target_label.text = "🎯 " + scope_text + " │ ALL"
-	else:
-		target_label.text = "🎯 " + scope_text
-
-
-func _get_rings_text(rings: Array) -> String:
-	"""Convert ring array to display text."""
-	if rings.size() == 0:
-		return ""
-	
-	# Check if all rings
-	if rings.size() >= 4:
-		var has_all: bool = true
-		for i: int in range(4):
-			if i not in rings:
-				has_all = false
-				break
-		if has_all:
-			return "ALL"
-	
-	# Build ring letters
-	var letters: Array[String] = []
-	var sorted_rings: Array = rings.duplicate()
-	sorted_rings.sort()
-	for ring: int in sorted_rings:
-		if ring >= 0 and ring < RING_NAMES.size():
-			letters.append(RING_NAMES[ring])
-	
-	return " ".join(letters)
+	# Update ring indicator visual
+	if ring_indicator:
+		ring_indicator.visible = show_ring_indicator
+		if show_ring_indicator:
+			ring_indicator.set_targeted_rings(card_def.target_rings)
+		else:
+			ring_indicator.clear_targeting()
 
 
 func _update_footer() -> void:
-	"""Update the footer with tags only (timing is shown in description)."""
-	# Tags display
-	tags_label.text = _format_tags_display()
+	"""Update the footer with play mode and tags."""
+	# Build footer text: [INSTANT/COMBAT] │ Tags
+	var play_mode_text: String = ""
+	var play_mode_color: Color = Color.WHITE
+	
+	if card_def.has_method("is_instant") and card_def.is_instant():
+		play_mode_text = "⚡ INSTANT"
+		play_mode_color = Color(0.5, 0.85, 1.0)  # Cyan
+	else:
+		play_mode_text = "⚔️ COMBAT"
+		play_mode_color = Color(1.0, 0.65, 0.35)  # Orange
+	
+	var tags_text: String = _format_tags_display()
+	
+	if tags_text != "":
+		tags_label.text = play_mode_text + " │ " + tags_text
+	else:
+		tags_label.text = play_mode_text
+	
+	# Color the whole label based on play mode (will affect tags too, but that's acceptable)
+	tags_label.add_theme_color_override("font_color", play_mode_color)
 
 
 func _format_tags_display() -> String:
-	"""Format tags for display: core type icon + family tags."""
+	"""Format tags for display: core type icon + important tags."""
 	if card_def.tags.size() == 0:
 		return ""
 	
 	var parts: Array[String] = []
 	
-	# Get core type (gun, hex, barrier, defense, skill, engine)
+	# Get core type icon (gun, hex, barrier, defense, skill, engine)
 	var core_type: String = card_def.get_core_type()
 	if core_type != "":
 		var icon: String = CORE_TYPE_ICONS.get(core_type, "")
 		if icon != "":
 			parts.append(icon)
+	
+	# Show damage type tags (piercing, explosive, beam, etc.)
+	var damage_type_icons: Dictionary = {
+		"piercing": "➡️",
+		"explosive": "💣",
+		"beam": "⚡",
+		"shock": "⚡",
+		"corrosive": "🧪"
+	}
+	for tag: Variant in card_def.tags:
+		if tag is String and damage_type_icons.has(tag):
+			parts.append(damage_type_icons[tag])
+	
+	# Show mechanical tags (aoe, sniper, etc.)
+	var mechanical_displays: Dictionary = {
+		"aoe": "AOE",
+		"sniper": "Sniper",
+		"shotgun": "Close",
+		"scaling": "Scale",
+		"multi_target": "Multi",
+		"ring_control": "Push",
+		"rapid_fire": "Rapid"
+	}
+	for tag: Variant in card_def.tags:
+		if tag is String and mechanical_displays.has(tag):
+			parts.append(mechanical_displays[tag])
 	
 	# Get family tags (lifedrain, hex_ritual, fortress, etc.)
 	var family_tags: Array[String] = card_def.get_family_tags()
@@ -353,19 +410,23 @@ func _format_tags_display() -> String:
 	elif parts.size() == 1:
 		return parts[0]
 	else:
-		# Format: "🔫 │ Volatile, Lifedrain"
-		var core_part: String = parts[0] if core_type != "" else ""
-		var family_part: String = ""
+		# Format: "🔫 │ AOE, Piercing"
+		var core_part: String = ""
+		var other_parts: Array[String] = []
 		
-		if core_type != "" and family_tags.size() > 0:
-			# Skip the first part (icon) and join the rest
-			var family_names: Array[String] = []
+		if core_type != "" and parts.size() > 0:
+			core_part = parts[0]
 			for i: int in range(1, parts.size()):
-				family_names.append(parts[i])
-			family_part = ", ".join(family_names)
-			return core_part + " │ " + family_part
+				other_parts.append(parts[i])
 		else:
-			return ", ".join(parts)
+			other_parts = parts
+		
+		if core_part != "" and other_parts.size() > 0:
+			return core_part + " │ " + ", ".join(other_parts)
+		elif core_part != "":
+			return core_part
+		else:
+			return ", ".join(other_parts)
 
 
 func _get_flavor_description() -> String:
@@ -376,77 +437,86 @@ func _get_flavor_description() -> String:
 	
 	if has_instant or has_persistent:
 		var parts: Array[String] = []
+		# Only add labels if card has BOTH instant and persistent effects
+		var needs_labels: bool = has_instant and has_persistent
 		if has_instant:
 			var instant_text: String = _substitute_values(card_def.instant_description)
-			parts.append("[color=#88ddff]Instant:[/color] " + instant_text)
+			if needs_labels:
+				parts.append("[color=#88ddff]Instant:[/color] " + instant_text)
+			else:
+				parts.append(instant_text)
 		if has_persistent:
 			var persist_text: String = _substitute_values(card_def.persistent_description)
-			parts.append("[color=#ffcc55]Persistent:[/color] " + persist_text)
+			if needs_labels:
+				parts.append("[color=#ffcc55]Persistent:[/color] " + persist_text)
+			else:
+				parts.append(persist_text)
 		return "\n".join(parts)
 	
 	# Fall back to auto-generated descriptions for cards without explicit descriptions
+	# No "Instant:" prefix needed since card type badge already shows it
 	match card_def.effect_type:
 		"weapon_persistent":
-			return "[color=#ffcc55]Persistent:[/color] Deal " + str(card_def.get_scaled_value("damage", tier)) + " to random enemy."
+			return "Deal " + str(card_def.get_scaled_value("damage", tier)) + " to random enemy."
 		"instant_damage":
 			var dmg: int = card_def.get_scaled_value("damage", tier)
 			if card_def.target_type == "ring" and not card_def.requires_target:
-				return "[color=#88ddff]Instant:[/color] Deal " + str(dmg) + " to all in range."
+				return "Deal " + str(dmg) + " to all in range."
 			elif card_def.target_type == "ring" and card_def.requires_target:
-				return "[color=#88ddff]Instant:[/color] Deal " + str(dmg) + " to ring."
+				return "Deal " + str(dmg) + " to ring."
 			else:
-				return "[color=#88ddff]Instant:[/color] Deal " + str(dmg) + " damage."
+				return "Deal " + str(dmg) + " damage."
 		"scatter_damage":
 			var dmg: int = card_def.get_scaled_value("damage", tier)
-			return "[color=#88ddff]Instant:[/color] Deal " + str(dmg) + " to " + str(card_def.target_count) + " random."
+			return "Deal " + str(dmg) + " to " + str(card_def.target_count) + " random."
 		"damage_and_draw":
 			var dmg: int = card_def.get_scaled_value("damage", tier)
-			return "[color=#88ddff]Instant:[/color] Deal " + str(dmg) + ". Draw " + str(card_def.cards_to_draw) + "."
+			return "Deal " + str(dmg) + ". Draw " + str(card_def.cards_to_draw) + "."
 		"damage_and_heal":
 			var dmg: int = card_def.get_scaled_value("damage", tier)
 			var heal: int = card_def.get_scaled_value("heal_amount", tier)
-			return "[color=#88ddff]Instant:[/color] Deal " + str(dmg) + ", heal " + str(heal) + "."
+			return "Deal " + str(dmg) + ", heal " + str(heal) + "."
 		"heal":
 			var heal: int = card_def.get_scaled_value("heal_amount", tier)
-			return "[color=#88ddff]Instant:[/color] Heal " + str(heal) + " HP."
+			return "Heal " + str(heal) + " HP."
 		"energy_and_draw":
-			return "[color=#88ddff]Instant:[/color] Gain " + str(card_def.buff_value) + " Energy. Draw " + str(card_def.cards_to_draw) + "."
+			return "Gain " + str(card_def.buff_value) + " Energy. Draw " + str(card_def.cards_to_draw) + "."
 		"gambit":
-			return "[color=#88ddff]Instant:[/color] Discard hand, draw " + str(card_def.cards_to_draw) + "."
+			return "Discard hand, draw " + str(card_def.cards_to_draw) + "."
 		"buff":
 			if card_def.buff_type == "hex_damage":
-				return "[color=#88ddff]Instant:[/color] Next Hex deals double."
-			return "[color=#88ddff]Instant:[/color] Apply buff."
+				return "Next Hex deals double."
+			return "Apply buff."
 		"apply_hex":
 			var hex: int = card_def.get_scaled_value("hex_damage", tier)
 			if card_def.target_type == "all_enemies":
-				return "[color=#88ddff]Instant:[/color] Apply " + str(hex) + " Hex to ALL."
+				return "Apply " + str(hex) + " Hex to ALL."
 			elif card_def.target_type == "ring" and card_def.requires_target:
-				return "[color=#88ddff]Instant:[/color] Apply " + str(hex) + " Hex to ring."
+				return "Apply " + str(hex) + " Hex to ring."
 			elif card_def.target_type == "ring":
-				return "[color=#88ddff]Instant:[/color] Apply " + str(hex) + " Hex in range."
-			return "[color=#88ddff]Instant:[/color] Apply " + str(hex) + " Hex."
+				return "Apply " + str(hex) + " Hex in range."
+			return "Apply " + str(hex) + " Hex."
 		"damage_and_hex":
 			var dmg: int = card_def.get_scaled_value("damage", tier)
 			var hex: int = card_def.get_scaled_value("hex_damage", tier)
-			return "[color=#88ddff]Instant:[/color] Deal " + str(dmg) + " + " + str(hex) + " Hex."
+			return "Deal " + str(dmg) + " + " + str(hex) + " Hex."
 		"gain_armor":
 			var armor: int = card_def.get_scaled_value("armor_amount", tier)
-			return "[color=#88ddff]Instant:[/color] Gain " + str(armor) + " Armor."
+			return "Gain " + str(armor) + " Armor."
 		"ring_barrier":
 			var dmg: int = card_def.get_scaled_value("damage", tier)
 			var dur: int = card_def.get_scaled_value("duration", tier)
-			return "[color=#88ddff]Instant:[/color] Barrier (" + str(dmg) + " dmg, " + str(dur) + "t)."
+			return "Barrier (" + str(dmg) + " dmg, " + str(dur) + "t)."
 		"armor_and_lifesteal":
 			var armor: int = card_def.get_scaled_value("armor_amount", tier)
-			return "[color=#88ddff]Instant:[/color] " + str(armor) + " Armor. Heal per Melee."
+			return str(armor) + " Armor. Heal per Melee."
 		"push_enemies":
 			if card_def.requires_target:
-				return "[color=#88ddff]Instant:[/color] Push ring back " + str(card_def.push_amount) + "."
+				return "Push ring back " + str(card_def.push_amount) + "."
 			else:
-				return "[color=#88ddff]Instant:[/color] Push back " + str(card_def.push_amount) + " ring."
+				return "Push back " + str(card_def.push_amount) + " ring."
 		"shield_bash":
-			return "[color=#88ddff]Instant:[/color] Deal damage = Armor."
+			return "Deal damage = Armor."
 		_:
 			return card_def.get_description_with_values(tier)
 
@@ -726,3 +796,143 @@ func set_fan_position(index: int, total: int, pos: Vector2, rot: float) -> void:
 	
 	# Update pivot for better rotation (center-bottom)
 	pivot_offset = Vector2(size.x / 2, size.y)
+
+
+# =============================================================================
+# BUFF VISUAL FEEDBACK SYSTEM
+# =============================================================================
+
+func apply_buff(buff_type: String, buff_value: int, tag_filter: String = "") -> void:
+	"""Apply a buff to this card with visual feedback. Called from CombatLane."""
+	# Check if this card should receive the buff (based on tag filter)
+	if not tag_filter.is_empty() and not card_def.has_tag(tag_filter):
+		return
+	
+	# Store the buff
+	var buff_key: String = buff_type + "_" + tag_filter
+	if not applied_buffs.has(buff_key):
+		applied_buffs[buff_key] = {"type": buff_type, "value": 0, "tag_filter": tag_filter}
+	applied_buffs[buff_key].value += buff_value
+	
+	# Update display to show buffed stats
+	_update_stats_row()
+	
+	# Play buff visual effects
+	_play_buff_animation(buff_type, buff_value)
+
+
+func _play_buff_animation(buff_type: String, buff_value: int) -> void:
+	"""Play visual effects when a buff is applied to this card."""
+	if not is_inside_tree():
+		return
+	
+	# Determine buff color based on type
+	var buff_color: Color = Color(0.4, 1.0, 0.5)  # Default green
+	var buff_icon: String = "⚔"
+	
+	match buff_type:
+		"gun_damage", "all_damage":
+			buff_color = Color(0.4, 1.0, 0.5)  # Bright green
+			buff_icon = "⚔"
+		"armor_gain":
+			buff_color = Color(0.4, 1.0, 0.9)  # Cyan
+			buff_icon = "🛡"
+		"hex_damage":
+			buff_color = Color(0.8, 0.4, 1.0)  # Purple
+			buff_icon = "☠"
+		_:
+			buff_color = Color(1.0, 0.9, 0.4)  # Gold
+			buff_icon = "✦"
+	
+	# Create floating buff notification
+	_spawn_buff_floater(buff_icon, buff_value, buff_color)
+	
+	# Pulse the card border
+	_play_buff_pulse(buff_color)
+	
+	# Brief glow effect
+	_play_buff_glow(buff_color)
+
+
+func _spawn_buff_floater(icon: String, value: int, color: Color) -> void:
+	"""Spawn a floating text showing the buff amount."""
+	var floater: Label = Label.new()
+	floater.text = "%s +%d" % [icon, value]
+	floater.add_theme_font_size_override("font_size", 20)
+	floater.add_theme_color_override("font_color", color)
+	floater.add_theme_color_override("font_outline_color", Color(0, 0, 0, 1))
+	floater.add_theme_constant_override("outline_size", 3)
+	floater.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	floater.z_index = 200
+	
+	# Position above the card
+	floater.position = Vector2(size.x / 2 - 30, -30)
+	add_child(floater)
+	
+	# Animate: float up and fade out
+	var tween: Tween = floater.create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(floater, "position:y", floater.position.y - 60, 1.2).set_ease(Tween.EASE_OUT)
+	tween.tween_property(floater, "modulate:a", 0.0, 1.2).set_delay(0.4)
+	tween.tween_property(floater, "scale", Vector2(1.3, 1.3), 0.2).set_ease(Tween.EASE_OUT)
+	tween.chain().tween_property(floater, "scale", Vector2(1.0, 1.0), 0.3)
+	tween.tween_callback(floater.queue_free).set_delay(1.2)
+
+
+func _play_buff_pulse(_color: Color) -> void:
+	"""Pulse the card's scale briefly to draw attention."""
+	if not card_background:
+		return
+	
+	# Save original scale
+	var original_scale: Vector2 = scale
+	
+	# Create pulse tween
+	var tween: Tween = create_tween()
+	tween.tween_property(self, "scale", original_scale * 1.12, 0.15).set_ease(Tween.EASE_OUT)
+	tween.tween_property(self, "scale", original_scale, 0.25).set_ease(Tween.EASE_IN_OUT)
+
+
+func _play_buff_glow(color: Color) -> void:
+	"""Create a brief glow effect around the card."""
+	if not card_background:
+		return
+	
+	# Get the current style
+	var current_style = card_background.get_theme_stylebox("panel")
+	if not current_style:
+		return
+	
+	# Create a new style with glow border
+	var glow_style: StyleBoxFlat = current_style.duplicate() if current_style is StyleBoxFlat else StyleBoxFlat.new()
+	glow_style.border_color = color
+	glow_style.set_border_width_all(4)
+	glow_style.shadow_color = Color(color.r, color.g, color.b, 0.6)
+	glow_style.shadow_size = 8
+	
+	# Apply glow style
+	card_background.add_theme_stylebox_override("panel", glow_style)
+	
+	# Animate back to original
+	await get_tree().create_timer(0.4).timeout
+	
+	if is_instance_valid(card_background) and is_instance_valid(self):
+		# Restore original style
+		_apply_style()
+
+
+func clear_buffs() -> void:
+	"""Clear all applied buffs and restore original display."""
+	applied_buffs.clear()
+	if card_def:
+		_update_stats_row()
+
+
+func get_total_damage_with_buffs() -> int:
+	"""Get the total damage including all applied buffs."""
+	return buffed_damage_display
+
+
+func has_buffs() -> bool:
+	"""Check if this card has any buffs applied."""
+	return not applied_buffs.is_empty()

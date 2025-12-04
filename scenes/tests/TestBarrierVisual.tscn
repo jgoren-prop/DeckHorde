@@ -1,0 +1,29 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="PackedScene" uid="uid://cbe1qr0xnyd0m" path="res://scenes/BattlefieldArena.tscn" id="1_arena"]
+[ext_resource type="Script" path="res://scripts/tests/TestBarrierVisual.gd" id="2_test"]
+
+[node name="TestBarrierVisual" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0.15, 0.15, 0.18, 1)
+
+[node name="BattlefieldArena" parent="." instance=ExtResource("1_arena")]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+
+[node name="TestRunner" type="Node" parent="."]
+script = ExtResource("2_test")
+

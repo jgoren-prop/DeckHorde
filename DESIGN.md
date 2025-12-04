@@ -14,10 +14,9 @@
 ### Core Loop (Brotato Economy)
 
 1. **Select Warden** - Choose from 4 characters with stat modifiers
-2. **Select Starter Weapon** - Pick 1 of 7 starter weapons (your only starting card!)
-3. **Combat** - Survive waves of enemies using your deck
-4. **Shop** - Buy cards, artifacts, stat upgrades, services (primary build driver)
-5. **Repeat** - Progress through 20 waves to victory
+2. **Combat** - Survive waves of enemies using your deck
+3. **Shop** - Buy cards, artifacts, stat upgrades, services (primary build driver)
+4. **Repeat** - Progress through 20 waves to victory
 
 **Note:** Health restores to full after each wave. Scrap comes from killing enemies during combat.
 
@@ -28,20 +27,89 @@ Inspired by Brotato, this economy system emphasizes shop-driven progression:
 | Feature | Value | Notes |
 |---------|-------|-------|
 | Starting HP | 50 | +20 from typical warden bonus |
-| Starting Energy | 1 | Buy more in shop |
-| Starting Draw | 1 | Buy more in shop |
-| Starting Cards | 3 | Picked weapon + 2 bundle cards |
-| Weapon Slots | ∞ | V2: No limit (removed) |
+| Starting Energy | 3 | Buy more in shop |
+| Starting Draw | 5 | Buy more in shop |
+| Starting Cards | 10 | Predefined starter deck |
 | Total Waves | 20 | Extended from 12 |
 | Interest Rate | 5% | Up to 25 scrap/wave |
 
 **Interest System**: After each wave, earn 5% of your scrap (max 25). Encourages saving!
 
-**V2 Changes**:
-- Weapons stay deployed (out of deck) while in play
-- Weapon slot limit removed - limited by hand/energy instead
-- Weapons have varied durations (infinite, turns, kills, burn_out)
-- Each warden gets a starter bundle (weapon pick + 2 fixed cards)
+---
+
+## V3 Combat System: Queue and Execute
+
+### Overview
+
+The V3 combat system replaces persistent weapons with a **queue and execute** model:
+
+1. **Staging Phase**: Player plays cards to a "combat lane" staging area
+2. **Cards Queue**: Cards appear from left to right in the order played
+3. **Reordering**: Player can drag-and-drop cards to reorder them before execution
+4. **Execution**: When player ends turn, all staged cards execute left-to-right
+5. **Discard**: All weapon cards are "one and done" - they go to discard after use
+
+### Key Differences from V2
+
+| Feature | V2 (Old) | V3 (New) |
+|---------|----------|----------|
+| Weapons | Persistent, stay deployed | One-and-done, return to discard |
+| Turn Flow | Play 1 card → immediate effect | Queue multiple cards → execute all at once |
+| Combat Lane | Displayed deployed weapons | Staging area for cards to execute |
+| Card Synergies | Limited, via artifacts | Core mechanic via lane buffs and execution order |
+| Duration System | turns, kills, burn_out, infinite | Removed entirely |
+
+### Synergy System
+
+The V3 system emphasizes **card synergies** through execution order:
+
+**Lane Buffs**: Some cards apply temporary buffs that affect cards played after them:
+- "Gun Amplifier" - All gun cards after this gain +2 damage
+- "Hex Catalyst" - All hex cards after this apply +1 hex
+- "Armor Forge" - All defense cards after this gain +2 armor
+
+**Scaling Cards**: Some cards get stronger based on what's already been played:
+- "Armored Tank" - Gains +2 damage for every gun already fired this turn
+- "Chain Lightning" - Deals +1 damage per enemy already damaged this turn
+
+**Example Turn**:
+1. Play "Gun Amplifier" (buff: +2 gun damage)
+2. Play "Pistol" (3 → 5 damage due to buff)
+3. Play "Shotgun" (4 → 6 damage due to buff)
+4. Play "Armored Tank" (2 + 4 = 6 damage, 2 guns already fired)
+
+### Turn Structure (V3)
+
+1. **Draw Phase** - Draw cards to hand (5 by default)
+2. **Staging Phase** - Play cards to combat lane (costs energy)
+3. **Execute Phase** - Cards execute left-to-right when turn ends
+4. **Enemy Phase** - Enemies move inward and attack
+5. **Wave Check** - Win if all enemies dead, lose if player HP reaches 0
+
+### Combat Lane UI
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                       BATTLEFIELD                            │
+│                 (Concentric enemy rings)                     │
+├─────────────────────────────────────────────────────────────┤
+│  STAGING LANE - Drag to reorder                 [EXECUTE]   │
+│  ┌──────┐  ┌──────┐  ┌──────┐  ┌──────┐                     │
+│  │ Amp  │  │ 🔫   │  │ 🔫   │  │ Tank │                     │
+│  │+2dmg │  │Pistol│  │Shot  │  │ +4  │                      │
+│  │ →    │  │ 5⚔  │  │ 6⚔  │  │ 6⚔  │                      │
+│  └──────┘  └──────┘  └──────┘  └──────┘                     │
+├─────────────────────────────────────────────────────────────┤
+│                      CARD HAND                               │
+│       [Card 1] [Card 2] [Card 3] [Card 4] [Card 5]          │
+└─────────────────────────────────────────────────────────────┘
+```
+
+Features:
+- Cards can be dragged left/right to reorder
+- Visual preview shows damage with lane buffs applied
+- Execute button triggers all cards in sequence
+- Cards animate flying to their target when executed
 
 ---
 
@@ -115,22 +183,30 @@ Enemies spawn in the **FAR** ring and advance toward the player each turn:
 - Destroyed visuals linger in `destroyed_visuals`, and the helper now falls back to those panels so late projectiles and death particles still aim at the correct coordinates instead of `(0,0)`.
 - Regression coverage lives in `scenes/tests/TestEnemyCenterPosition.tscn` (`scripts/tests/TestEnemyCenterPosition.gd`), which instantiates the manager, spawns an enemy, and asserts the helper matches the panel midpoint.
 
-### Turn Structure
-
-1. **Draw Phase** - Draw cards to hand (5 by default)
-2. **Player Phase** - Play cards using Energy (3 by default)
-3. **Enemy Phase** - Enemies move inward and attack
-4. **Wave Check** - Win if all enemies dead, lose if player HP reaches 0
-
-### Card Types
+### Card Types (V3)
 
 | Type | Description |
 |------|-------------|
-| Weapon/Gun | Deal damage, some persist across turns |
+| Weapon/Gun | Deal damage, one-and-done (returns to discard) |
 | Skill | Buffs, healing, utility, draw, energy |
 | Hex | Apply stacking damage-over-time to enemies |
 | Defense | Gain armor, create barriers |
-| Engine | Persistent effects (turrets, auras) |
+| Lane Buff | Apply temporary buffs to subsequent cards in execution |
+
+### Card Play Modes
+
+**Combat Cards** (`play_mode = "combat"`):
+- Dragged to the **Staging Lane** at the bottom of screen
+- Queue up left-to-right, can be reordered
+- Execute all at once when "End Turn" is clicked
+
+**Instant Cards** (`play_mode = "instant"`):
+- Resolve **immediately** when played, don't go to staging lane
+- Most instant cards can be dragged anywhere outside the hand area
+- **Instant Ring-Targeting Cards**: Cards with `requires_target = true` and `target_type = "ring"` must be dragged directly to the battlefield
+  - Valid target rings **highlight green** when the card is dragged over them
+  - Drop on a valid ring to play the card targeting that ring
+  - Example: **Shield Barrier** - drag to Close/Mid/Far ring to place the barrier there
 
 ### Core Mechanics
 
@@ -140,9 +216,87 @@ Enemies spawn in the **FAR** ring and advance toward the player each turn:
 
 **Hex**: Stacking debuff on enemies. When a hexed enemy takes damage, they take bonus damage equal to their hex stacks, then hex is consumed.
 
-**Persistent Weapons**: Stay in play and trigger automatically at end of each turn before enemy phase.
+**Lane Buffs**: Temporary effects that modify cards executed after them in the same turn. Reset after execution completes.
 
-**Barriers**: Ring-based traps that damage enemies when crossed. Have HP/duration and can trigger multiple times.
+**Barriers**: Ring-based traps that damage enemies when crossed. Have a set number of uses (e.g., 2 uses). Each enemy that crosses consumes 1 use, and the barrier disappears when uses reach 0.
+
+---
+
+## V3 Card Pool (Starter Deck + Core Cards)
+
+### Card Design Principles
+
+1. **All weapons are one-and-done** - No persistence tracking needed
+2. **Lane buffs encourage ordering** - Playing buff first maximizes value
+3. **Scaling cards reward setup** - Building a strong turn feels satisfying
+4. **Clear synergy tags** - "gun" cards benefit from gun buffs, etc.
+
+### Veteran Starter Deck (10 cards)
+
+| Card | Type | Cost | Tags | Effect |
+|------|------|------|------|--------|
+| Pistol ×3 | Weapon | 1 | gun | Deal 3 damage to random enemy |
+| Shotgun ×2 | Weapon | 2 | gun, aoe | Deal 4 damage to random enemy in Melee/Close, +2 splash to group |
+| Guard Stance ×2 | Skill | 1 | defense | Gain 4 armor |
+| Minor Hex ×1 | Skill | 1 | hex | Apply 3 hex to random enemy |
+| Gun Amplifier ×1 | Skill | 1 | buff, gun | All gun cards after this gain +2 damage this turn |
+| Tactical Reload ×1 | Skill | 0 | draw | Draw 2 cards |
+
+### Lane Buff Cards
+
+| Card | Cost | Tags | Effect |
+|------|------|------|--------|
+| Gun Amplifier | 1 | buff, gun | All gun cards after this gain +2 damage this turn |
+| Hex Catalyst | 1 | buff, hex | All hex cards after this apply +1 hex this turn |
+| Armor Forge | 1 | buff, defense | All defense cards after this gain +2 armor this turn |
+| Energy Surge | 0 | buff | Refund 1 energy for the next card played |
+| Momentum | 1 | buff | Next 3 cards cost 1 less energy (min 0) |
+
+### Scaling Weapon Cards
+
+| Card | Cost | Tags | Effect |
+|------|------|------|--------|
+| Armored Tank | 2 | gun, defense, scaling | Deal 2 damage (+2 per gun already fired), convert damage to armor |
+| Chain Lightning | 2 | shock, scaling | Deal 3 damage (+1 per enemy already damaged this turn) |
+| Finishing Shot | 1 | gun, execute | Deal 5 damage to lowest HP enemy. +3 if target has hex |
+| Volley | 2 | gun, aoe | Deal 2 damage × number of cards staged after this |
+
+### Basic Weapon Cards
+
+| Card | Cost | Tags | Effect |
+|------|------|------|--------|
+| Pistol | 1 | gun | Deal 3 damage to random enemy |
+| Shotgun | 2 | gun, aoe | Deal 4 damage + 2 splash to target's group |
+| Rifle | 2 | gun, sniper | Deal 6 damage to random enemy in Mid/Far |
+| SMG | 1 | gun, rapid | Deal 2 damage to 2 random enemies |
+| Grenade | 2 | explosive, aoe | Deal 3 damage to all enemies in target ring |
+
+### Hex Cards
+
+| Card | Cost | Tags | Effect |
+|------|------|------|--------|
+| Minor Hex | 1 | hex | Apply 3 hex to random enemy |
+| Plague Cloud | 2 | hex, aoe | Apply 2 hex to all enemies |
+| Withering Mark | 1 | hex, single | Apply 5 hex to target enemy |
+| Hex Explosion | 2 | hex, consume | Consume all hex on target, deal that damage to all adjacent |
+
+### Defense Cards
+
+| Card | Cost | Tags | Effect |
+|------|------|------|--------|
+| Guard Stance | 1 | defense | Gain 4 armor |
+| Iron Wall | 2 | defense | Gain 8 armor |
+| Minor Barrier | 1 | barrier | Place barrier: deals 3 damage when crossed |
+| Reactive Armor | 1 | defense | Gain 2 armor. +2 for each enemy in Melee |
+
+### Utility Cards
+
+| Card | Cost | Tags | Effect |
+|------|------|------|--------|
+| Tactical Reload | 0 | draw | Draw 2 cards |
+| Adrenaline | 1 | energy | Gain 2 energy |
+| Focus Fire | 1 | target | Next weapon deals double damage |
+| Shove | 1 | control | Push 1 enemy back 1 ring |
 
 ---
 
@@ -157,21 +311,15 @@ Every card has tags that define its behavior and synergies:
 - `barrier` – ring traps and movement-triggered effects
 - `defense` – armor, shields, direct HP manipulation
 - `skill` – instant effects: draw, energy, utility
-- `engine` – non-weapon persistent effects
-
-### Timing Tags (exactly 1)
-
-- `instant` – resolve once on play
-- `persistent` – stays in play and triggers each turn
 
 ### Behavior Tags (0-3)
 
 - `shotgun` – many weak hits in Melee/Close
 - `sniper` – prefers Far/Mid
 - `aoe` – hits many enemies or full rings
-- `ring_control` – push, pull, slow, reposition
-- `swarm_clear` – specifically good vs multiple low-HP enemies
-- `single_target` – focus on one enemy
+- `scaling` – gets stronger based on lane state
+- `buff` – applies lane buff to subsequent cards
+- `execute` – bonus damage to low HP targets
 
 ### Build-Family Tags (0-3)
 
@@ -220,17 +368,17 @@ The game supports 4 distinct build archetypes:
 
 ### Gun Board
 
-Build a board of persistent guns that automatically clear the horde. Strong vs spread-out waves, wants to control Mid/Far.
+Build up massive turn combos with gun synergies. Play buff cards first, then unleash a volley of amplified shots.
 
-- **Core**: Persistent `gun` weapons (shotgun/sniper variants)
-- **Support**: Sharpened Rounds, damage scaling artifacts
+- **Core**: Gun Amplifier + multiple gun cards
+- **Support**: Scaling weapons like Armored Tank, rapid-fire cards
 
 ### Hex Ritualist
 
 Stack hex across the horde, trade HP/tempo for enormous delayed damage. Strong vs large waves.
 
 - **Core**: `hex` + `hex_ritual` cards
-- **Support**: Occult Focus, Creeping Doom, HP-sacrificing artifacts
+- **Support**: Hex Catalyst, Creeping Doom, HP-sacrificing artifacts
 
 ### Barrier Fortress
 
@@ -248,100 +396,16 @@ Trade damage for sustain. Constantly healing and converting sustain into armor/d
 
 ---
 
-## Card Pool (48 Cards)
-
-### Gun Board Family (12 cards)
-
-| Card | Cost | Tags | Effect |
-|------|------|------|--------|
-| Rusty Pistol | 1 | gun, persistent, single_target | At end of turn, deal 3 damage to random enemy |
-| Infernal Pistol | 1 | gun, persistent, sniper | At end of turn, deal 4 damage to random enemy in Mid/Far |
-| Choirbreaker Shotgun | 1 | gun, persistent, shotgun, swarm_clear | At end of turn, deal 2 damage to up to 3 enemies in Melee/Close |
-| Riftshard Rifle | 2 | gun, instant, sniper | Deal 8 damage to enemy in Far. If it dies, apply 2 hex to another |
-| Scatter Volley | 1 | gun, instant, shotgun, swarm_clear | Deal 2 damage to 4 random enemies |
-| Storm Carbine | 2 | gun, persistent, mid_focus | At end of turn, deal 3 damage to 2 enemies in Close/Mid |
-| Overcharged Revolver | 1 | gun, instant, volatile | Deal 6 damage to random enemy. Lose 1 HP |
-| Suppressing Fire | 1 | gun, instant, ring_control | Deal 3 damage to all enemies in Mid. Slow them |
-| Twin Pistols | 1 | gun, persistent, close_focus | At end of turn, deal 2 damage to 2 enemies in Melee/Close |
-| Salvo Drone | 2 | gun, engine, persistent, aoe | At end of turn, deal 3 damage to a random ring |
-| Ammo Cache | 1 | skill, instant, engine_core, gun | Draw 2 cards. Next gun card costs 1 less |
-| Iron Bastion | 2 | defense, instant, fortress | Gain 6 armor |
-
-### Hex Ritualist Family (12 cards)
-
-| Card | Cost | Tags | Effect |
-|------|------|------|--------|
-| Minor Hex | 1 | hex, instant, hex_ritual | Apply 3 hex to a random enemy |
-| Plague Cloud | 2 | hex, instant, aoe, swarm_clear, hex_ritual | Apply 2 hex to all enemies |
-| Withering Mark | 1 | hex, instant, single_target, hex_ritual | Apply 5 hex to a single enemy |
-| Plague Turret | 2 | hex, engine, persistent, aoe, hex_ritual | At end of turn, apply 2 hex to all enemies in random ring |
-| Soul Brand | 1 | hex, instant, hex_ritual | Apply 3 hex. If target dies this turn, gain 2 armor |
-| Rotting Gale | 2 | hex, instant, aoe, ring_control, hex_ritual | Apply 2 hex to Close/Mid. Push Far enemies into Mid |
-| Ritual Focus | 0 | skill, instant, hex_ritual, engine_core | Lose 2 HP; next hex card has +100% hex value |
-| Blood Sigil Bolt | 1 | hex, instant, lifedrain, hex_ritual | Apply 3 hex to random enemy. Heal 1 HP |
-| Cursed Miasma | 2 | hex, instant, aoe, swarm_clear | Apply 1 hex to all. Draw 1 card per 3 hex applied |
-| Doom Clock | 2 | hex, engine, persistent, hex_ritual | At end of turn, increase hex on all hexed enemies by 1 |
-| Last Rite | 2 | hex, instant, volatile, hex_ritual | Consume target's hex, deal that damage to all other enemies |
-| Hex-Tipped Rounds | 1 | gun, instant, hex_ritual, sniper | Deal 3 damage. Apply 2 hex |
-
-### Barrier Fortress Family (12 cards)
-
-| Card | Cost | Tags | Effect |
-|------|------|------|--------|
-| Minor Barrier | 1 | barrier, instant, ring_control, barrier_trap | Place barrier: 3 damage when crossed, 1 use |
-| Ring Ward | 2 | barrier, engine, persistent, barrier_trap, fortress | Place barrier: 3 damage, 3 uses |
-| Barrier Sigil | 1 | barrier, instant, ring_control, barrier_trap | Place barrier: 4 damage, enemies don't move this turn |
-| Glass Ward | 1 | defense, instant, fortress | Gain 5 armor |
-| Runic Rampart | 2 | barrier, instant, fortress | Place barrier in Melee and Close: 3 HP, 2 damage each |
-| Reinforced Circle | 1 | barrier, instant, fortress | Existing barriers in chosen ring gain +2 HP |
-| Ward Shock | 1 | skill, instant, barrier_trap, ring_control | All enemies that crossed a barrier this turn take 2 damage |
-| Lockdown Field | 2 | barrier, instant, ring_control, fortress | Enemies can't move Close→Melee this turn. Place barrier in Close |
-| Guardian Circle | 1 | defense, instant, fortress | Gain 3 armor. +2 if you control 3+ barriers |
-| Repulsion Wave | 1 | skill, instant, ring_control, swarm_clear, volatile | Push all Melee/Close enemies back 1 ring. Barrier crossers take 2 |
-| Cursed Bulwark | 2 | defense, instant, fortress, hex_ritual | Gain 6 armor. Apply 1 hex to all enemies in Melee |
-| Barrier Leech | 1 | barrier, instant, lifedrain, barrier_trap | Place barrier: 2 damage. Heal 1 HP when it triggers |
-
-### Lifedrain Bruiser Family (7 cards)
-
-| Card | Cost | Tags | Effect |
-|------|------|------|--------|
-| Blood Shield | 1 | defense, instant, lifedrain, fortress | Gain 3 armor. This turn, heal 1 HP per kill |
-| Blood Bolt | 1 | gun, instant, lifedrain | Deal 5 damage to random enemy. Heal 2 HP |
-| Leeching Slash | 1 | gun, instant, lifedrain, close_focus | Deal 4 damage to Melee/Close enemy. Heal 2 HP |
-| Crimson Guard | 1 | defense, instant, lifedrain | Gain 4 armor. Heal 1 HP |
-| Sanguine Aura | 2 | engine, persistent, lifedrain | At end of turn, heal 1 HP per enemy killed this turn |
-| Martyr's Vow | 0 | skill, instant, lifedrain, volatile | Lose 3 HP. This turn, heal 3 HP per kill |
-| Vampiric Volley | 2 | gun, instant, lifedrain, swarm_clear | Deal 3 damage to 3 random enemies. Heal 1 HP each |
-
-### Overlap/Engine Cards (5 cards)
-
-| Card | Cost | Tags | Effect |
-|------|------|------|--------|
-| Precision Strike | 1 | gun, instant, single_target | Deal 7 damage to target enemy. If stacked, hits all enemies in the stack |
-| Guard Stance | 1 | defense, instant, fortress | Gain 4 armor |
-| Shove | 1 | skill, instant, ring_control, volatile | Push 1 enemy back 1 ring. Barrier hit = 2 damage |
-| Ritual Cartridge | 1 | skill, instant, engine_core, gun, hex_ritual | Next gun and hex card cost 1 less |
-| Blood Ward Turret | 2 | engine, persistent, lifedrain, barrier_trap | At end of turn, deal 2 to Melee/Close enemy, heal 1 HP |
-
----
-
 ## Rarity System
 
 Both cards and artifacts use a 4-tier rarity system:
 
 | Rarity | Tier | Color | Shop Weight | Notes |
 |--------|------|-------|-------------|-------|
-| Common | 1 | Gray | High | All starter weapons, basic cards |
+| Common | 1 | Gray | High | Starter deck cards, basic pieces |
 | Uncommon | 2 | Green | Medium | Solid upgrades |
 | Rare | 3 | Blue | Low | Powerful synergy pieces |
 | Legendary | 4 | Gold | Very Low | Build-defining power |
-
-### Rarity Distribution
-
-- **Common (17 cards)**: Starter weapons, basic skills, foundation pieces
-- **Uncommon (25 cards)**: Most instant skills, mid-tier engines
-- **Rare (15 cards)**: Persistent weapons, powerful AoE, synergy payoffs
-- **Legendary (TBD)**: Reserved for future powerful cards
 
 ### Shop Appearance Rates (by wave)
 
@@ -372,6 +436,15 @@ Artifacts are **Brotato-style items**: small, often stackable stat and tag boost
 | Runic Plating | Uncommon | ✓ | Armor gained +25%. Heal power -10% |
 | Forward Bastion | Uncommon | ✓ | Damage vs Melee/Close +15%. Damage vs Mid/Far -10% |
 | Scrap Magnet | Common | ✓ | Scrap gained +15% |
+
+### V3 Lane Synergy Artifacts (New)
+
+| Artifact | Rarity | Stackable | Effect |
+|----------|--------|-----------|--------|
+| Chain Loader | Uncommon | ✗ | Each gun fired this turn gives the next gun +1 damage |
+| Combo Master | Rare | ✗ | If you play 5+ cards in one turn, all deal +2 damage |
+| Lane Commander | Uncommon | ✓ | Lane buffs are +50% more effective |
+| Execution Protocol | Rare | ✗ | Last card executed each turn deals +50% damage |
 
 ### Lifedrain Family Artifacts (4)
 
@@ -478,58 +551,9 @@ The shop screen displays several information panels:
 
 ---
 
-## Starter Weapons (Brotato Economy)
-
-Player picks 1 starter weapon after selecting their warden. All cost 1 energy and are persistent. **Every starter MUST be able to kill enemies solo.**
-
-### V2 Weapon Duration System
-
-Weapons now have varied durations instead of all being permanent:
-
-| Duration Type | Behavior | Example |
-|---------------|----------|---------|
-| `infinite` | Stays deployed until wave ends | Rusty Pistol, Mini Turret |
-| `turns` | Lasts X turns then discards/banishes | Shock Prod (5 turns) |
-| `kills` | Destroys after X kills | Volatile Handgun (4 kills) |
-| `burn_out` | Strong but short, then banished | Spark Coil (3 turns) |
-
-On expiry, weapons can:
-- `discard` - Return to deck, can draw again
-- `banish` - Gone for rest of wave
-- `destroy` - Gone from run entirely
-
-### Starter Weapon Table
-
-| Weapon | Tags | Effect | Duration | On Expire |
-|--------|------|--------|----------|-----------|
-| Rusty Pistol | gun, persistent | Deal 3 damage to random enemy | Infinite | - |
-| Worn Hex Staff | hex, persistent, hex_ritual | Deal 1 damage + apply 2 Hex | Infinite | - |
-| Shock Prod | shock, persistent | Deal 3 shock to closest enemy | 5 turns | Discard |
-| Leaky Siphon | gun, persistent, lifedrain | Deal 2 damage, heal 1 HP | Infinite | - |
-| Volatile Handgun | gun, persistent, volatile | Deal 4 damage, lose 1 HP | 4 kills | Banish |
-| Mini Turret | gun, engine, persistent, aoe | Deal 2 damage to 2 enemies | Infinite | - |
-| Spark Coil | shock, persistent, aoe | Deal 3 damage to all Melee | 3 turns | Banish |
-
-### Warden Starter Bundles
-
-Each warden gets **bonus cards** alongside the weapon they pick:
-
-| Warden | Weapon Pick | Bundle Cards |
-|--------|-------------|--------------|
-| Veteran | Pick 1 of 7 | Guard Stance + Ammo Cache |
-| Ash | Pick 1 of 7 | Minor Hex + Guard Stance |
-| Gloom | Pick 1 of 7 | Minor Hex + Guard Stance |
-| Glass | Pick 1 of 7 | Guard Stance + Minor Barrier |
-
-**Veteran starts with 3 cards**: 1 picked weapon + Guard Stance (defense) + Ammo Cache (draw/utility)
-
----
-
 ## Stat Upgrades (Brotato Economy)
 
 Buyable stat upgrades appear in the shop (1-2 per refresh). Prices scale exponentially with purchases.
-
-**V2 Note**: Weapon Slot upgrade removed - no limit on deployed weapons now.
 
 | Upgrade | Base Price | Effect | Cap |
 |---------|------------|--------|-----|
@@ -594,22 +618,7 @@ Wardens now provide stat MODIFIERS (bonuses) rather than setting absolute stats.
 - **Fantasy**: Battle-hardened generalist
 - **Stat Bonuses**: +20 HP, +2 energy
 - **Passive**: None (balanced stats, no special bonuses)
-- **Starting Cards**: None - player picks starter weapon
-
-#### Starter Deck (board-synergy proposal, not implemented yet)
-- Goal: put the lane to work immediately, then amplify it with tempo and tag infusion.
-- Proposed 10 cards:
-	- Rusty Pistol ×2 (gun, persistent) – baseline auto-clear and tag targets
-	- Storm Carbine ×1 (gun, persistent, close/mid) – pushes lane presence without overshooting damage
-	- Ammo Cache ×1 (skill, instant, engine_core, gun) – fuels cheap gun curve and early rerolls
-	- Minor Hex ×1 (hex, instant) – single-target setup for beam/hex synergies
-	- Minor Barrier ×1 (barrier, instant) – early ring control and fortress hooks
-	- Guard Stance ×1 (defense, instant, fortress) – stabilizer
-	- Precision Strike ×1 (gun, instant, single_target) – stack breaker, works with future tags
-	- Shove ×1 (skill, instant, ring_control, volatile) – movement control and barrier trigger
-	- **Overclock (new card)** ×1 – skill, instant, engine_core: "All deployed guns fire immediately for 75% damage; draw 1." (board tempo lever)
-	- **Tag Infusion: Piercing (new card/service)** ×1 – skill, instant: "Add `piercing` tag to a chosen gun. Piercing shots continue through a stack to hit a second enemy (overflow applies)." (turns Rusty Pistol into two-hit in stacks)
-- Early shop priorities: another persistent gun (Twin Pistols/Choirbreaker/Infernal Pistol), one barrier enabler (Ring Ward or Barrier Sigil), and a second ammo/tempo piece (Ammo Cache or Ritual Cartridge) to keep lane-filling fast.
+- **Starter Deck**: 10 predefined cards (see V3 Card Pool section)
 
 ### Ash Warden
 
@@ -768,56 +777,6 @@ Flash banners for important events:
 
 ---
 
-## Combat Lane System
-
-A Hearthstone-style "board" for deployed persistent weapons, positioned between the battlefield and hand.
-
-### Visual Design
-
-```
-┌─────────────────────────────────────────────────────┐
-│                    BATTLEFIELD                       │
-│              (Concentric enemy rings)                │
-├─────────────────────────────────────────────────────┤
-│  ⚡ DEPLOYED WEAPONS (3/7)                          │
-│  ┌──────┐  ┌──────┐  ┌──────┐                       │
-│  │ 🔫   │  │ 🔫   │  │ 🔫   │  (fills ~80% of lane) │
-│  │Rusty │  │Pistol│  │Turret│                       │
-│  │ ⚔3  │  │ ⚔4  │  │ ⚔3  │                       │
-│  └──────┘  └──────┘  └──────┘                       │
-├─────────────────────────────────────────────────────┤
-│                   CARD HAND                          │
-│    [Card 1] [Card 2] [Card 3] [Card 4] [Card 5]     │
-└─────────────────────────────────────────────────────┘
-```
-
-### Features
-
-| Feature | Description |
-|---------|-------------|
-| Deployment Animation | Cards fly from hand to lane with shrink effect |
-| Weapon Fire Effect | Cards pulse briefly and pistol visuals fire a fast projectile from the lane to the targeted enemy. Animation is fully synchronized: gun aims → muzzle flash → bullet fires → bullet hits → damage visuals appear |n
-| Damage Floater | "-X⚔" rises from card when damage dealt |
-| Capacity Limit | Maximum 7 weapons deployed at once |
-| Card Scale | Cards auto-resize to ~80% of lane height whenever the lane resizes |
-| Lane Visibility | Lane frame always visible; label indicates empty/full |
-| Hover Preview | Hover spawns full-size preview card above lane without altering base card scale |
-
-### Timing
-
-- Weapons deploy **instantly** when persistent card is played
-- Weapons **fire at end of turn** (before enemy phase)
-- Weapons phase has subtle yellow glow overlay while processing
-
-### Implementation
-
-- `scripts/ui/CombatLane.gd` - Main lane controller (dynamic card scaling + preview logic)
-- Scaled `CardUI.tscn` instances sized to ~80% of lane height (computed from control size)
-- Connected to `CombatManager.weapon_triggered` signal
-- Cards stored in `deployed_weapons: Array[Dictionary]`
-
----
-
 ## Technical Architecture
 
 ### Autoloads (Singletons)
@@ -827,8 +786,8 @@ A Hearthstone-style "board" for deployed persistent weapons, positioned between 
 | SettingsManager | User settings persistence |
 | GameManager | Scene transitions, game state |
 | RunManager | Current run: HP, scrap, deck, wave, PlayerStats |
-| CombatManager | Turn flow, card playing, enemy AI, artifact triggers |
-| CardDatabase | All card definitions (48 cards) |
+| CombatManager | Turn flow, card staging, execution, enemy AI |
+| CardDatabase | All card definitions |
 | EnemyDatabase | All enemy definitions (11 enemies) |
 | MergeManager | Triple-merge card upgrades |
 | ArtifactManager | Artifact effects (26 artifacts) |
@@ -843,7 +802,6 @@ A Hearthstone-style "board" for deployed persistent weapons, positioned between 
 | Main Menu | `scenes/MainMenu.tscn` |
 | Settings | `scenes/Settings.tscn` |
 | Warden Select | `scenes/WardenSelect.tscn` |
-| Starter Weapon Select | `scenes/StarterWeaponSelect.tscn` |
 | Combat | `scenes/Combat.tscn` |
 | Shop | `scenes/Shop.tscn` |
 | Run End | `scenes/RunEnd.tscn` |
@@ -866,8 +824,53 @@ A Hearthstone-style "board" for deployed persistent weapons, positioned between 
 |-------|------|---------|
 | BattlefieldState | `scripts/combat/BattlefieldState.gd` | Ring management, enemy tracking |
 | EnemyInstance | `scripts/combat/EnemyInstance.gd` | Runtime enemy state |
-| DeckManager | `scripts/combat/DeckManager.gd` | Deck, hand, discard zones |
-| CardEffectResolver | `scripts/combat/CardEffectResolver.gd` | Execute card effects |
+| DeckManager | `scripts/combat/DeckManager.gd` | Deck, hand, discard zones (no deployed) |
+| CardEffectResolver | `scripts/combat/CardEffectResolver.gd` | Execute card effects with lane context |
+| BattlefieldArena | `scripts/combat/BattlefieldArena.gd` | Orchestrator for battlefield visuals |
+| BattlefieldEffectsNode | `scripts/combat/nodes/BattlefieldEffectsNode.gd` | Projectiles, damage numbers, particle effects |
+
+### Combat Visual Feedback
+
+When effects are applied to enemies, visual feedback is triggered via signals:
+
+| Signal | Handler | Visual Effect |
+|--------|---------|---------------|
+| `enemy_damaged` | `_on_enemy_damaged()` | Shake enemy, flash red, show damage number |
+| `enemy_hexed` | `_on_enemy_hexed()` | Purple flash, hex particles, floating "+☠X" indicator, update hex display |
+| `enemy_targeted` | `_on_enemy_targeted()` | Fire projectile at enemy |
+| `barrier_placed` | `_on_barrier_placed()` | Green wave effect along ring, shield particles, ring barrier indicator |
+| `barrier_triggered` | `_on_barrier_triggered()` | Shield burst at barrier, sparks to enemy, stack expands to show damaged unit |
+| `player_damaged` | `_on_player_damaged()` | Show player damage number |
+
+**Barrier Visual Feedback**:
+
+1. **Persistent Barrier Indicator** (while barrier is active):
+   - Pulsing green arc along the ring edge
+   - Label displays "🛡️ X dmg × Y" showing damage amount and remaining uses
+   - Updates immediately when uses are consumed
+
+2. **Barrier Placement** (when Shield Barrier or similar card is played):
+   - Green wave effect sweeps along the targeted ring arc
+   - Shield particles spawn and pulse along the barrier position
+   - Persistent indicator appears showing barrier stats
+
+3. **Barrier Trigger** (when enemy crosses barrier):
+   - Shield burst flash at the barrier impact point
+   - Green sparks fly from barrier toward the enemy
+   - Floating "🛡️ -X" damage text appears at barrier position
+   - **Stack expands** to show individual enemies - the damaged unit is visible
+   - Stack shakes and flashes green to draw attention
+   - Barrier uses decrement (label updates)
+
+4. **Barrier Consumed** (when uses reach 0):
+   - Barrier indicator disappears
+   - "Break" particle effect - shield shards fall and fade
+
+**Hex Visual Feedback** (applied when hex cards are played):
+1. Enemy flashes purple (0.2 seconds)
+2. Purple particles spawn around enemy and float upward
+3. Floating "+☠X" text appears showing hex amount applied
+4. Enemy panel hex display updates immediately (shows ☠ icon + stack count)
 
 ### Constants
 
@@ -892,23 +895,22 @@ A Hearthstone-style "board" for deployed persistent weapons, positioned between 
 │  │   ⚔ 4    ☠ 0    ♥ 0  │  │
 │  └───────────────────────┘  │
 │                             │
-│  Persistent: Deal 3 to a    │  ← Description with timing label
-│  random enemy at turn end.  │
+│  Deal 3 damage to random    │  ← Description
+│  enemy.                     │
 │                             │
 ├─────────────────────────────┤
 │  🎯 1 Random │ ALL Rings    │  ← Target Row
 ├─────────────────────────────┤
-│  🔁 PERSISTENT │ gun        │  ← Footer: Timing Badge + Tags
+│  ⚡ INSTANT │ gun           │  ← Footer: Timing Badge + Tags
 └─────────────────────────────┘
 ```
 
-### Timing Badges
+### Timing Badges (V3)
 
 | Timing | Badge | Color |
 |--------|-------|-------|
 | Instant | ⚡ INSTANT | White |
-| Persistent | 🔁 PERSISTENT | Gold |
-| Buff | ✦ BUFF | Blue |
+| Lane Buff | ✦ BUFF | Blue |
 
 ### Effect Stats Row
 
@@ -1000,6 +1002,7 @@ DeckHorde/
 │       ├── MainMenu.gd
 │       ├── WardenSelect.gd
 │       ├── CombatScreen.gd
+│       ├── CombatLane.gd
 │       ├── CardUI.gd
 │       ├── Shop.gd
 │       ├── RunEnd.gd
@@ -1028,7 +1031,7 @@ DeckHorde/
 1. Open project in Godot 4.5+
 2. Press F5
 3. New Run → Select Warden → Start
-4. Play cards, end turns, watch enemies
+4. Play cards to staging lane, end turn to execute
 5. Press F3 to view debug stat panel
 
 ### Debug Features
@@ -1042,7 +1045,7 @@ DeckHorde/
 
 ### To add a new card:
 1. Open `scripts/autoloads/CardDatabase.gd`
-2. Find `_create_default_cards()` function
+2. Find `_create_v3_cards()` function
 3. Copy an existing card block and modify
 4. Add appropriate tags from TagConstants
 

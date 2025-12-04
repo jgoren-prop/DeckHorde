@@ -16,6 +16,7 @@ enum Ring {
 signal enemy_added(enemy, ring: int)  # enemy: EnemyInstance
 signal enemy_removed(enemy)  # enemy: EnemyInstance
 signal enemy_moved(enemy, from_ring: int, to_ring: int)  # enemy: EnemyInstance
+signal barrier_consumed(ring: int)  # Emitted when a barrier's uses reach 0
 
 # Enemies stored by ring
 var rings: Array[Array] = [[], [], [], []]  # MELEE, CLOSE, MID, FAR
@@ -78,6 +79,13 @@ func move_enemy(enemy, new_ring: int) -> Dictionary:  # enemy: EnemyInstance
 				var barrier: Dictionary = ring_barriers[check_ring]
 				result.barrier_damage += barrier.damage
 				enemy.current_hp -= barrier.damage
+				
+				# Consume one use of the barrier
+				barrier.turns_remaining -= 1
+				if barrier.turns_remaining <= 0:
+					ring_barriers.erase(check_ring)
+					barrier_consumed.emit(check_ring)
+				
 				if enemy.current_hp <= 0:
 					result.killed_by_barrier = true
 					enemy_removed.emit(enemy)

@@ -50,16 +50,15 @@ func _create_default_wardens() -> Array[WardenDefinition]:
 	ash.passive_id = ""  # No special passive, all via stat_modifiers
 	ash.portrait_color = Color(1.0, 0.4, 0.2)
 	ash.icon = "🔥"
-	# V2 Brainstorm: Gun-focused deck with damage-type synergies
+	# V3: Gun-focused deck with damage and buff cards
 	ash.starting_deck = [
-		{"card_id": "rusty_pistol", "tier": 1, "count": 2},        # Persistent gun
-		{"card_id": "mortar_team", "tier": 1, "count": 1},         # Explosive sniper
-		{"card_id": "volley_rig", "tier": 1, "count": 1},          # Shotgun swarm clear
-		{"card_id": "rail_piercer", "tier": 1, "count": 1},        # Piercing damage
-		{"card_id": "flame_coil", "tier": 1, "count": 2},          # Explosive AoE
-		{"card_id": "precision_strike", "tier": 1, "count": 1},    # Stack breaker
-		{"card_id": "guard_stance", "tier": 1, "count": 1},        # Defense
-		{"card_id": "overclock", "tier": 1, "count": 1}            # Fire all guns
+		{"card_id": "pistol", "tier": 1, "count": 2},              # Basic gun
+		{"card_id": "shotgun", "tier": 1, "count": 1},             # Splash damage
+		{"card_id": "heavy_pistol", "tier": 1, "count": 1},        # Strong single target
+		{"card_id": "assault_rifle", "tier": 1, "count": 1},       # Multi-target
+		{"card_id": "gun_amplifier", "tier": 1, "count": 1},       # Lane buff for guns
+		{"card_id": "iron_shell", "tier": 1, "count": 1},          # Defense
+		{"card_id": "quick_draw", "tier": 1, "count": 2}           # Draw cards
 	]
 	result.append(ash)
 	
@@ -80,16 +79,15 @@ func _create_default_wardens() -> Array[WardenDefinition]:
 	gloom.passive_id = ""  # hex_lifesteal to be added in V2 Phase 7+
 	gloom.portrait_color = Color(0.5, 0.2, 0.6)
 	gloom.icon = "🌑"
-	# V2 Brainstorm: Hex-focused deck with beam synergies
+	# V3: Hex-focused deck with hex and beam synergies
 	gloom.starting_deck = [
-		{"card_id": "rusty_pistol", "tier": 1, "count": 2},        # Persistent gun
-		{"card_id": "minor_hex", "tier": 1, "count": 2},           # Basic hex
-		{"card_id": "hex_bloom", "tier": 1, "count": 1},           # Hex AoE
-		{"card_id": "hex_transfer", "tier": 1, "count": 1},        # Move hex + gun hex buff
-		{"card_id": "arc_conductor", "tier": 1, "count": 1},       # Beam engine from hex
-		{"card_id": "hex_lance_turret", "tier": 1, "count": 1},    # Hex beam engine
-		{"card_id": "beam_splitter", "tier": 1, "count": 1},       # Beam damage + hex spread
-		{"card_id": "guard_stance", "tier": 1, "count": 1}         # Defense
+		{"card_id": "pistol", "tier": 1, "count": 2},              # Basic gun
+		{"card_id": "hex_bolt", "tier": 1, "count": 2},            # Basic hex
+		{"card_id": "hex_strike", "tier": 1, "count": 1},          # Damage + hex
+		{"card_id": "concentrated_hex", "tier": 1, "count": 1},    # Big hex
+		{"card_id": "beam_cannon", "tier": 1, "count": 1},         # Chains through hexed
+		{"card_id": "iron_shell", "tier": 1, "count": 1},          # Defense
+		{"card_id": "quick_draw", "tier": 1, "count": 2}           # Draw cards
 	]
 	result.append(gloom)
 	
@@ -109,16 +107,15 @@ func _create_default_wardens() -> Array[WardenDefinition]:
 	glass.passive_id = "cheat_death"  # Special passive: survive fatal hit once per wave
 	glass.portrait_color = Color(0.7, 0.9, 1.0)
 	glass.icon = "💎"
-	# V2 Brainstorm: Defense-focused deck with fortress synergies
+	# V3: Defense-focused deck with armor and barrier synergies
 	glass.starting_deck = [
-		{"card_id": "rusty_pistol", "tier": 1, "count": 2},        # Persistent gun
-		{"card_id": "guard_stance", "tier": 1, "count": 2},        # Basic armor
-		{"card_id": "minor_barrier", "tier": 1, "count": 2},       # Barrier trap
-		{"card_id": "sentinel_barrier", "tier": 1, "count": 1},    # Fortress barrier engine
-		{"card_id": "bulwark_drone", "tier": 1, "count": 1},       # Armor + barrier engine
-		{"card_id": "barrier_channel", "tier": 1, "count": 1},     # Trigger all barriers
-		{"card_id": "null_field", "tier": 1, "count": 1},          # Strong armor + melee debuff
-		{"card_id": "runic_overload", "tier": 1, "count": 1}       # Armor + free Overclock
+		{"card_id": "pistol", "tier": 1, "count": 2},              # Basic gun
+		{"card_id": "iron_shell", "tier": 1, "count": 2},          # Basic armor
+		{"card_id": "heavy_armor", "tier": 1, "count": 1},         # Strong armor
+		{"card_id": "shield_barrier", "tier": 1, "count": 2},      # Barrier traps
+		{"card_id": "reactive_armor", "tier": 1, "count": 1},      # Armor + heal
+		{"card_id": "armored_tank", "tier": 1, "count": 1},        # Scaling gun + armor
+		{"card_id": "quick_draw", "tier": 1, "count": 1}           # Draw cards
 	]
 	result.append(glass)
 	
@@ -140,18 +137,16 @@ func _create_default_wardens() -> Array[WardenDefinition]:
 	veteran.portrait_color = Color(0.6, 0.6, 0.7)  # Neutral gray-blue
 	veteran.icon = "⚔️"
 	veteran.is_unlocked_by_default = true  # V2 baseline, always available
-	# V2 Brainstorm Starter Deck: 10-card board-first, tag-flex design
+	# V3 Starter Deck: 10-card balanced design
 	veteran.starting_deck = [
-		{"card_id": "rusty_pistol", "tier": 1, "count": 2},        # 2x persistent gun - baseline lane fill
-		{"card_id": "storm_carbine", "tier": 1, "count": 1},       # 1x persistent gun - Close/Mid coverage
-		{"card_id": "ammo_cache", "tier": 1, "count": 1},          # 1x engine_core skill - draw + cost reduction
-		{"card_id": "minor_hex", "tier": 1, "count": 1},           # 1x hex - beam/hex synergy setup
-		{"card_id": "minor_barrier", "tier": 1, "count": 1},       # 1x barrier - fortress hooks
-		{"card_id": "guard_stance", "tier": 1, "count": 1},        # 1x defense - stabilizer
-		{"card_id": "precision_strike", "tier": 1, "count": 1},    # 1x targeted attack - stack breaker
-		{"card_id": "shove", "tier": 1, "count": 1},               # 1x ring_control - movement control
-		{"card_id": "overclock", "tier": 1, "count": 1},           # 1x tempo - all guns fire at 75%
-		{"card_id": "tag_infusion_piercing", "tier": 1, "count": 1} # 1x tag infusion - piercing upgrade
+		{"card_id": "pistol", "tier": 1, "count": 2},              # 2x basic gun - baseline damage
+		{"card_id": "shotgun", "tier": 1, "count": 1},             # 1x splash gun - group clear
+		{"card_id": "gun_amplifier", "tier": 1, "count": 1},       # 1x lane buff - damage boost
+		{"card_id": "hex_bolt", "tier": 1, "count": 1},            # 1x hex - synergy setup
+		{"card_id": "shield_barrier", "tier": 1, "count": 1},      # 1x barrier - ring control
+		{"card_id": "iron_shell", "tier": 1, "count": 1},          # 1x defense - armor
+		{"card_id": "shove", "tier": 1, "count": 1},               # 1x ring control - push
+		{"card_id": "quick_draw", "tier": 1, "count": 2}           # 2x draw - card advantage
 	]
 	result.append(veteran)
 	
@@ -267,8 +262,11 @@ func _update_preview(warden: WardenDefinition) -> void:
 	]
 	preview_passive.text = "[b]Passive:[/b] %s" % warden.passive_description
 	
-	# Brotato Economy: No starting deck - player picks starter weapon
-	preview_deck.text = "Starting: Pick 1 weapon next"
+	# Show starting deck count
+	var deck_size: int = selected_warden.starting_deck.reduce(
+		func(acc: int, entry: Dictionary) -> int: return acc + entry.get("count", 1), 0
+	)
+	preview_deck.text = "Starting Deck: %d cards" % deck_size
 
 
 func _on_difficulty_changed(value: float) -> void:
@@ -293,16 +291,14 @@ func _on_start_pressed() -> void:
 	
 	print("[WardenSelect] Selected warden: ", selected_warden.warden_name)
 	
-	# V2: Use set_warden to apply all stat modifiers
+	# V2: Use set_warden to apply all stat modifiers and initialize deck
 	RunManager.set_warden(selected_warden)
 	RunManager.danger_level = int(difficulty_slider.value)
 	
-	# Brotato Economy: Don't initialize deck here - go to StarterWeaponSelect
-	# The player will pick their starter weapon there
-	RunManager.deck.clear()
+	print("[WardenSelect] Initialized deck with %d cards" % RunManager.deck.size())
 	
-	# Go to starter weapon selection
-	GameManager.go_to_starter_weapon_select()
+	# Start combat directly
+	GameManager.start_new_run()
 
 
 func _on_back_pressed() -> void:

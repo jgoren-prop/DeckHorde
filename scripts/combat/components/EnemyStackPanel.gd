@@ -230,7 +230,7 @@ func _setup_intent_indicator(enemy_def, _panel_width: float) -> void:
 		total_attack_damage = damage_per_enemy * enemy_count
 	
 	var y_offset: float = 0.0
-	var intent_x: float = -38.0
+	var intent_x: float = -5.0
 	
 	# Movement intent
 	if will_move and move_distance > 0:

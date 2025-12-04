@@ -912,26 +912,26 @@ func _create_cross_tag_artifacts() -> void:
 
 
 # =============================================================================
-# V2 TEMPO/OVERCLOCK ARTIFACTS (5)
+# V3 STAGING/LANE ARTIFACTS (5)
 # =============================================================================
 
 func _create_tempo_artifacts() -> void:
-	"""Artifacts that reward skill chains and Overclock plays."""
+	"""Artifacts that reward lane staging and card sequencing."""
 	
-	# Overclock Capacitor - first Overclock free
-	var overclock_cap := ArtifactDef.new()
-	overclock_cap.artifact_id = "overclock_capacitor"
-	overclock_cap.artifact_name = "Overclock Capacitor"
-	overclock_cap.description = "First Overclock you play each turn costs 0."
-	overclock_cap.rarity = 2
-	overclock_cap.base_cost = 65
-	overclock_cap.stackable = false
-	overclock_cap.trigger_type = "on_turn_start"
-	overclock_cap.effect_type = "free_overclock"
-	overclock_cap.effect_value = 1
-	overclock_cap.icon = "⏱️"
-	overclock_cap.icon_color = Color(0.2, 0.6, 0.9)
-	_register_artifact(overclock_cap)
+	# Staging Capacitor - first card staged each turn is free
+	var staging_cap := ArtifactDef.new()
+	staging_cap.artifact_id = "staging_capacitor"
+	staging_cap.artifact_name = "Staging Capacitor"
+	staging_cap.description = "First card staged each turn costs 0 energy."
+	staging_cap.rarity = 2
+	staging_cap.base_cost = 65
+	staging_cap.stackable = false
+	staging_cap.trigger_type = "on_turn_start"
+	staging_cap.effect_type = "free_first_card"
+	staging_cap.effect_value = 1
+	staging_cap.icon = "⏱️"
+	staging_cap.icon_color = Color(0.2, 0.6, 0.9)
+	_register_artifact(staging_cap)
 	
 	# Burst Amplifier - fire immediately bonus
 	var burst_amp := ArtifactDef.new()

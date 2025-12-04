@@ -112,7 +112,6 @@ func go_to_scene(scene_name: String) -> void:
 	var scene_paths: Dictionary = {
 		"main_menu": "res://scenes/MainMenu.tscn",
 		"warden_select": "res://scenes/WardenSelect.tscn",
-		"starter_weapon_select": "res://scenes/StarterWeaponSelect.tscn",
 		"combat": "res://scenes/Combat.tscn",
 		"shop": "res://scenes/Shop.tscn",
 		"reward": "res://scenes/PostWaveReward.tscn",
@@ -169,12 +168,6 @@ func go_to_warden_select() -> void:
 	print("[GameManager] Going to warden select")
 	current_state = GameState.WARDEN_SELECT
 	transition_to_scene("res://scenes/WardenSelect.tscn")
-
-
-func go_to_starter_weapon_select() -> void:
-	print("[GameManager] Going to starter weapon select")
-	current_state = GameState.WARDEN_SELECT  # Same state, different screen
-	transition_to_scene("res://scenes/StarterWeaponSelect.tscn")
 
 
 func return_to_main_menu() -> void:

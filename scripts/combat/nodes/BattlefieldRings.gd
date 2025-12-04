@@ -128,6 +128,7 @@ func _draw() -> void:
 		
 		# Draw barrier if present
 		if ring_barriers.has(i):
+			print("[BattlefieldRings] Drawing barrier on ring ", i, " with data: ", ring_barriers[i])
 			_draw_barrier_ring(i, outer_radius, ARC_START, ARC_END)
 	
 	# Draw center (warden position) - at the arena center point
@@ -157,19 +158,70 @@ func _draw_semicircle_fill(center: Vector2, inner_r: float, outer_r: float, star
 	draw_colored_polygon(points, color)
 
 
-func _draw_barrier_ring(_ring: int, radius: float, arc_start: float = PI, arc_end: float = TAU) -> void:
+func _draw_barrier_ring(ring: int, radius: float, arc_start: float = PI, arc_end: float = TAU) -> void:
 	"""Draw a barrier effect on a ring (as a semicircle arc)."""
 	var pulse: float = (sin(_barrier_pulse_time) + 1.0) / 2.0
-	var barrier_color: Color = BARRIER_COLOR.lightened(pulse * 0.2)
-	barrier_color.a = 0.4 + pulse * 0.2
+	var fast_pulse: float = (sin(_barrier_pulse_time * 2.0) + 1.0) / 2.0
 	
-	# Draw glowing barrier arc (semicircle)
-	draw_arc(arena_center, radius - 3, arc_start, arc_end, 64, barrier_color, 6.0)
+	# Brighter, more saturated barrier color
+	var barrier_color: Color = Color(0.2, 1.0, 0.5, 0.9)  # Bright green
+	barrier_color = barrier_color.lightened(pulse * 0.15)
 	
-	# Inner glow
-	var inner_glow: Color = barrier_color
-	inner_glow.a *= 0.5
-	draw_arc(arena_center, radius - 6, arc_start, arc_end, 64, inner_glow, 3.0)
+	# Draw THICK main barrier arc - very prominent
+	draw_arc(arena_center, radius - 4, arc_start, arc_end, 64, barrier_color, 12.0)
+	
+	# Draw secondary pulsing arc for "energy field" effect
+	var pulse_color: Color = Color(0.4, 1.0, 0.7, 0.6 + fast_pulse * 0.3)
+	draw_arc(arena_center, radius - 4, arc_start, arc_end, 64, pulse_color, 18.0 + pulse * 4.0)
+	
+	# Inner core glow
+	var inner_glow: Color = Color(0.6, 1.0, 0.8, 0.5)
+	draw_arc(arena_center, radius - 10, arc_start, arc_end, 64, inner_glow, 5.0)
+	
+	# Outer glow for "force field" effect
+	var outer_glow: Color = Color(0.2, 0.8, 0.4, 0.25 + pulse * 0.15)
+	draw_arc(arena_center, radius + 4, arc_start, arc_end, 64, outer_glow, 6.0)
+	
+	# Draw barrier "posts" at intervals along the arc for visibility
+	var post_count: int = 7
+	for i: int in range(post_count):
+		var angle: float = arc_start + (float(i) / float(post_count - 1)) * (arc_end - arc_start)
+		var post_pos: Vector2 = arena_center + Vector2(cos(angle), sin(angle)) * radius
+		var post_inner: Vector2 = arena_center + Vector2(cos(angle), sin(angle)) * (radius - 20)
+		
+		# Post line
+		var post_color: Color = barrier_color
+		post_color.a = 0.6 + fast_pulse * 0.3
+		draw_line(post_inner, post_pos, post_color, 3.0)
+		
+		# Post cap (small circle at outer end)
+		draw_circle(post_pos, 5.0 + pulse * 2.0, post_color)
+	
+	# Draw barrier info label at the top center of the ring - LARGER and more visible
+	if ring_barriers.has(ring):
+		var barrier: Dictionary = ring_barriers[ring]
+		var label_angle: float = PI * 1.5  # Top center of semicircle
+		var label_radius: float = radius - 35
+		var label_pos: Vector2 = arena_center + Vector2(cos(label_angle), sin(label_angle)) * label_radius
+		
+		var font: Font = ThemeDB.fallback_font
+		var barrier_text: String = "🛡️ BARRIER: " + str(barrier.damage) + " DMG × " + str(barrier.duration)
+		
+		# Draw larger background for better readability
+		var text_size: Vector2 = font.get_string_size(barrier_text, HORIZONTAL_ALIGNMENT_CENTER, -1, 18)
+		var bg_rect: Rect2 = Rect2(label_pos - Vector2(text_size.x / 2 + 8, 14), Vector2(text_size.x + 16, 26))
+		
+		# Pulsing background glow
+		var glow_rect: Rect2 = bg_rect.grow(3.0 + pulse * 2.0)
+		draw_rect(glow_rect, Color(0.2, 0.8, 0.4, 0.3 + pulse * 0.15), true)
+		
+		# Main background
+		draw_rect(bg_rect, Color(0.0, 0.15, 0.05, 0.9), true)
+		draw_rect(bg_rect, barrier_color, false, 2.5)
+		
+		# Draw the text - bright and pulsing
+		var text_color: Color = Color(0.7, 1.0, 0.8, 1.0).lightened(pulse * 0.2)
+		draw_string(font, label_pos - Vector2(text_size.x / 2, -4), barrier_text, HORIZONTAL_ALIGNMENT_CENTER, -1, 18, text_color)
 
 
 func _draw_ring_label(ring: int, radius: float) -> void:
@@ -202,10 +254,13 @@ func set_threat_level(ring: int, level: ThreatLevel, damage: int = 0, has_bomber
 
 func set_barrier(ring: int, damage: int, duration: int) -> void:
 	"""Set a barrier on a ring."""
+	print("[BattlefieldRings] set_barrier called: ring=", ring, " damage=", damage, " duration=", duration)
 	if damage > 0 and duration > 0:
 		ring_barriers[ring] = {"damage": damage, "duration": duration}
+		print("[BattlefieldRings] Barrier ADDED to ring ", ring, " - ring_barriers now: ", ring_barriers)
 	else:
 		ring_barriers.erase(ring)
+		print("[BattlefieldRings] Barrier REMOVED from ring ", ring)
 	queue_redraw()
 
 

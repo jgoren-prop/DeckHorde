@@ -1,6 +1,7 @@
-[gd_scene load_steps=3 format=3 uid="uid://cjr2m8xkl1qp7"]
+[gd_scene load_steps=4 format=3 uid="uid://cjr2m8xkl1qp7"]
 
 [ext_resource type="Script" uid="uid://baghrps4dfauv" path="res://scripts/ui/CardUI.gd" id="1_card"]
+[ext_resource type="Script" path="res://scripts/ui/RingTargetIndicator.gd" id="2_ring_indicator"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_card"]
 bg_color = Color(0.15, 0.12, 0.2, 1)
@@ -133,23 +134,6 @@ theme_override_colors/font_color = Color(0.8, 0.8, 0.8, 1)
 theme_override_font_sizes/font_size = 15
 text = "⏱ 2"
 
-[node name="TargetRow" type="Panel" parent="CardBackground/VBox"]
-custom_minimum_size = Vector2(0, 24)
-layout_mode = 2
-
-[node name="TargetLabel" type="Label" parent="CardBackground/VBox/TargetRow"]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-theme_override_colors/font_color = Color(0.9, 0.85, 0.7, 1)
-theme_override_font_sizes/font_size = 11
-text = "🎯 1 Random │ ALL"
-horizontal_alignment = 1
-vertical_alignment = 1
-
 [node name="Footer" type="HBoxContainer" parent="CardBackground/VBox"]
 layout_mode = 2
 theme_override_constants/separation = 4
@@ -173,6 +157,37 @@ theme_override_font_sizes/normal_font_size = 11
 bbcode_enabled = true
 text = "Card description text here."
 scroll_active = false
+
+[node name="TargetRow" type="Panel" parent="CardBackground/VBox"]
+custom_minimum_size = Vector2(0, 50)
+layout_mode = 2
+
+[node name="TargetHBox" type="HBoxContainer" parent="CardBackground/VBox/TargetRow"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 4
+alignment = 1
+
+[node name="TargetLabel" type="Label" parent="CardBackground/VBox/TargetRow/TargetHBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 1
+theme_override_colors/font_color = Color(0.9, 0.85, 0.7, 1)
+theme_override_font_sizes/font_size = 10
+text = "🎯 1 Random"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="RingIndicator" type="Control" parent="CardBackground/VBox/TargetRow/TargetHBox"]
+custom_minimum_size = Vector2(90, 40)
+layout_mode = 2
+size_flags_horizontal = 0
+size_flags_vertical = 4
+script = ExtResource("2_ring_indicator")
 
 [node name="ClickArea" type="Button" parent="."]
 modulate = Color(1, 1, 1, 0)

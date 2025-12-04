@@ -1,12 +1,13 @@
 extends Node
 ## CombatManager - Combat turn flow orchestration
-## Now using real BattlefieldState and DeckManager
+## V3: Staging system - queue cards to lane, then execute all at once
 
 # Preload combat classes
 const BattlefieldStateScript = preload("res://scripts/combat/BattlefieldState.gd")
 const DeckManagerScript = preload("res://scripts/combat/DeckManager.gd")
 const CardResolver = preload("res://scripts/combat/CardEffectResolver.gd")
 
+# Core signals
 signal phase_changed(new_phase: int)
 signal turn_started(turn_number: int)
 signal turn_ended(turn_number: int)
@@ -14,48 +15,56 @@ signal energy_changed(current: int, max_energy: int)
 signal card_played(card, tier: int)
 signal enemy_spawned(enemy)
 signal enemy_killed(enemy)
-signal enemy_damaged(enemy, amount: int, hex_triggered: bool)  # Specific enemy took damage
+signal enemy_damaged(enemy, amount: int, hex_triggered: bool)
 signal enemy_moved(enemy, from_ring: int, to_ring: int)
-signal _enemies_spawned_together(enemies: Array, ring: int, enemy_id: String)  # Internal: enemies spawned in same batch
+signal _enemies_spawned_together(enemies: Array, ring: int, enemy_id: String)
 signal damage_dealt_to_enemies(amount: int, ring: int)
 signal player_damaged(amount: int, source: String)
 signal wave_ended(success: bool)
-signal weapon_triggered(card_name: String, damage: int, weapon_index: int)  # Persistent weapon fired
-signal enemy_ability_triggered(enemy, ability: String, value: int)  # Special ability fired
-signal enemy_targeted(enemy)  # Enemy is about to be attacked (for visual indicator)
-@warning_ignore("unused_signal")  # Emitted from CardEffectResolver.gd
-signal enemy_hexed(enemy, hex_amount: int)  # Enemy received hex (for visual indicator)
-@warning_ignore("unused_signal")  # Emitted from CardEffectResolver.gd
-signal barrier_placed(ring: int, damage: int, duration: int)  # Barrier created
-signal barrier_triggered(enemy, ring: int, damage: int)  # Barrier dealt damage to enemy
-signal ring_phase_started(ring: int, ring_name: String)  # Ring is being processed
-signal ring_phase_ended(ring: int)  # Ring processing complete
-signal enemy_attacking(enemy, damage: int)  # Enemy is about to attack
-signal weapons_phase_started()  # Persistent weapons starting to fire
-signal weapons_phase_ended()  # All persistent weapons finished firing
-# V2 Signals (reserved for future artifact triggers)
-@warning_ignore("unused_signal")
-signal gun_deployed(card_def)  # Persistent gun deployed
-signal gun_fired(card_def, damage: int)  # Gun fired (for artifact triggers)
-@warning_ignore("unused_signal")
-signal gun_out_of_ammo(card_def)  # Gun ran out of ammo
-@warning_ignore("unused_signal")
-signal engine_triggered(card_def)  # Engine effect triggered
-signal self_damage_dealt(amount: int)  # Player took self-damage (volatile cards)
-@warning_ignore("unused_signal")
-signal explosive_hit(damage: int, ring: int, splash_damage: int)  # Explosive damage dealt
-@warning_ignore("unused_signal")
-signal beam_chain(damage: int, chain_index: int)  # Beam chain hit
-@warning_ignore("unused_signal")
-signal piercing_overflow(damage: int, overflow: int)  # Piercing overkill
-@warning_ignore("unused_signal")
-signal shock_hit(damage: int, target)  # Shock damage dealt
-@warning_ignore("unused_signal")
-signal corrosive_hit(damage: int, shred: int, target)  # Corrosive damage dealt
-signal overkill(damage: int, overkill_amount: int, target)  # Overkill damage
-signal weapon_expired(card_def, destination: String)  # Weapon duration ended
 
-enum CombatPhase { INACTIVE, WAVE_START, DRAW_PHASE, PLAYER_PHASE, END_PLAYER_PHASE, ENEMY_PHASE, WAVE_CHECK }
+# Enemy interaction signals
+signal enemy_ability_triggered(enemy, ability: String, value: int)
+signal enemy_targeted(enemy)
+@warning_ignore("unused_signal")
+signal enemy_hexed(enemy, hex_amount: int)
+@warning_ignore("unused_signal")
+signal barrier_placed(ring: int, damage: int, duration: int)
+signal barrier_triggered(enemy, ring: int, damage: int)
+signal barrier_consumed(ring: int)  # Emitted when a barrier's uses reach 0
+signal ring_phase_started(ring: int, ring_name: String)
+signal ring_phase_ended(ring: int)
+signal enemy_attacking(enemy, damage: int)
+
+# V3 Staging System Signals
+signal card_staged(card_def, tier: int, lane_index: int)
+signal card_unstaged(lane_index: int)
+signal cards_reordered()
+signal execution_started()
+signal execution_completed()
+signal card_executing(card_def, tier: int, lane_index: int)
+signal card_executed(card_def, tier: int)
+signal instant_card_played(card_def, tier: int)  # For instant cards that resolve immediately
+signal tag_played(tag: String)  # Emitted when a tag is played (for tag tracker)
+signal lane_buff_applied(buff_type: String, buff_value: int, tag_filter: String)  # When a lane buff affects staged cards
+signal staged_card_buffed(lane_index: int, buff_type: String, buff_value: int)  # When a specific staged card receives a buff
+
+# V2 artifact signals (kept for compatibility)
+@warning_ignore("unused_signal")
+signal gun_fired(card_def, damage: int)
+signal self_damage_dealt(amount: int)
+@warning_ignore("unused_signal")
+signal explosive_hit(damage: int, ring: int, splash_damage: int)
+@warning_ignore("unused_signal")
+signal beam_chain(damage: int, chain_index: int)
+@warning_ignore("unused_signal")
+signal piercing_overflow(damage: int, overflow: int)
+@warning_ignore("unused_signal")
+signal shock_hit(damage: int, target)
+@warning_ignore("unused_signal")
+signal corrosive_hit(damage: int, shred: int, target)
+signal overkill(damage: int, overkill_amount: int, target)
+
+enum CombatPhase { INACTIVE, WAVE_START, DRAW_PHASE, PLAYER_PHASE, EXECUTION_PHASE, ENEMY_PHASE, WAVE_CHECK }
 
 # Current combat state
 var current_phase: int = CombatPhase.INACTIVE
@@ -63,29 +72,34 @@ var current_turn: int = 0
 var current_energy: int = 0
 var max_energy: int = 3
 var turn_limit: int = 5
-var kills_this_turn: int = 0  # Track kills for Leech Tooth artifact
-var gun_played_this_turn: bool = false  # Track for Gun Harness cost reduction
-# V2 state tracking
-var skills_played_this_turn: int = 0  # Track for Coolant System
-var overclocks_played_this_turn: int = 0  # Track for Overclock Capacitor
-var priority_ring: int = -1  # Target Sync priority ring
-var priority_ring_bonus: int = 0  # Target Sync damage bonus
-var rampage_stacks: int = 0  # Rampage Core kill stacks
-var first_gun_played_this_turn: bool = false  # Track for Quick Draw / Chain Reactor
+var kills_this_turn: int = 0
+
+# V3 Staging System
+var staged_cards: Array[Dictionary] = []  # {card_def, tier, hand_index, lane_buffs: Dictionary}
+var lane_buffs: Dictionary = {}  # Active buffs applied to staged cards: {buff_type: value}
+
+# V3 Execution Context (tracked during execute phase)
+var execution_context: Dictionary = {
+	"guns_fired": 0,
+	"cards_played": 0,
+	"damage_dealt": 0,
+	"last_damaged_enemy": null
+}
+
+# Tag tracking for Tag Tracker UI
+var tags_played_this_combat: Dictionary = {}  # tag_name -> count
 
 # Combat objects
 var battlefield = null  # BattlefieldState
 var deck_manager = null  # DeckManager
 var current_wave_def = null
-var active_weapons: Array = []
-var current_firing_weapon_index: int = -1  # Track which weapon INDEX is currently firing for projectile origin
 
-# Spawn batch tracking - ensures enemies from different spawns don't merge groups
+# Spawn batch tracking
 var _spawn_batch_counter: int = 0
 
 
 func _ready() -> void:
-	print("[CombatManager] Initialized")
+	print("[CombatManager] V3 Staging System Initialized")
 
 
 func initialize_combat(wave_def) -> void:
@@ -94,22 +108,30 @@ func initialize_combat(wave_def) -> void:
 	current_turn = 0
 	turn_limit = 5 if not wave_def else wave_def.turn_limit
 	max_energy = RunManager.base_energy
-	active_weapons.clear()
 	kills_this_turn = 0
-	_spawn_batch_counter = 0  # Reset spawn batch tracking
+	_spawn_batch_counter = 0
 	
-	# Reset per-wave state (Glass Warden cheat death, etc.)
+	# Reset staging system
+	staged_cards.clear()
+	lane_buffs.clear()
+	_reset_execution_context()
+	
+	# Reset tag tracking
+	tags_played_this_combat.clear()
+	
+	# Reset per-wave state
 	RunManager.reset_wave_state()
 	
 	# Create real battlefield
 	battlefield = BattlefieldStateScript.new()
+	battlefield.barrier_consumed.connect(_on_barrier_consumed)
 	
 	# Create real deck manager with player's deck
 	deck_manager = DeckManagerScript.new()
 	deck_manager.initialize(RunManager.deck.duplicate(true))
 	print("[CombatManager] Deck initialized with ", deck_manager.deck.size(), " cards")
 	
-	# Trigger on_wave_start artifacts (e.g., Iron Shell)
+	# Trigger on_wave_start artifacts
 	ArtifactManager.trigger_artifacts("on_wave_start", {})
 	
 	# Spawn initial enemies from wave definition
@@ -127,18 +149,16 @@ func initialize_combat(wave_def) -> void:
 func start_player_turn() -> void:
 	current_turn += 1
 	kills_this_turn = 0
-	gun_played_this_turn = false
-	# V2 state reset
-	skills_played_this_turn = 0
-	overclocks_played_this_turn = 0
-	priority_ring = -1
-	priority_ring_bonus = 0
-	rampage_stacks = 0
-	first_gun_played_this_turn = false
+	
+	# Clear staging for new turn
+	staged_cards.clear()
+	lane_buffs.clear()
+	_reset_execution_context()
+	
 	turn_started.emit(current_turn)
 	AudioManager.play_turn_start()
 	
-	# Trigger on_turn_start artifacts (Quick Draw, Hex Amplifier)
+	# Trigger on_turn_start artifacts
 	var turn_start_effects: Dictionary = ArtifactManager.trigger_artifacts("on_turn_start", {})
 	
 	# Hex Amplifier: deal damage to hexed enemies
@@ -154,144 +174,50 @@ func start_player_turn() -> void:
 	phase_changed.emit(current_phase)
 	
 	var cards_to_draw: int = 5 if not RunManager.current_warden else RunManager.current_warden.hand_size
-	# Add bonus draws from artifacts (Quick Draw)
 	cards_to_draw += turn_start_effects.draw_cards
-	print("[CombatManager] Drawing ", cards_to_draw, " cards (deck: ", deck_manager.deck.size(), ", hand: ", deck_manager.hand.size(), ")")
+	print("[CombatManager] Drawing ", cards_to_draw, " cards")
 	for i in range(cards_to_draw):
 		deck_manager.draw_card()
-	print("[CombatManager] After draw - hand size: ", deck_manager.hand.size())
 	
 	# Enter player phase
 	current_phase = CombatPhase.PLAYER_PHASE
 	phase_changed.emit(current_phase)
 
 
-func _trigger_persistent_weapons() -> void:
-	"""Trigger all registered persistent weapons with visual feedback."""
-	if active_weapons.is_empty():
-		return
-	
-	# Signal that weapons phase is starting (BattlefieldArena will hold stacks open)
-	weapons_phase_started.emit()
-	
-	# Process each weapon with delay for visual clarity
-	for i: int in range(active_weapons.size()):
-		var weapon: Dictionary = active_weapons[i]
-		var card_def = weapon.card_def
-		var tier: int = weapon.tier
-		
-		# Get how many shots this weapon fires
-		var target_count: int = CardResolver.get_weapon_target_count(card_def, tier)
-		
-		print("[CombatManager] Triggering persistent weapon: ", card_def.card_name, " (", target_count, " shots)")
-		
-		# Track which weapon INDEX is firing (for BattlefieldArena to get projectile origin)
-		# The index in active_weapons matches the index in CombatLane.deployed_weapons
-		current_firing_weapon_index = i
-		
-		# Fire each shot with proper animation timing
-		for shot: int in range(target_count):
-			# Emit signal for visual feedback (flash icon) - include index for correct card targeting
-			var damage: int = card_def.get_scaled_value("damage", tier)
-			weapon_triggered.emit(card_def.card_name, damage, i)
-			
-			# Small delay before firing (Slay the Spire style)
-			await get_tree().create_timer(0.15).timeout
-			
-			# Fire a single shot using the CardResolver
-			# deal_damage_to_random_enemy will emit enemy_targeted and handle the await internally
-			CardResolver.resolve_weapon_effect_single_shot(card_def, tier, self)
-			
-			# Wait for projectile animation to complete before next shot
-			await get_tree().create_timer(0.5).timeout
-			
-			# Shorter delay between shots from the same weapon
-			if shot < target_count - 1:
-				await get_tree().create_timer(0.15).timeout
-		
-		# Clear weapon tracking after all shots complete
-		current_firing_weapon_index = -1
-		
-		# Decrement triggers remaining if not infinite (-1)
-		if weapon.triggers_remaining > 0:
-			weapon.triggers_remaining -= 1
-		
-		# Delay between different weapons
-		if i < active_weapons.size() - 1:
-			await get_tree().create_timer(0.3).timeout
-	
-	# Wait for final weapon animations to complete (projectile travel + hit effect + viewing time)
-	await get_tree().create_timer(1.2).timeout
-	
-	# Signal that weapons phase is ending (BattlefieldArena can release holds)
-	weapons_phase_ended.emit()
-	
-	# V2: Decrement turn-based durations and remove expired weapons
-	_process_weapon_durations()
+func _reset_execution_context() -> void:
+	"""Reset the execution context for a new execution."""
+	execution_context = {
+		"guns_fired": 0,
+		"cards_played": 0,
+		"damage_dealt": 0,
+		"last_damaged_enemy": null
+	}
 
 
-func _get_weapon_target(card_def) -> Variant:
-	"""Get the target for a weapon (for visual indicator)."""
-	if not battlefield:
-		return null
-	
-	# Build ring mask from target_rings
-	var ring_mask: int = 0
-	for ring: int in card_def.target_rings:
-		ring_mask |= (1 << ring)
-	
-	if ring_mask == 0:
-		ring_mask = 0b1111  # All rings
-	
-	# Find candidates
-	var candidates: Array = []
-	for ring: int in range(4):
-		if ring_mask & (1 << ring):
-			candidates.append_array(battlefield.get_enemies_in_ring(ring))
-	
-	if candidates.size() > 0:
-		return candidates[randi() % candidates.size()]
-	
-	return null
+# =============================================================================
+# V3 STAGING SYSTEM
+# =============================================================================
 
-
-func can_play_card(card_def, _tier: int) -> bool:
+func can_stage_card(card_def, _tier: int) -> bool:
+	"""Check if a card can be staged to the lane."""
 	if current_phase != CombatPhase.PLAYER_PHASE:
 		return false
 	if not card_def:
 		return false
 	if current_energy < card_def.base_cost:
 		return false
-	
-	# V2: No weapon slot limit - limited by hand/energy instead
-	# Persistent weapons stay deployed but can be unlimited
-	
 	return true
 
 
-func _is_persistent_weapon(card_def) -> bool:
-	"""Check if a card is a persistent weapon that takes a slot."""
-	if not card_def:
-		return false
-	return card_def.effect_type == "weapon_persistent" or "persistent" in card_def.tags
+func can_play_card(card_def, tier: int) -> bool:
+	"""Alias for can_stage_card for V2 compatibility."""
+	return can_stage_card(card_def, tier)
 
 
-func is_weapon_slots_full() -> bool:
-	"""V2: Weapon slots removed - always returns false."""
-	return false
-
-
-func get_weapon_slots_remaining() -> int:
-	"""V2: Weapon slots removed - returns -1 to indicate no limit."""
-	return -1
-
-
-func get_deployed_weapon_count() -> int:
-	"""Get number of currently deployed weapons."""
-	return active_weapons.size()
-
-
-func play_card(hand_index: int, target_ring: int = -1) -> bool:
+func stage_card(hand_index: int, target_ring: int = -1) -> bool:
+	"""Stage a card from hand to the combat lane, or play instantly if instant card. 
+	For instant cards that require ring targeting, pass target_ring.
+	Returns true if successful."""
 	if current_phase != CombatPhase.PLAYER_PHASE:
 		return false
 	
@@ -305,48 +231,304 @@ func play_card(hand_index: int, target_ring: int = -1) -> bool:
 	if not card_def:
 		return false
 	
-	var cost: int = card_def.base_cost
-	if current_energy < cost:
+	if current_energy < card_def.base_cost:
 		return false
 	
 	# Spend energy
-	current_energy -= cost
+	current_energy -= card_def.base_cost
 	energy_changed.emit(current_energy, max_energy)
 	
-	# V2: Persistent weapons are DEPLOYED (removed from deck while in play)
-	# Instant cards are PLAYED (go to discard, cycle back)
-	if _is_persistent_weapon(card_def):
-		deck_manager.deploy_card(hand_index)
-	else:
-		deck_manager.play_card(hand_index)
+	# Remove from hand
+	deck_manager.remove_from_hand(hand_index)
 	
-	# Execute card effect
-	_execute_card_effect(card_def, tier, target_ring)
+	# Track tags played
+	_track_tags_played(card_def)
 	
+	# INSTANT CARDS: Execute immediately, don't go to staging lane
+	if card_def.is_instant():
+		var ring_str: String = " (Ring %d)" % target_ring if target_ring >= 0 else ""
+		print("[CombatManager] Playing INSTANT card: ", card_def.card_name, ring_str)
+		
+		# If this is a buff card, apply buff to cards already in lane
+		if card_def.is_lane_buff():
+			_apply_lane_buff(card_def, tier)
+		
+		# Execute the card immediately (pass target_ring for ring-targeting cards)
+		CardResolver.resolve(card_def, tier, target_ring, self)
+		
+		# Discard the card
+		deck_manager.discard_by_id(card_entry.card_id, tier)
+		
+		instant_card_played.emit(card_def, tier)
+		card_played.emit(card_def, tier)
+		AudioManager.play_card_play()
+		
+		return true
+	
+	# COMBAT CARDS: Stage to the lane
+	# Create staged card entry
+	var staged_entry: Dictionary = {
+		"card_def": card_def,
+		"tier": tier,
+		"card_id": card_entry.card_id,
+		"applied_buffs": {}  # Track buffs applied to this card
+	}
+	
+	# Apply current lane buffs to this card
+	staged_entry.applied_buffs = lane_buffs.duplicate()
+	
+	staged_cards.append(staged_entry)
+	
+	var lane_index: int = staged_cards.size() - 1
+	card_staged.emit(card_def, tier, lane_index)
 	card_played.emit(card_def, tier)
 	AudioManager.play_card_play()
+	
+	print("[CombatManager] Staged COMBAT card: ", card_def.card_name, " at lane index ", lane_index)
 	return true
 
 
-func _execute_card_effect(card_def, tier: int, target_ring: int) -> void:
-	print("[CombatManager] Executing card: ", card_def.card_name, " (effect: ", card_def.effect_type, ")")
+func _track_tags_played(card_def) -> void:
+	"""Track tags when a card is played (for tag tracker UI)."""
+	for tag: Variant in card_def.tags:
+		if tag is String:
+			if not tags_played_this_combat.has(tag):
+				tags_played_this_combat[tag] = 0
+			tags_played_this_combat[tag] += 1
+			tag_played.emit(tag)
+
+
+func get_tags_played() -> Dictionary:
+	"""Get the dictionary of tags played this combat."""
+	return tags_played_this_combat
+
+
+func unstage_card(lane_index: int) -> bool:
+	"""Remove a card from the staging lane and refund its cost. Returns card to hand."""
+	if lane_index < 0 or lane_index >= staged_cards.size():
+		return false
 	
-	# Use CardResolver for all card effects
-	CardResolver.resolve(card_def, tier, target_ring, self)
+	var staged_entry: Dictionary = staged_cards[lane_index]
+	var card_def = staged_entry.card_def
+	
+	# Refund energy
+	current_energy += card_def.base_cost
+	energy_changed.emit(current_energy, max_energy)
+	
+	# Return card to hand
+	deck_manager.add_to_hand(staged_entry.card_id, staged_entry.tier)
+	
+	# If this was a buff card, we need to recalculate lane buffs
+	if card_def.is_lane_buff():
+		_recalculate_lane_buffs()
+	
+	staged_cards.remove_at(lane_index)
+	card_unstaged.emit(lane_index)
+	
+	print("[CombatManager] Unstaged card: ", card_def.card_name)
+	return true
 
 
-func end_player_turn() -> void:
+func reorder_staged_cards(from_index: int, to_index: int) -> bool:
+	"""Reorder cards in the staging lane."""
+	if from_index < 0 or from_index >= staged_cards.size():
+		return false
+	if to_index < 0 or to_index >= staged_cards.size():
+		return false
+	if from_index == to_index:
+		return false
+	
+	var card: Dictionary = staged_cards[from_index]
+	staged_cards.remove_at(from_index)
+	staged_cards.insert(to_index, card)
+	
+	cards_reordered.emit()
+	print("[CombatManager] Reordered cards: ", from_index, " -> ", to_index)
+	return true
+
+
+func _apply_lane_buff(card_def, tier: int) -> void:
+	"""Apply a lane buff from a buff card."""
+	var buff_type: String = card_def.lane_buff_type
+	var buff_value: int = card_def.get_scaled_value("lane_buff_value", tier)
+	var tag_filter: String = card_def.lane_buff_tag_filter
+	
+	# Store the buff with its filter
+	var buff_key: String = buff_type + "_" + tag_filter
+	if not lane_buffs.has(buff_key):
+		lane_buffs[buff_key] = {"type": buff_type, "value": 0, "tag_filter": tag_filter}
+	lane_buffs[buff_key].value += buff_value
+	
+	print("[CombatManager] Applied lane buff: ", buff_type, " +", buff_value, " (filter: ", tag_filter, ")")
+	
+	# Emit general buff applied signal
+	lane_buff_applied.emit(buff_type, buff_value, tag_filter)
+	
+	# Update buffs on already-staged cards and emit per-card signals
+	for i: int in range(staged_cards.size()):
+		var staged_entry: Dictionary = staged_cards[i]
+		var staged_def = staged_entry.card_def
+		if tag_filter.is_empty() or staged_def.has_tag(tag_filter):
+			staged_entry.applied_buffs[buff_key] = lane_buffs[buff_key].duplicate()
+			# Emit signal for this specific card being buffed
+			staged_card_buffed.emit(i, buff_type, buff_value)
+
+
+func _recalculate_lane_buffs() -> void:
+	"""Recalculate all lane buffs after a buff card is removed."""
+	lane_buffs.clear()
+	
+	# Re-apply buffs from all staged buff cards
+	for staged_entry: Dictionary in staged_cards:
+		var card_def = staged_entry.card_def
+		if card_def.is_lane_buff():
+			_apply_lane_buff(card_def, staged_entry.tier)
+	
+	# Update applied buffs on all staged cards
+	for staged_entry: Dictionary in staged_cards:
+		staged_entry.applied_buffs.clear()
+		for buff_key: String in lane_buffs.keys():
+			var buff_data: Dictionary = lane_buffs[buff_key]
+			var card_def = staged_entry.card_def
+			if buff_data.tag_filter.is_empty() or card_def.has_tag(buff_data.tag_filter):
+				staged_entry.applied_buffs[buff_key] = buff_data.duplicate()
+
+
+func get_staged_card_count() -> int:
+	"""Get number of cards currently staged."""
+	return staged_cards.size()
+
+
+func get_staged_cards() -> Array[Dictionary]:
+	"""Get all staged cards."""
+	return staged_cards
+
+
+func get_buff_for_card(card_def, buff_type: String) -> int:
+	"""Get the total buff value for a card of a specific buff type."""
+	var total: int = 0
+	for buff_key: String in lane_buffs.keys():
+		var buff_data: Dictionary = lane_buffs[buff_key]
+		if buff_data.type == buff_type:
+			if buff_data.tag_filter.is_empty() or card_def.has_tag(buff_data.tag_filter):
+				total += buff_data.value
+	return total
+
+
+# =============================================================================
+# EXECUTION PHASE
+# =============================================================================
+
+func execute_staged_cards() -> void:
+	"""Execute all staged cards from left to right."""
 	if current_phase != CombatPhase.PLAYER_PHASE:
+		print("[CombatManager] Cannot execute - not in player phase")
 		return
 	
-	print("[CombatManager] Ending player turn")
-	current_phase = CombatPhase.END_PLAYER_PHASE
+	if staged_cards.is_empty():
+		print("[CombatManager] No cards to execute - ending turn")
+		_finish_player_turn()
+		return
+	
+	print("[CombatManager] Starting execution of ", staged_cards.size(), " staged cards")
+	
+	current_phase = CombatPhase.EXECUTION_PHASE
 	phase_changed.emit(current_phase)
+	execution_started.emit()
 	
-	# Trigger persistent weapons at end of player turn (before enemy phase)
-	await _trigger_persistent_weapons()
+	_reset_execution_context()
 	
-	# Trigger on_turn_end artifacts (Leech Tooth)
+	# Execute each card left to right
+	for i: int in range(staged_cards.size()):
+		var staged_entry: Dictionary = staged_cards[i]
+		var card_def = staged_entry.card_def
+		var tier: int = staged_entry.tier
+		
+		card_executing.emit(card_def, tier, i)
+		print("[CombatManager] Executing card ", i, ": ", card_def.card_name)
+		
+		# Small delay for visual feedback
+		await get_tree().create_timer(0.2).timeout
+		
+		# Execute the card with the current execution context
+		await _execute_staged_card(staged_entry, i)
+		
+		# Update execution context
+		execution_context.cards_played += 1
+		if card_def.is_gun():
+			execution_context.guns_fired += 1
+		
+		card_executed.emit(card_def, tier)
+		
+		# Delay between card executions for visual clarity
+		await get_tree().create_timer(0.4).timeout
+		
+		# Check if all enemies died - can stop early
+		if battlefield.get_total_enemy_count() == 0:
+			print("[CombatManager] All enemies defeated during execution!")
+			break
+	
+	# All staged cards go to discard after execution
+	for staged_entry: Dictionary in staged_cards:
+		deck_manager.discard_by_id(staged_entry.card_id, staged_entry.tier)
+	
+	staged_cards.clear()
+	lane_buffs.clear()
+	
+	execution_completed.emit()
+	
+	# Wait a moment then finish turn
+	await get_tree().create_timer(0.3).timeout
+	_finish_player_turn()
+
+
+func _execute_staged_card(staged_entry: Dictionary, lane_index: int) -> void:
+	"""Execute a single staged card."""
+	var card_def = staged_entry.card_def
+	var tier: int = staged_entry.tier
+	var applied_buffs: Dictionary = staged_entry.applied_buffs
+	
+	# Calculate final damage with lane buffs and scaling
+	var bonus_damage: int = 0
+	
+	# Apply damage buffs
+	for buff_key: String in applied_buffs.keys():
+		var buff_data: Dictionary = applied_buffs[buff_key]
+		if buff_data.type == "gun_damage" or buff_data.type == "all_damage":
+			bonus_damage += buff_data.value
+	
+	# Apply scaling bonuses
+	if card_def.scales_with_lane:
+		match card_def.scaling_type:
+			"guns_fired":
+				bonus_damage += execution_context.guns_fired * card_def.scaling_value
+			"cards_played":
+				bonus_damage += execution_context.cards_played * card_def.scaling_value
+			"damage_dealt":
+				bonus_damage += (execution_context.damage_dealt / 10) * card_def.scaling_value
+	
+	# Store bonus damage in effect_params for CardResolver to use
+	var modified_params: Dictionary = card_def.effect_params.duplicate()
+	modified_params["lane_bonus_damage"] = bonus_damage
+	modified_params["lane_index"] = lane_index
+	modified_params["execution_context"] = execution_context
+	
+	# Temporarily set effect_params (CardResolver will use this)
+	var original_params: Dictionary = card_def.effect_params
+	card_def.effect_params = modified_params
+	
+	# Use CardResolver to execute the effect
+	CardResolver.resolve(card_def, tier, -1, self)
+	
+	# Restore original params
+	card_def.effect_params = original_params
+
+
+func _finish_player_turn() -> void:
+	"""Finish the player turn and proceed to enemy phase."""
+	print("[CombatManager] Finishing player turn")
+	
+	# Trigger on_turn_end artifacts
 	var context: Dictionary = {}
 	if kills_this_turn > 0:
 		context["condition"] = "killed_this_turn"
@@ -355,7 +537,7 @@ func end_player_turn() -> void:
 	# Discard remaining hand
 	deck_manager.discard_hand()
 	
-	# Check if all enemies are already defeated - skip enemy phase if so
+	# Check if all enemies are already defeated
 	if battlefield.get_total_enemy_count() == 0:
 		print("[CombatManager] All enemies defeated - skipping enemy phase")
 		turn_ended.emit(current_turn)
@@ -366,24 +548,32 @@ func end_player_turn() -> void:
 	_process_enemy_phase()
 
 
+func end_player_turn() -> void:
+	"""Called when player clicks End Turn - triggers execution."""
+	if current_phase != CombatPhase.PLAYER_PHASE:
+		return
+	
+	# Execute all staged cards (this will call _finish_player_turn when done)
+	execute_staged_cards()
+
+
+# =============================================================================
+# ENEMY PHASE (unchanged from original)
+# =============================================================================
+
 func _process_enemy_phase() -> void:
 	current_phase = CombatPhase.ENEMY_PHASE
 	phase_changed.emit(current_phase)
 	
 	print("[CombatManager] Enemy phase - processing ring by ring")
 	
-	# Get buffer amount ONCE at the start (in case Torchbearers die during phase)
 	var buff_amount: int = _get_torchbearer_buff()
 	
-	# Process each ring from innermost (Melee) to outermost (Far)
-	# Ring order: 0 (Melee) -> 1 (Close) -> 2 (Mid) -> 3 (Far)
 	for ring: int in range(4):
 		await _process_ring_phase(ring, buff_amount)
 	
-	# Process enemy special abilities (spawning, etc.) after movement
 	await _process_enemy_abilities_visual()
 	
-	# Spawn reinforcements from wave definition
 	if current_wave_def and current_wave_def.phase_spawns:
 		ring_phase_started.emit(-1, "Reinforcements")
 		await get_tree().create_timer(0.3).timeout
@@ -393,104 +583,78 @@ func _process_enemy_phase() -> void:
 		ring_phase_ended.emit(-1)
 	
 	turn_ended.emit(current_turn)
-	
-	# Check wave end conditions
 	_check_wave_end()
 
 
 func _process_ring_phase(ring: int, buff_amount: int) -> void:
-	"""Process a single ring's enemy actions with visual feedback."""
 	var ring_names: Array[String] = ["Melee", "Close", "Mid", "Far"]
 	var enemies_in_ring: Array = battlefield.get_enemies_in_ring(ring)
 	
-	# Skip empty rings (but still show briefly for context)
 	if enemies_in_ring.is_empty():
 		return
 	
-	# Signal that we're processing this ring
 	ring_phase_started.emit(ring, ring_names[ring])
-	print("[CombatManager] Processing ring: ", ring_names[ring], " (", enemies_in_ring.size(), " enemies)")
+	print("[CombatManager] Processing ring: ", ring_names[ring])
 	
-	# Brief pause to show which ring we're processing
 	await get_tree().create_timer(0.3).timeout
 	
-	# MELEE RING: Enemies attack!
 	if ring == BattlefieldStateScript.Ring.MELEE:
 		await _process_melee_attacks(enemies_in_ring, buff_amount)
 	
-	# ALL RINGS: Check for ranged attackers at their target ring
 	await _process_ranged_attacks_in_ring(ring, buff_amount)
-	
-	# Brief pause after attacks
 	await get_tree().create_timer(0.2).timeout
-	
-	# ALL RINGS: Move enemies that want to move inward
 	await _process_enemy_movement_from_ring(ring)
 	
-	# Signal ring processing complete
 	ring_phase_ended.emit(ring)
-	
-	# Pause between rings so player can see each step
 	await get_tree().create_timer(0.5).timeout
 
 
 func _process_melee_attacks(melee_enemies: Array, buff_amount: int) -> void:
-	"""Process attacks from melee enemies with visual feedback."""
 	var total_damage: int = 0
-	var total_armor_shred: int = 0  # V2: Armor Reaver shred
+	var total_armor_shred: int = 0
 	
 	for enemy in melee_enemies:
 		var enemy_def = EnemyDatabase.get_enemy(enemy.enemy_id)
-		if enemy_def and enemy_def.attack_type != "suicide":  # Bombers don't attack
+		if enemy_def and enemy_def.attack_type != "suicide":
 			var base_dmg: int = enemy_def.get_scaled_damage(RunManager.current_wave)
 			var final_dmg: int = base_dmg + buff_amount
 			
-			# Signal that this enemy is attacking
 			enemy_attacking.emit(enemy, final_dmg)
 			await get_tree().create_timer(0.15).timeout
 			
 			total_damage += final_dmg
-			print("[CombatManager] ", enemy_def.enemy_name, " attacks for ", final_dmg)
 			
-			# V2: Armor Reaver shreds additional armor
 			if enemy_def.armor_shred > 0:
 				total_armor_shred += enemy_def.armor_shred
 				enemy_ability_triggered.emit(enemy, "armor_shred", enemy_def.armor_shred)
-				print("[CombatManager] ", enemy_def.enemy_name, " shreds ", enemy_def.armor_shred, " armor!")
 	
 	if total_damage > 0:
 		await get_tree().create_timer(0.1).timeout
 		RunManager.take_damage(total_damage)
 		player_damaged.emit(total_damage, "melee_enemies")
 	
-	# V2: Apply armor shred AFTER damage (removes armor directly)
 	if total_armor_shred > 0:
 		var actual_shred: int = mini(RunManager.armor, total_armor_shred)
 		if actual_shred > 0:
 			RunManager.armor -= actual_shred
 			RunManager.armor_changed.emit(RunManager.armor)
-			print("[CombatManager] Armor shredded! -", actual_shred, " armor (now ", RunManager.armor, ")")
 
 
 func _process_ranged_attacks_in_ring(ring: int, buff_amount: int) -> void:
-	"""Process ranged attacks from enemies in this ring."""
 	var enemies_in_ring: Array = battlefield.get_enemies_in_ring(ring)
 	var total_ranged_damage: int = 0
 	
 	for enemy in enemies_in_ring:
 		var enemy_def = EnemyDatabase.get_enemy(enemy.enemy_id)
 		if enemy_def and enemy_def.attack_type == "ranged":
-			# Ranged enemies attack if at their target ring and player is in range
 			if enemy.ring == enemy_def.target_ring and enemy_def.attack_range >= enemy.ring:
 				var base_dmg: int = enemy_def.get_scaled_damage(RunManager.current_wave)
 				var final_dmg: int = base_dmg + buff_amount
 				
-				# Signal that this enemy is attacking
 				enemy_attacking.emit(enemy, final_dmg)
 				await get_tree().create_timer(0.2).timeout
 				
 				total_ranged_damage += final_dmg
-				print("[CombatManager] Ranged attack from ", enemy_def.enemy_name, " in ring ", ring, " for ", final_dmg)
 	
 	if total_ranged_damage > 0:
 		await get_tree().create_timer(0.1).timeout
@@ -499,13 +663,9 @@ func _process_ranged_attacks_in_ring(ring: int, buff_amount: int) -> void:
 
 
 func _process_enemy_movement_from_ring(ring: int) -> void:
-	"""Process enemy movement from a specific ring."""
-	# Get fresh list of enemies (some may have died)
 	var enemies_in_ring: Array = battlefield.get_enemies_in_ring(ring)
-	
-	# Group enemies by their group_id for synchronized movement
-	var groups_to_move: Dictionary = {}  # group_id -> Array of {enemy, old_ring, new_ring}
-	var ungrouped_to_move: Array = []  # Array of {enemy, old_ring, new_ring}
+	var groups_to_move: Dictionary = {}
+	var ungrouped_to_move: Array = []
 	
 	for enemy in enemies_in_ring:
 		var enemy_def = EnemyDatabase.get_enemy(enemy.enemy_id)
@@ -519,89 +679,67 @@ func _process_enemy_movement_from_ring(ring: int) -> void:
 				}
 				
 				if not enemy.group_id.is_empty():
-					# This enemy is part of a group - batch with others in same group
 					if not groups_to_move.has(enemy.group_id):
 						groups_to_move[enemy.group_id] = []
 					groups_to_move[enemy.group_id].append(move_data)
 				else:
-					# Ungrouped enemy - move individually
 					ungrouped_to_move.append(move_data)
 	
-	# Move grouped enemies together (all enemies in a group move at once)
 	for group_id: String in groups_to_move.keys():
 		var group_moves: Array = groups_to_move[group_id]
-		var barrier_results: Array = []  # Store results for visual feedback
+		var barrier_results: Array = []
 		
-		# Move all enemies in the group without delay between them
 		for move_data: Dictionary in group_moves:
 			var result: Dictionary = battlefield.move_enemy(move_data.enemy, move_data.new_ring)
 			barrier_results.append({"enemy": move_data.enemy, "result": result, "move_data": move_data})
 		
-		# First pass: emit barrier_triggered signals for enemies that took barrier damage (triggers stack popup)
 		var any_barrier_damage: bool = false
 		for i: int in range(group_moves.size()):
 			var barrier_info: Dictionary = barrier_results[i]
 			var result: Dictionary = barrier_info.result
 			var move_data: Dictionary = barrier_info.move_data
 			if result.barrier_damage > 0:
-				# Use barrier_triggered signal (not enemy_targeted) so it shows barrier animation, not gun animation
 				barrier_triggered.emit(barrier_info.enemy, move_data.old_ring, result.barrier_damage)
 				any_barrier_damage = true
 		
-		# Wait for stack expansion animation if any barrier damage occurred
 		if any_barrier_damage:
 			await get_tree().create_timer(0.3).timeout
 		
-		# Second pass: emit damage and movement signals
 		for i: int in range(group_moves.size()):
 			var move_data: Dictionary = group_moves[i]
 			var barrier_info: Dictionary = barrier_results[i]
 			var result: Dictionary = barrier_info.result
 			
-			# Handle barrier damage visual feedback
 			if result.barrier_damage > 0:
-				enemy_damaged.emit(move_data.enemy, result.barrier_damage, false)  # false = not hex
-				print("[CombatManager] Barrier dealt ", result.barrier_damage, " to ", move_data.enemy.enemy_id)
+				enemy_damaged.emit(move_data.enemy, result.barrier_damage, false)
 			
-			# Handle barrier kill
 			if result.killed_by_barrier:
-				print("[CombatManager] ", move_data.enemy.enemy_id, " killed by barrier!")
 				_handle_enemy_death(move_data.enemy, false)
 			else:
 				enemy_moved.emit(move_data.enemy, move_data.old_ring, move_data.new_ring)
-				# Check if bomber entered melee - show warning banner
 				_check_bomber_melee_warning(move_data.enemy, move_data.new_ring)
 		
-		# Delay after the whole group moves
 		if not group_moves.is_empty():
 			await get_tree().create_timer(0.15).timeout
 	
-	# Move ungrouped enemies one at a time with delays
 	for move_data: Dictionary in ungrouped_to_move:
 		var result: Dictionary = battlefield.move_enemy(move_data.enemy, move_data.new_ring)
 		
-		# Handle barrier damage visual feedback
 		if result.barrier_damage > 0:
-			# Emit barrier_triggered first to trigger stack popup with barrier animation (not gun animation)
 			barrier_triggered.emit(move_data.enemy, move_data.old_ring, result.barrier_damage)
-			await get_tree().create_timer(0.3).timeout  # Wait for stack expansion
-			enemy_damaged.emit(move_data.enemy, result.barrier_damage, false)  # false = not hex
-			print("[CombatManager] Barrier dealt ", result.barrier_damage, " to ", move_data.enemy.enemy_id)
+			await get_tree().create_timer(0.3).timeout
+			enemy_damaged.emit(move_data.enemy, result.barrier_damage, false)
 		
-		# Handle barrier kill
 		if result.killed_by_barrier:
-			print("[CombatManager] ", move_data.enemy.enemy_id, " killed by barrier!")
 			_handle_enemy_death(move_data.enemy, false)
 		else:
 			enemy_moved.emit(move_data.enemy, move_data.old_ring, move_data.new_ring)
-			# Check if bomber entered melee - show warning banner
 			_check_bomber_melee_warning(move_data.enemy, move_data.new_ring)
 		
 		await get_tree().create_timer(0.1).timeout
 
 
 func _check_bomber_melee_warning(enemy, new_ring: int) -> void:
-	"""Check if a bomber entered melee ring and emit warning."""
 	if new_ring != 0:
 		return
 	
@@ -609,19 +747,15 @@ func _check_bomber_melee_warning(enemy, new_ring: int) -> void:
 	if not enemy_def:
 		return
 	
-	# Check if this is a bomber (suicide attack type with explode_on_death)
 	if enemy_def.special_ability == "explode_on_death" or enemy_def.behavior_type == EnemyDefinition.BehaviorType.BOMBER:
 		var explosion_damage: int = enemy_def.buff_amount if enemy_def.buff_amount > 0 else 5
 		enemy_ability_triggered.emit(enemy, "bomber_melee_warning", explosion_damage)
-		print("[CombatManager] BOMBER WARNING: ", enemy_def.enemy_name, " entered melee!")
 
 
 func _process_enemy_abilities_visual() -> void:
-	"""Process special abilities for all enemies with visual feedback."""
 	var all_enemies: Array = battlefield.get_all_enemies()
 	var spawners: Array = []
 	
-	# Collect spawners
 	for enemy in all_enemies:
 		var enemy_def = EnemyDatabase.get_enemy(enemy.enemy_id)
 		if not enemy_def or enemy_def.special_ability.is_empty():
@@ -630,7 +764,6 @@ func _process_enemy_abilities_visual() -> void:
 		if enemy_def.special_ability == "spawn_minions":
 			spawners.append({"enemy": enemy, "def": enemy_def})
 	
-	# Process spawners with visual feedback
 	if spawners.size() > 0:
 		ring_phase_started.emit(-2, "Spawning")
 		await get_tree().create_timer(0.3).timeout
@@ -640,28 +773,23 @@ func _process_enemy_abilities_visual() -> void:
 			var enemy_def = spawner_data.def
 			
 			if enemy_def.spawn_enemy_id and enemy_def.spawn_count > 0:
-				# Spawn at Far ring
 				var spawn_ring: int = BattlefieldStateScript.Ring.FAR
 				
 				enemy_ability_triggered.emit(enemy, "spawn_minions", enemy_def.spawn_count)
 				await get_tree().create_timer(0.2).timeout
 				
-				# Increment spawn batch counter - all minions from this spawner share the same batch
 				_spawn_batch_counter += 1
 				var batch_id: int = _spawn_batch_counter
 				
-				# Spawn all minions and create a group for them
 				var spawned_minions: Array = []
 				for i: int in range(enemy_def.spawn_count):
 					var spawned = battlefield.spawn_enemy(enemy_def.spawn_enemy_id, spawn_ring)
 					if spawned:
-						spawned.spawn_batch_id = batch_id  # Tag with spawn batch
+						spawned.spawn_batch_id = batch_id
 						spawned_minions.append(spawned)
 						enemy_spawned.emit(spawned)
-						print("[CombatManager] ", enemy_def.enemy_name, " spawned ", enemy_def.spawn_enemy_id, " (batch ", batch_id, ")")
 					await get_tree().create_timer(0.15).timeout
 				
-				# Create a group for spawned minions
 				if spawned_minions.size() > 0:
 					_enemies_spawned_together.emit(spawned_minions, spawn_ring, enemy_def.spawn_enemy_id)
 		
@@ -673,80 +801,39 @@ func _check_wave_end() -> void:
 	current_phase = CombatPhase.WAVE_CHECK
 	phase_changed.emit(current_phase)
 	
-	# Win: all enemies dead
 	if battlefield.get_total_enemy_count() == 0:
 		print("[CombatManager] Wave cleared!")
 		AudioManager.play_wave_complete()
 		wave_ended.emit(true)
 		return
 	
-	# Lose: player dead (only way to lose - no turn limit)
 	if RunManager.current_hp <= 0:
 		print("[CombatManager] Player defeated!")
 		AudioManager.play_wave_fail()
 		wave_ended.emit(false)
 		return
 	
-	# Continue to next turn
 	start_player_turn()
 
 
 func _spawn_enemies(enemy_id: String, count: int, ring: int) -> void:
-	"""Spawn multiple enemies and create a persistent group for them."""
 	var spawned_enemies: Array = []
 	
-	# Increment spawn batch counter - all enemies in this call share the same batch
 	_spawn_batch_counter += 1
 	var batch_id: int = _spawn_batch_counter
 	
-	# Spawn all enemies first
 	for i in range(count):
 		var enemy = battlefield.spawn_enemy(enemy_id, ring)
 		if enemy:
-			enemy.spawn_batch_id = batch_id  # Tag with spawn batch
+			enemy.spawn_batch_id = batch_id
 			spawned_enemies.append(enemy)
 			enemy_spawned.emit(enemy)
-			print("[CombatManager] Spawned ", enemy_id, " in ring ", ring, " (batch ", batch_id, ")")
 	
-	# Create a persistent group for all enemies of the same type spawned together
-	# This allows groups to persist even when enemies die
 	if spawned_enemies.size() > 0:
 		_enemies_spawned_together.emit(spawned_enemies, ring, enemy_id)
 
 
-
-
-func _calculate_enemy_attack_damage() -> int:
-	"""Calculate total damage from enemies, including Torchbearer buffs."""
-	var total_damage: int = 0
-	
-	# Check if any Torchbearer is present for damage buff
-	var buff_amount: int = _get_torchbearer_buff()
-	
-	# Melee enemies attack (in Melee ring)
-	var melee_enemies: Array = battlefield.get_enemies_in_ring(BattlefieldStateScript.Ring.MELEE)
-	for enemy in melee_enemies:
-		var enemy_def = EnemyDatabase.get_enemy(enemy.enemy_id)
-		if enemy_def and enemy_def.attack_type != "suicide":  # Bombers don't attack
-			var base_dmg: int = enemy_def.get_scaled_damage(RunManager.current_wave)
-			total_damage += base_dmg + buff_amount
-	
-	# Ranged enemies attack from their position if in range
-	var all_enemies: Array = battlefield.get_all_enemies()
-	for enemy in all_enemies:
-		var enemy_def = EnemyDatabase.get_enemy(enemy.enemy_id)
-		if enemy_def and enemy_def.attack_type == "ranged":
-			# Ranged enemies attack if at their target ring and player is in range
-			if enemy.ring == enemy_def.target_ring and enemy_def.attack_range >= enemy.ring:
-				var base_dmg: int = enemy_def.get_scaled_damage(RunManager.current_wave)
-				total_damage += base_dmg + buff_amount
-				print("[CombatManager] Ranged attack from ", enemy_def.enemy_name, " in ring ", enemy.ring)
-	
-	return total_damage
-
-
 func _get_torchbearer_buff() -> int:
-	"""Get the damage buff from any alive Torchbearers."""
 	var buff: int = 0
 	var all_enemies: Array = battlefield.get_all_enemies()
 	var torchbearers: Array = []
@@ -756,55 +843,56 @@ func _get_torchbearer_buff() -> int:
 		if enemy_def and enemy_def.special_ability == "buff_allies":
 			buff += enemy_def.buff_amount
 			torchbearers.append({"enemy": enemy, "amount": enemy_def.buff_amount})
-			print("[CombatManager] Torchbearer buffing allies: +", enemy_def.buff_amount, " damage")
 	
-	# Emit ability triggered for each torchbearer (for event banners)
 	for tb: Dictionary in torchbearers:
 		enemy_ability_triggered.emit(tb.enemy, "buff_allies", tb.amount)
 	
 	return buff
 
 
+# =============================================================================
+# BARRIER HANDLING
+# =============================================================================
+
+func _on_barrier_consumed(ring: int) -> void:
+	"""Handle when a barrier's uses reach 0."""
+	print("[CombatManager] Barrier consumed on ring ", ring)
+	barrier_consumed.emit(ring)
+
+
+# =============================================================================
+# DAMAGE AND DEATH HANDLING
+# =============================================================================
+
 func _handle_enemy_death(enemy, hex_was_triggered: bool = false) -> void:
-	"""Handle all logic when an enemy dies."""
 	var enemy_def = EnemyDatabase.get_enemy(enemy.enemy_id)
 	
-	# Trigger death effects BEFORE removing from battlefield
 	_trigger_death_effect(enemy, enemy_def)
 	
-	# Gloom Warden passive: Heal 1 HP when hexed enemy dies
 	if hex_was_triggered and _has_warden_passive("hex_lifesteal"):
 		RunManager.heal(1)
-		print("[CombatManager] Gloom Warden passive: Healed 1 HP from hexed enemy death")
 	
-	# Remove from battlefield
 	battlefield.remove_enemy(enemy)
 	enemy_killed.emit(enemy)
 	AudioManager.play_enemy_death()
 	
-	# Track kills this turn for Leech Tooth
 	kills_this_turn += 1
 	
-	# Trigger on_kill artifacts (Blood Sigil, Scavenger's Eye)
 	var kill_effects: Dictionary = ArtifactManager.trigger_artifacts("on_kill", {})
 	
-	# Give scrap based on enemy definition + artifact bonus
 	var scrap_reward: int = 2 if not enemy_def else enemy_def.scrap_value
 	scrap_reward += kill_effects.bonus_scrap
 	RunManager.add_scrap(scrap_reward)
 	
-	# Give XP based on enemy definition (Brotato-style leveling)
 	var xp_reward: int = 1 if not enemy_def else enemy_def.xp_value
 	RunManager.add_xp(xp_reward)
 	
 	RunManager.record_enemy_kill()
 	
-	# Check if all enemies are dead - auto-end wave immediately
 	_check_instant_wave_clear()
 
 
 func _has_warden_passive(passive_id: String) -> bool:
-	"""Check if the current warden has a specific passive."""
 	if RunManager.current_warden == null:
 		return false
 	if RunManager.current_warden is Dictionary:
@@ -813,12 +901,10 @@ func _has_warden_passive(passive_id: String) -> bool:
 
 
 func _check_instant_wave_clear() -> void:
-	"""Check if all enemies are dead and end wave immediately if so."""
 	if not battlefield:
 		return
 	
-	# Only check during player phase (not during enemy phase which has its own check)
-	if current_phase != CombatPhase.PLAYER_PHASE:
+	if current_phase != CombatPhase.PLAYER_PHASE and current_phase != CombatPhase.EXECUTION_PHASE:
 		return
 	
 	if battlefield.get_total_enemy_count() == 0:
@@ -830,23 +916,18 @@ func _check_instant_wave_clear() -> void:
 
 
 func _trigger_death_effect(enemy, enemy_def) -> void:
-	"""Trigger any special effects when an enemy dies."""
 	if not enemy_def or enemy_def.special_ability.is_empty():
 		return
 	
 	match enemy_def.special_ability:
 		"explode_on_death":
-			# V2 Bomber: Deals damage to player AND other enemies in same ring
 			var player_damage: int = enemy_def.buff_amount
 			var aoe_damage: int = enemy_def.aoe_damage if enemy_def.aoe_damage > 0 else 0
 			
-			# Damage to player
 			RunManager.take_damage(player_damage)
 			player_damaged.emit(player_damage, "bomber_explosion")
 			enemy_ability_triggered.emit(enemy, "explode_on_death", player_damage)
-			print("[CombatManager] BOMBER EXPLODED! Dealt ", player_damage, " to player")
 			
-			# V2: AoE damage to other enemies in same ring
 			if aoe_damage > 0:
 				var ring_enemies: Array = battlefield.get_enemies_in_ring(enemy.ring)
 				var enemies_to_damage: Array = []
@@ -857,15 +938,12 @@ func _trigger_death_effect(enemy, enemy_def) -> void:
 				for target_enemy in enemies_to_damage:
 					target_enemy.current_hp -= aoe_damage
 					enemy_damaged.emit(target_enemy, aoe_damage, false)
-					print("[CombatManager] Bomber AoE dealt ", aoe_damage, " to ", target_enemy.enemy_id)
 					
 					if target_enemy.current_hp <= 0:
-						# Queue for death after iteration (avoid modifying array during iteration)
 						call_deferred("_handle_enemy_death", target_enemy, false)
 
 
 func _deal_hex_tick_damage(damage: int) -> void:
-	"""Deal damage to all enemies with Hex status (Hex Amplifier artifact)."""
 	if not battlefield:
 		return
 	
@@ -874,15 +952,12 @@ func _deal_hex_tick_damage(damage: int) -> void:
 	
 	for enemy in all_enemies:
 		if enemy.has_status("hex"):
-			# Deal damage WITHOUT consuming hex (just tick damage)
 			enemy.current_hp -= damage
-			enemy_damaged.emit(enemy, damage, false)  # Not a hex trigger, just tick damage
-			print("[CombatManager] Hex Amplifier dealt ", damage, " to ", enemy.enemy_id)
+			enemy_damaged.emit(enemy, damage, false)
 			
 			if enemy.current_hp <= 0:
 				enemies_to_kill.append(enemy)
 	
-	# Handle deaths after iterating
 	for enemy in enemies_to_kill:
 		_handle_enemy_death(enemy)
 
@@ -890,15 +965,14 @@ func _deal_hex_tick_damage(damage: int) -> void:
 func deal_damage_to_ring(ring: int, damage: int) -> void:
 	var enemies: Array = battlefield.get_enemies_in_ring(ring)
 	for enemy in enemies:
-		# Use take_damage to handle hex triggering
 		var result: Dictionary = enemy.take_damage(damage)
 		var total_damage: int = result.total_damage
 		
-		# Emit damage signal for visual feedback (with hex_triggered info)
 		enemy_damaged.emit(enemy, total_damage, result.hex_triggered)
 		
-		if result.hex_triggered:
-			print("[CombatManager] Hex triggered! ", damage, " + ", result.hex_bonus, " = ", total_damage)
+		# Track damage in execution context
+		execution_context.damage_dealt += total_damage
+		execution_context.last_damaged_enemy = enemy
 		
 		if enemy.current_hp <= 0:
 			_handle_enemy_death(enemy, result.hex_triggered)
@@ -915,48 +989,48 @@ func deal_damage_to_random_enemy(ring_mask: int, damage: int, show_targeting: bo
 	if candidates.size() > 0:
 		var target = candidates[randi() % candidates.size()]
 		
-		# Emit targeting signal BEFORE damage (for visual indicator)
 		if show_targeting:
 			enemy_targeted.emit(target)
-			# Delay for full weapon animation: gun aim/fire (~0.4s) + projectile travel (~0.2s)
-			# The visual damage effects are deferred until projectile hits
-			await get_tree().create_timer(0.6).timeout
+			await get_tree().create_timer(0.4).timeout
 		
-		# Use take_damage to handle hex triggering
 		var result: Dictionary = target.take_damage(damage)
 		var total_damage: int = result.total_damage
 		
-		if result.hex_triggered:
-			print("[CombatManager] Hex triggered on ", target.enemy_id, "! ", damage, " + ", result.hex_bonus, " = ", total_damage)
+		# Track damage in execution context
+		execution_context.damage_dealt += total_damage
+		execution_context.last_damaged_enemy = target
 		
-		print("[CombatManager] Dealt ", total_damage, " damage to ", target.enemy_id, " in ring ", target.ring, " (HP: ", target.current_hp + total_damage, " -> ", target.current_hp, ")")
-		
-		# Emit signal with the specific enemy instance for visual updates (with hex_triggered info)
 		enemy_damaged.emit(target, total_damage, result.hex_triggered)
 		
 		if target.current_hp <= 0:
-			print("[CombatManager] Enemy killed: ", target.enemy_id)
 			_handle_enemy_death(target, result.hex_triggered)
-	else:
-		print("[CombatManager] No valid targets found for damage (ring_mask: ", ring_mask, ")")
 
 
-func register_weapon(card_def, tier: int, duration: int = -1) -> void:
-	"""Register a persistent weapon. V2: Now tracks duration based on card's duration_type."""
-	var weapon_data: Dictionary = {
-		"card_def": card_def,
-		"tier": tier,
-		"triggers_remaining": duration,  # Legacy: -1 = infinite
-		# V2 Duration tracking
-		"turns_remaining": card_def.duration_turns if card_def.duration_type == "turns" or card_def.duration_type == "burn_out" else -1,
-		"kills_remaining": card_def.duration_kills if card_def.duration_type == "kills" else -1,
-		"kill_count": 0  # Track kills for kill-based duration
-	}
-	active_weapons.append(weapon_data)
-	print("[CombatManager] Registered weapon: %s (duration_type: %s, turns: %d, kills: %d)" % [
-		card_def.card_name, card_def.duration_type, weapon_data.turns_remaining, weapon_data.kills_remaining
-	])
+func deal_damage_to_last_damaged(damage: int) -> void:
+	"""Deal damage to the last damaged enemy (for reactive cards like Armored Tank)."""
+	var target = execution_context.last_damaged_enemy
+	if not target or not is_instance_valid(target):
+		# Fall back to random enemy
+		deal_damage_to_random_enemy(0b1111, damage, true)
+		return
+	
+	enemy_targeted.emit(target)
+	await get_tree().create_timer(0.3).timeout
+	
+	var result: Dictionary = target.take_damage(damage)
+	var total_damage: int = result.total_damage
+	
+	execution_context.damage_dealt += total_damage
+	
+	enemy_damaged.emit(target, total_damage, result.hex_triggered)
+	
+	if target.current_hp <= 0:
+		_handle_enemy_death(target, result.hex_triggered)
 
+
+# =============================================================================
+# UTILITY
+# =============================================================================
 
 func calculate_incoming_damage() -> Dictionary:
 	var total: int = 0
@@ -965,7 +1039,6 @@ func calculate_incoming_damage() -> Dictionary:
 	if not battlefield:
 		return {"total": 0, "breakdown": []}
 	
-	# Calculate damage from melee enemies
 	var melee_enemies: Array = battlefield.get_enemies_in_ring(BattlefieldStateScript.Ring.MELEE)
 	for enemy in melee_enemies:
 		var enemy_def = EnemyDatabase.get_enemy(enemy.enemy_id)
@@ -991,7 +1064,6 @@ func get_enemies_moving_to_melee() -> int:
 		return 0
 	
 	var count: int = 0
-	# Check Close ring - they'll move to Melee next turn
 	var close_enemies: Array = battlefield.get_enemies_in_ring(BattlefieldStateScript.Ring.CLOSE)
 	for enemy in close_enemies:
 		var enemy_def = EnemyDatabase.get_enemy(enemy.enemy_id)
@@ -1002,210 +1074,32 @@ func get_enemies_moving_to_melee() -> int:
 
 
 func cleanup_combat() -> void:
-	# V2: Return deployed and banished cards to deck before cleanup
-	if deck_manager:
-		deck_manager.return_deployed_to_deck()
-		deck_manager.return_banished_to_deck()
-	
 	battlefield = null
 	deck_manager = null
 	current_wave_def = null
-	active_weapons.clear()
+	staged_cards.clear()
+	lane_buffs.clear()
+	_reset_execution_context()
 	current_phase = CombatPhase.INACTIVE
 
 
-# =============================================================================
-# V2 HELPER METHODS
-# =============================================================================
-
-func get_registered_weapons() -> Array:
-	"""Get all currently deployed persistent weapons."""
-	return active_weapons
-
-
-func set_priority_ring(ring: int, bonus_damage: int) -> void:
-	"""Set priority ring for deployed guns (Target Sync effect)."""
-	priority_ring = ring
-	priority_ring_bonus = bonus_damage
-	print("[CombatManager] Priority ring set: ", ring, " with +", bonus_damage, " damage")
-
-
-func get_priority_ring_bonus(ring: int) -> int:
-	"""Get bonus damage for targeting a specific ring."""
-	if ring == priority_ring:
-		return priority_ring_bonus
-	return 0
-
-
-func trigger_v2_artifact(trigger_type: String, context: Dictionary = {}) -> Dictionary:
-	"""Trigger V2 artifacts and return combined effects."""
-	return ArtifactManager.trigger_artifacts(trigger_type, context)
-
-
-func track_gun_play(card_def) -> void:
-	"""Track gun play for V2 artifact triggers."""
-	if not first_gun_played_this_turn:
-		first_gun_played_this_turn = true
-		# Trigger Chain Reactor if equipped
-		ArtifactManager.trigger_artifacts("on_card_play", {
-			"card_tags": card_def.tags,
-			"first_gun": true
-		})
-	gun_played_this_turn = true
-	gun_fired.emit(card_def, card_def.base_damage)
-
-
-func track_skill_play() -> void:
-	"""Track skill play for Coolant System artifact."""
-	skills_played_this_turn += 1
-	# Coolant System: After 3 skills, draw 1
-	if skills_played_this_turn == 3:
-		var effects: Dictionary = ArtifactManager.trigger_artifacts("on_card_play", {
-			"card_tags": ["skill"],
-			"skills_count": skills_played_this_turn
-		})
-		if effects.draw_cards > 0:
-			for i: int in range(effects.draw_cards):
-				deck_manager.draw_card()
-
-
-func track_overclock_play() -> void:
-	"""Track Overclock play for Overclock Capacitor artifact."""
-	overclocks_played_this_turn += 1
-
-
-func record_overkill(damage: int, overkill_amount: int, target) -> void:
-	"""Record overkill for artifact triggers."""
-	overkill.emit(damage, overkill_amount, target)
-	ArtifactManager.trigger_artifacts("on_overkill", {
-		"damage": damage,
-		"overkill": overkill_amount,
-		"target_ring": target.ring if target else -1
-	})
-
-
 func deal_self_damage(amount: int, source: String = "card") -> void:
-	"""Deal self-damage and trigger V2 artifacts."""
 	RunManager.take_damage(amount)
 	self_damage_dealt.emit(amount)
 	
-	# Volatile Reactor: Deal self-damage to enemy
 	var effects: Dictionary = ArtifactManager.trigger_artifacts("on_self_damage", {
 		"damage": amount,
 		"source": source
 	})
 	
 	if effects.has("reflect_damage") and effects.reflect_damage > 0:
-		# Deal damage to random enemy in Melee/Close
 		deal_damage_to_random_enemy(0b0011, effects.reflect_damage, false)
 
 
-func get_deployed_gun_count() -> int:
-	"""Get count of deployed guns for Firing Solution."""
-	var count: int = 0
-	for weapon: Dictionary in active_weapons:
-		if weapon.card_def.has_tag("gun"):
-			count += 1
-	return count
-
-
-func trigger_on_kill_effects() -> void:
-	"""Trigger all on-kill effects."""
-	kills_this_turn += 1
-	
-	# Rampage Core: Stack damage bonus
-	if rampage_stacks < 3:
-		rampage_stacks += 1
-	
-	var effects: Dictionary = ArtifactManager.trigger_artifacts("on_kill", {
-		"kills_this_turn": kills_this_turn,
-		"rampage_stacks": rampage_stacks
+func record_overkill(damage: int, overkill_amount: int, target) -> void:
+	overkill.emit(damage, overkill_amount, target)
+	ArtifactManager.trigger_artifacts("on_overkill", {
+		"damage": damage,
+		"overkill": overkill_amount,
+		"target_ring": target.ring if target else -1
 	})
-	
-	# Apply scrap bonus
-	if effects.bonus_scrap > 0:
-		RunManager.add_scrap(effects.bonus_scrap)
-	
-	# Apply draw chance
-	if effects.has("draw_chance") and randf() * 100.0 < effects.draw_chance:
-		deck_manager.draw_card()
-
-
-func get_rampage_bonus() -> int:
-	"""Get current Rampage Core damage bonus."""
-	if ArtifactManager.has_artifact("rampage_core"):
-		return rampage_stacks * 2  # +2 damage per stack
-	return 0
-
-
-# =============================================================================
-# V2 WEAPON DURATION MANAGEMENT
-# =============================================================================
-
-func _process_weapon_durations() -> void:
-	"""Process turn-based weapon durations and remove expired weapons."""
-	var weapons_to_remove: Array[int] = []
-	
-	for i: int in range(active_weapons.size()):
-		var weapon: Dictionary = active_weapons[i]
-		var card_def = weapon.card_def
-		
-		# Legacy duration system (triggers_remaining)
-		if weapon.triggers_remaining > 0:
-			weapon.triggers_remaining -= 1
-			if weapon.triggers_remaining == 0:
-				weapons_to_remove.append(i)
-				continue
-		
-		# V2 turn-based duration
-		if weapon.turns_remaining > 0:
-			weapon.turns_remaining -= 1
-			print("[CombatManager] %s turns remaining: %d" % [card_def.card_name, weapon.turns_remaining])
-			if weapon.turns_remaining == 0:
-				weapons_to_remove.append(i)
-				continue
-	
-	# Remove expired weapons in reverse order (to maintain indices)
-	for i: int in range(weapons_to_remove.size() - 1, -1, -1):
-		var index: int = weapons_to_remove[i]
-		_expire_weapon(index)
-
-
-func _expire_weapon(weapon_index: int) -> void:
-	"""Handle weapon expiry - remove from active and notify."""
-	if weapon_index < 0 or weapon_index >= active_weapons.size():
-		return
-	
-	var weapon: Dictionary = active_weapons[weapon_index]
-	var card_def = weapon.card_def
-	var destination: String = card_def.on_expire if card_def.on_expire else "discard"
-	
-	print("[CombatManager] Weapon expired: %s -> %s" % [card_def.card_name, destination])
-	
-	# Remove from active weapons
-	active_weapons.remove_at(weapon_index)
-	
-	# Handle deck manager side (if using deployed tracking)
-	if deck_manager:
-		deck_manager.undeploy_card_by_id(card_def.card_id, destination)
-	
-	# Emit signal for visual feedback
-	weapon_expired.emit(card_def, destination)
-
-
-func record_weapon_kill(weapon_index: int) -> void:
-	"""Record a kill for a specific weapon. Called when weapon damage kills an enemy."""
-	if weapon_index < 0 or weapon_index >= active_weapons.size():
-		return
-	
-	var weapon: Dictionary = active_weapons[weapon_index]
-	weapon.kill_count = weapon.get("kill_count", 0) + 1
-	
-	# Check kill-based duration
-	if weapon.kills_remaining > 0:
-		weapon.kills_remaining -= 1
-		var card_def = weapon.card_def
-		print("[CombatManager] %s kills remaining: %d" % [card_def.card_name, weapon.kills_remaining])
-		if weapon.kills_remaining == 0:
-			# Expire this weapon
-			call_deferred("_expire_weapon", weapon_index)

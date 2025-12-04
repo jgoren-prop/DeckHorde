@@ -90,11 +90,14 @@ func _connect_combat_signals() -> void:
 	CombatManager.enemy_killed.connect(_on_enemy_died)
 	CombatManager.enemy_moved.connect(_on_enemy_moved)
 	CombatManager.enemy_targeted.connect(_on_enemy_targeted)
+	CombatManager.enemy_hexed.connect(_on_enemy_hexed)
 	CombatManager.player_damaged.connect(_on_player_damaged)
+	CombatManager.barrier_placed.connect(_on_barrier_placed)
 	CombatManager.barrier_triggered.connect(_on_barrier_triggered)
+	CombatManager.barrier_consumed.connect(_on_barrier_consumed)
 	CombatManager.turn_started.connect(_on_turn_started)
-	CombatManager.weapons_phase_started.connect(_on_weapons_phase_started)
-	CombatManager.weapons_phase_ended.connect(_on_weapons_phase_ended)
+	CombatManager.execution_started.connect(_on_weapons_phase_started)
+	CombatManager.execution_completed.connect(_on_weapons_phase_ended)
 
 
 func _recalculate_layout() -> void:
@@ -190,9 +193,12 @@ func fire_projectile_to_enemy(enemy, color: Color = Color(1.0, 0.9, 0.3)) -> voi
 		effects_node.fire_projectile_to_position(to_pos, color)
 
 
-func show_damage_on_enemy(enemy, amount: int, is_hex: bool = false) -> void:
-	"""Show a damage number on an enemy."""
-	var pos: Vector2 = get_enemy_center_position(enemy) - Vector2(15, 30)
+func show_damage_on_enemy(enemy, amount: int, is_hex: bool = false, offset: Vector2 = Vector2.ZERO) -> void:
+	"""Show a damage number on an enemy.
+	offset: Optional offset to stagger multiple simultaneous damage numbers."""
+	# Add random spread so multiple damage numbers (from splash) don't overlap
+	var random_spread: Vector2 = Vector2(randf_range(-20, 20), randf_range(-15, 15))
+	var pos: Vector2 = get_enemy_center_position(enemy) - Vector2(15, 30) + offset + random_spread
 	if effects_node:
 		effects_node.show_damage_number(pos, amount, is_hex)
 
@@ -723,18 +729,231 @@ func _calculate_intra_group_position(enemy, group_data: Dictionary) -> float:
 
 
 
+func _on_enemy_hexed(enemy, hex_amount: int) -> void:
+	"""Handle enemy receiving hex status - show visual feedback."""
+	if enemy == null:
+		return
+	
+	# Purple flash on the enemy
+	var hex_color: Color = Color(0.7, 0.3, 1.0, 1.0)
+	flash_enemy(enemy, hex_color, 0.2)
+	
+	# Show floating hex stack indicator (+☠X)
+	var pos: Vector2 = get_enemy_center_position(enemy) - Vector2(15, 40)
+	if effects_node:
+		effects_node.show_hex_stack_number(pos, hex_amount)
+		effects_node.spawn_hex_particles(get_enemy_center_position(enemy))
+	
+	# Update the enemy panel's hex display
+	_update_enemy_hex_display(enemy)
+
+
+func _update_enemy_hex_display(enemy) -> void:
+	"""Update the hex display on an enemy's visual panel."""
+	if enemy_manager and enemy_manager.has_enemy_visual(enemy.instance_id):
+		var visual: Panel = enemy_manager.get_enemy_visual(enemy.instance_id)
+		if visual and visual.has_method("update_hex"):
+			visual.update_hex()
+	
+	# Also update mini-panels if in a stack
+	if stack_system:
+		var stack_key: String = stack_system.get_stack_key_for_enemy(enemy)
+		if not stack_key.is_empty() and stack_system.stack_visuals.has(stack_key):
+			var stack_data: Dictionary = stack_system.stack_visuals[stack_key]
+			var mini_panels: Array = stack_data.get("mini_panels", [])
+			for mini_panel in mini_panels:
+				if is_instance_valid(mini_panel):
+					var panel_enemy = mini_panel.get_meta("enemy_instance", null)
+					if panel_enemy and panel_enemy.instance_id == enemy.instance_id:
+						if mini_panel.has_method("update_hex"):
+							mini_panel.update_hex()
+						break
+
+
 func _on_player_damaged(amount: int, _source) -> void:
 	"""Handle player taking damage."""
 	if effects_node:
 		effects_node.show_player_damage(amount)
 
 
-func _on_barrier_triggered(ring: int, _damage_absorbed: int) -> void:
-	"""Handle barrier being triggered."""
-	# Visual feedback
+func _on_barrier_placed(ring: int, damage: int, duration: int) -> void:
+	"""Handle barrier being placed on a ring - show visual feedback."""
+	print("[BattlefieldArena] Barrier placed on ring ", ring, " damage=", damage, " duration=", duration)
+	
+	# Update the ring display to show the barrier
+	if rings:
+		rings.set_barrier(ring, damage, duration)
+	
+	# Create visual placement effect
+	if effects_node:
+		# Calculate barrier position (on the ring edge)
+		var barrier_radius: float = rings.get_ring_radius(ring) if rings else max_radius * 0.5
+		
+		# Create a shield flash effect on the ring
+		_create_barrier_placement_effect(ring, barrier_radius)
+
+
+func _create_barrier_placement_effect(ring: int, radius: float) -> void:
+	"""Create visual effect when a barrier is placed on a ring."""
+	if not effects_node:
+		return
+	
+	# Use the new wave effect along the ring
+	effects_node.create_barrier_wave(center, radius, PI, TAU)
+	
+	# Also spawn shield particles along the ring arc for extra impact
+	var barrier_color: Color = Color(0.3, 0.9, 0.5, 1.0)  # Green/cyan for shield
+	var particle_count: int = 12
+	
+	for i: int in range(particle_count):
+		# Spread particles along the semicircle (PI to 2*PI)
+		var angle: float = PI + (float(i) / float(particle_count - 1)) * PI
+		var pos: Vector2 = center + Vector2(cos(angle), sin(angle)) * radius
+		
+		# Create particle
+		var particle: Panel = Panel.new()
+		particle.custom_minimum_size = Vector2(10, 10)
+		particle.size = Vector2(10, 10)
+		particle.position = pos - Vector2(5, 5)
+		particle.z_index = 55
+		particle.modulate.a = 0.0
+		particle.scale = Vector2(0.5, 0.5)
+		
+		var style: StyleBoxFlat = StyleBoxFlat.new()
+		style.bg_color = barrier_color
+		style.set_corner_radius_all(5)
+		particle.add_theme_stylebox_override("panel", style)
+		
+		effects_node.add_child(particle)
+		
+		# Animate: fade in, pulse, fade out
+		var delay: float = float(i) * 0.02
+		var tween: Tween = particle.create_tween()
+		tween.tween_property(particle, "modulate:a", 1.0, 0.1).set_delay(delay)
+		tween.tween_property(particle, "scale", Vector2(1.5, 1.5), 0.2).set_ease(Tween.EASE_OUT)
+		tween.tween_property(particle, "modulate:a", 0.0, 0.3)
+		tween.tween_callback(particle.queue_free)
+	
+	# Also flash the ring itself briefly
+	if rings:
+		_flash_ring_barrier(ring)
+
+
+func _flash_ring_barrier(_ring: int) -> void:
+	"""Flash the ring to indicate barrier placement."""
+	# The ring drawing handles the barrier visual via set_barrier
+	# This adds an extra flash effect by temporarily adjusting the visual
+	# Since BattlefieldRings handles drawing, we'll trigger a redraw with a pulse
+	if rings:
+		rings.queue_redraw()
+
+
+func _on_barrier_consumed(ring: int) -> void:
+	"""Handle when a barrier's uses reach 0 and it disappears."""
+	print("[BattlefieldArena] Barrier consumed on ring ", ring)
+	
+	# Clear the barrier visual from the ring
+	if rings:
+		rings.clear_barrier(ring)
+	
+	# Optional: Create a "barrier break" visual effect
+	if effects_node:
+		var barrier_radius: float = rings.get_ring_radius(ring) if rings else max_radius * 0.5
+		_create_barrier_break_effect(ring, barrier_radius)
+
+
+func _create_barrier_break_effect(ring: int, radius: float) -> void:
+	"""Create visual effect when a barrier is consumed/broken."""
+	if not effects_node:
+		return
+	
+	var barrier_color: Color = Color(0.3, 0.9, 0.5, 0.8)
+	var break_color: Color = Color(0.5, 0.5, 0.5, 0.8)  # Gray for "broken"
+	
+	# Spawn breaking particles along the ring
+	var particle_count: int = 16
+	for i: int in range(particle_count):
+		var angle: float = PI + (float(i) / float(particle_count - 1)) * PI
+		var pos: Vector2 = center + Vector2(cos(angle), sin(angle)) * radius
+		
+		var particle: Panel = Panel.new()
+		particle.custom_minimum_size = Vector2(8, 8)
+		particle.size = Vector2(8, 8)
+		particle.position = pos - Vector2(4, 4)
+		particle.z_index = 55
+		
+		var style: StyleBoxFlat = StyleBoxFlat.new()
+		style.bg_color = barrier_color.lerp(break_color, randf())
+		style.set_corner_radius_all(4)
+		particle.add_theme_stylebox_override("panel", style)
+		
+		effects_node.add_child(particle)
+		
+		# Animate: fall downward and fade out
+		var fall_offset: Vector2 = Vector2(randf_range(-30, 30), randf_range(40, 80))
+		var tween: Tween = particle.create_tween()
+		tween.set_parallel(true)
+		tween.tween_property(particle, "position", particle.position + fall_offset, 0.5).set_ease(Tween.EASE_IN)
+		tween.tween_property(particle, "modulate:a", 0.0, 0.4).set_delay(0.1)
+		tween.tween_property(particle, "rotation", randf_range(-PI, PI), 0.5)
+		tween.set_parallel(false)
+		tween.tween_callback(particle.queue_free)
+
+
+func _on_barrier_triggered(enemy, ring: int, damage: int) -> void:
+	"""Handle barrier being triggered when enemy crosses it."""
+	print("[BattlefieldArena] Barrier triggered! Enemy=", enemy.enemy_id if enemy else "null", " ring=", ring, " damage=", damage)
+	
+	# Sync the barrier visual with the actual state (updates remaining uses display)
+	_sync_barrier_visual(ring)
+	
+	# Get enemy position for effects
+	var enemy_pos: Vector2 = get_enemy_center_position(enemy) if enemy else center
+	
+	# Visual feedback: sparks from barrier to enemy, and barrier hit effect
 	if effects_node and rings:
-		var barrier_pos: Vector2 = center + Vector2(0, -rings.get_ring_center_radius(ring))
-		effects_node.fire_barrier_sparks(barrier_pos, center)
+		var barrier_radius: float = rings.get_ring_radius(ring)
+		# Calculate position along the ring where the enemy crossed
+		var angle: float = (enemy_pos - center).angle()
+		var barrier_pos: Vector2 = center + Vector2(cos(angle), sin(angle)) * barrier_radius
+		
+		# Fire sparks from barrier to enemy
+		effects_node.fire_barrier_sparks(barrier_pos, enemy_pos)
+		
+		# Create barrier hit effect at the barrier position
+		effects_node.create_barrier_hit_effect(barrier_pos, damage)
+	
+	# IMPORTANT: Expand the stack to show which enemy was hit
+	if enemy and stack_system:
+		var stack_key: String = stack_system.get_stack_key_for_enemy(enemy)
+		if not stack_key.is_empty():
+			# Hold the stack open so player can see the damage
+			stack_system.hold_stack_open(stack_key)
+			
+			# Shake and flash the stack to draw attention
+			stack_system.shake_stack(stack_key, 6.0, 0.2)
+			stack_system.flash_stack(stack_key, Color(0.3, 1.0, 0.5, 1.2), 0.2)
+			
+			# Release the hold after a delay so it can collapse
+			var timer: SceneTreeTimer = get_tree().create_timer(1.5)
+			timer.timeout.connect(func():
+				if stack_system:
+					stack_system.release_stack_hold(stack_key)
+			)
+
+
+func _sync_barrier_visual(ring: int) -> void:
+	"""Sync the barrier visual with the actual BattlefieldState."""
+	if not rings or not CombatManager.battlefield:
+		return
+	
+	var battlefield_barriers: Dictionary = CombatManager.battlefield.ring_barriers
+	if battlefield_barriers.has(ring):
+		var barrier: Dictionary = battlefield_barriers[ring]
+		rings.set_barrier(ring, barrier.damage, barrier.turns_remaining)
+	else:
+		# Barrier no longer exists in state, clear visual
+		rings.clear_barrier(ring)
 
 
 func _on_enemy_targeted(enemy) -> void:
@@ -758,14 +977,8 @@ func _on_enemy_targeted(enemy) -> void:
 	if not effects_node:
 		return
 	
-	var weapon_index: int = CombatManager.current_firing_weapon_index
-	if weapon_index >= 0:
-		# Track that this enemy has a projectile in flight - defer damage visuals
-		_enemies_with_pending_projectile[enemy.instance_id] = true
-		# Fire weapon projectile at the enemy (damage visuals will be triggered on hit)
-		effects_node.fire_weapon_projectile_at_enemy(enemy, target_pos, Color(1.0, 0.9, 0.3), weapon_index)
-	else:
-		effects_node.fire_projectile_to_position(target_pos, Color(1.0, 0.9, 0.3))
+	# Fire generic projectile at the enemy
+	effects_node.fire_projectile_to_position(target_pos, Color(1.0, 0.9, 0.3))
 
 
 

@@ -125,17 +125,16 @@ func reset_run() -> void:
 
 func set_warden(warden) -> void:
 	"""Set the current warden and apply their stat modifiers.
-	Brotato Economy: Wardens apply MODIFIERS on top of base stats, not replace them.
+	V3: Also initializes the starter deck.
 	"""
 	current_warden = warden
 	
-	# Reset to Brotato Economy defaults first (50 HP, 1 energy, 1 draw)
+	# Reset to defaults first
 	player_stats.reset_to_defaults()
 	cheat_death_available = true
 	
 	if warden and warden is WardenDefinition:
-		# Brotato Economy: Apply stat modifiers from warden (additive bonuses)
-		# Wardens no longer set base stats directly - they modify the defaults
+		# Apply stat modifiers from warden (additive bonuses)
 		if warden.stat_modifiers.size() > 0:
 			player_stats.apply_modifiers(warden.stat_modifiers)
 		
@@ -145,6 +144,9 @@ func set_warden(warden) -> void:
 		# Passive check: Glass Warden cheat_death
 		if warden.passive_id == "cheat_death":
 			cheat_death_available = true
+	
+	# V3: Initialize starter deck automatically
+	initialize_starter_deck()
 	
 	stats_changed.emit()
 
@@ -383,6 +385,36 @@ func get_interest_preview() -> Dictionary:
 func add_card_to_deck(card_id: String, tier: int) -> void:
 	deck.append({"card_id": card_id, "tier": tier})
 	print("[RunManager] Added card to deck: ", card_id)
+
+
+func initialize_starter_deck() -> void:
+	"""Initialize deck with the starter deck for the current warden."""
+	deck.clear()
+	
+	# V3: Use warden's starting_deck if available, otherwise fall back to Veteran
+	var starter_entries: Array = []
+	if current_warden != null and current_warden is WardenDefinition:
+		starter_entries = current_warden.starting_deck
+	else:
+		# Fallback to Veteran starter deck from CardDatabase
+		starter_entries = CardDatabase.get_veteran_starter_deck()
+	
+	# Build deck from starter entries
+	for card_entry: Variant in starter_entries:
+		if card_entry is Dictionary:
+			var card_id: String = card_entry.get("card_id", "")
+			var count: int = card_entry.get("count", 1)
+			var tier: int = card_entry.get("tier", 1)
+			# Verify the card exists
+			var card: CardDefinition = CardDatabase.get_card(card_id)
+			if card:
+				for i: int in range(count):
+					# Store as dictionary with card_id and tier (not the CardDefinition object)
+					deck.append({"card_id": card_id, "tier": tier})
+			else:
+				push_warning("[RunManager] Card not found: %s" % card_id)
+	
+	print("[RunManager] Starter deck initialized with ", deck.size(), " cards")
 
 
 func remove_card_from_deck(index: int) -> void:

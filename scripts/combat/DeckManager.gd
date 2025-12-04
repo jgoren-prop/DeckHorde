@@ -162,6 +162,30 @@ func add_card_to_hand(card_id: String, tier: int = 1) -> void:
 	hand_changed.emit()
 
 
+func add_to_hand(card_id: String, tier: int = 1) -> void:
+	"""Alias for add_card_to_hand."""
+	add_card_to_hand(card_id, tier)
+
+
+func remove_from_hand(hand_index: int) -> Dictionary:
+	"""Remove a card from hand without discarding it. Returns the removed card."""
+	if hand_index < 0 or hand_index >= hand.size():
+		return {}
+	
+	var card_entry: Dictionary = hand[hand_index]
+	hand.remove_at(hand_index)
+	hand_changed.emit()
+	
+	return card_entry
+
+
+func discard_by_id(card_id: String, tier: int) -> void:
+	"""Add a card directly to discard pile by ID and tier."""
+	var card_entry: Dictionary = {"card_id": card_id, "tier": tier}
+	discard.append(card_entry)
+	card_discarded.emit(card_entry)
+
+
 func add_card_to_discard(card_id: String, tier: int = 1) -> void:
 	"""Add a card directly to discard pile."""
 	var card_entry: Dictionary = {"card_id": card_id, "tier": tier}

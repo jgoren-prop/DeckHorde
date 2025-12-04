@@ -152,9 +152,9 @@ func _update_display() -> void:
 	text += "\n"
 	
 	# Active combat state (if CombatManager is available)
-	if CombatManager and CombatManager.active_weapons.size() > 0:
-		text += "[color=#ffaa00]━━ ACTIVE ━━[/color]\n"
-		text += "Weapons: [color=#ffaa00]%d[/color]\n" % CombatManager.active_weapons.size()
+	if CombatManager and CombatManager.staged_cards.size() > 0:
+		text += "[color=#ffaa00]━━ STAGED ━━[/color]\n"
+		text += "Cards: [color=#ffaa00]%d[/color]\n" % CombatManager.staged_cards.size()
 	
 	# Passive state
 	if RunManager._has_cheat_death_passive():

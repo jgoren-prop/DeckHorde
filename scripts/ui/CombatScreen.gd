@@ -87,6 +87,11 @@ var deck_viewer_overlay: CanvasLayer = null
 var deck_viewer_grid: GridContainer = null
 var deck_viewer_title: Label = null
 
+# UI References - Tag Tracker panel (created dynamically)
+var tag_tracker_panel: PanelContainer = null
+var tag_tracker_content: VBoxContainer = null
+var tag_labels: Dictionary = {}  # tag_name -> Label
+
 var card_ui_scene: PackedScene = preload("res://scenes/ui/CardUI.tscn")
 var pending_card_index: int = -1
 var pending_card_def = null  # CardDefinition
@@ -105,6 +110,7 @@ func _ready() -> void:
 	_setup_intent_bar()
 	_setup_deck_viewer_overlay()
 	_setup_dev_panel()
+	_setup_tag_tracker_panel()
 	_create_v2_debug_stat_panel()
 	_setup_animation_manager()
 	_hide_settings_overlay()
@@ -143,6 +149,213 @@ func _setup_dev_panel() -> void:
 	CombatOverlayBuilder.create_dev_button(dev_vbox, "⚙️ +1000 Scrap", _dev_add_scrap)
 
 
+func _setup_tag_tracker_panel() -> void:
+	"""Create the tag tracker panel on the right side of the screen."""
+	# Create panel container
+	tag_tracker_panel = PanelContainer.new()
+	tag_tracker_panel.name = "TagTrackerPanel"
+	
+	# Style the panel
+	var panel_style: StyleBoxFlat = StyleBoxFlat.new()
+	panel_style.bg_color = Color(0.08, 0.08, 0.12, 0.9)
+	panel_style.border_color = Color(0.3, 0.4, 0.5, 0.8)
+	panel_style.set_border_width_all(1)
+	panel_style.set_corner_radius_all(6)
+	panel_style.set_content_margin_all(8)
+	tag_tracker_panel.add_theme_stylebox_override("panel", panel_style)
+	
+	# Position on right side, below intent bar
+	tag_tracker_panel.anchor_left = 1.0
+	tag_tracker_panel.anchor_right = 1.0
+	tag_tracker_panel.anchor_top = 0.0
+	tag_tracker_panel.anchor_bottom = 0.0
+	tag_tracker_panel.offset_left = -160
+	tag_tracker_panel.offset_right = -10
+	tag_tracker_panel.offset_top = 120
+	tag_tracker_panel.offset_bottom = 400
+	tag_tracker_panel.custom_minimum_size = Vector2(150, 200)
+	
+	# Create content container
+	var margin: MarginContainer = MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 4)
+	margin.add_theme_constant_override("margin_right", 4)
+	margin.add_theme_constant_override("margin_top", 4)
+	margin.add_theme_constant_override("margin_bottom", 4)
+	tag_tracker_panel.add_child(margin)
+	
+	var scroll: ScrollContainer = ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	margin.add_child(scroll)
+	
+	tag_tracker_content = VBoxContainer.new()
+	tag_tracker_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(tag_tracker_content)
+	
+	# Add title
+	var title: Label = Label.new()
+	title.text = "📊 TAGS PLAYED"
+	title.add_theme_font_size_override("font_size", 12)
+	title.add_theme_color_override("font_color", Color(0.8, 0.9, 1.0))
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	tag_tracker_content.add_child(title)
+	
+	# Add separator
+	var sep: HSeparator = HSeparator.new()
+	sep.add_theme_constant_override("separation", 4)
+	tag_tracker_content.add_child(sep)
+	
+	add_child(tag_tracker_panel)
+	
+	# Initialize with empty tracker
+	_update_tag_tracker()
+
+
+func _update_tag_tracker() -> void:
+	"""Update the tag tracker display with current counts."""
+	if not tag_tracker_content:
+		return
+	
+	# Get current tags from CombatManager
+	var tags_played: Dictionary = CombatManager.get_tags_played()
+	
+	# Clear existing tag labels (keep title and separator)
+	while tag_tracker_content.get_child_count() > 2:
+		var child: Node = tag_tracker_content.get_child(2)
+		tag_tracker_content.remove_child(child)
+		child.queue_free()
+	
+	tag_labels.clear()
+	
+	# If no tags, show placeholder
+	if tags_played.is_empty():
+		var placeholder: Label = Label.new()
+		placeholder.text = "No tags played yet"
+		placeholder.add_theme_font_size_override("font_size", 10)
+		placeholder.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5))
+		placeholder.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		tag_tracker_content.add_child(placeholder)
+		return
+	
+	# Sort tags by count (descending), then alphabetically
+	var sorted_tags: Array = tags_played.keys()
+	sorted_tags.sort_custom(func(a: String, b: String) -> bool:
+		if tags_played[a] != tags_played[b]:
+			return tags_played[a] > tags_played[b]
+		return a < b
+	)
+	
+	# Create label for each tag
+	for tag: String in sorted_tags:
+		var count: int = tags_played[tag]
+		var tag_row: HBoxContainer = HBoxContainer.new()
+		tag_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		
+		# Tag icon/name
+		var tag_label: Label = Label.new()
+		tag_label.text = _get_tag_display_name(tag)
+		tag_label.add_theme_font_size_override("font_size", 11)
+		tag_label.add_theme_color_override("font_color", _get_tag_color(tag))
+		tag_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		tag_label.clip_text = true
+		tag_row.add_child(tag_label)
+		
+		# Count
+		var count_label: Label = Label.new()
+		count_label.text = "×" + str(count)
+		count_label.add_theme_font_size_override("font_size", 11)
+		count_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.4))
+		count_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		tag_row.add_child(count_label)
+		
+		tag_tracker_content.add_child(tag_row)
+		tag_labels[tag] = count_label
+
+
+func _get_tag_display_name(tag: String) -> String:
+	"""Get display name with icon for a tag."""
+	match tag:
+		"gun":
+			return "🔫 Gun"
+		"hex":
+			return "☠️ Hex"
+		"barrier":
+			return "🚧 Barrier"
+		"defense":
+			return "🛡️ Defense"
+		"skill":
+			return "✨ Skill"
+		"buff":
+			return "⬆️ Buff"
+		"aoe":
+			return "💥 AoE"
+		"single_target":
+			return "🎯 Single"
+		"piercing":
+			return "➡️ Piercing"
+		"explosive":
+			return "💣 Explosive"
+		"beam":
+			return "⚡ Beam"
+		"sniper":
+			return "🔭 Sniper"
+		"shotgun":
+			return "🔥 Shotgun"
+		"scaling":
+			return "📈 Scaling"
+		"draw":
+			return "📜 Draw"
+		"heal":
+			return "❤️ Heal"
+		"armor":
+			return "🛡️ Armor"
+		"ring_control":
+			return "↔️ Ring Ctrl"
+		"rapid_fire":
+			return "⚡ Rapid"
+		"multi_target":
+			return "🎯× Multi"
+		"gun_support":
+			return "🔧 Gun Supp"
+		"damage_boost":
+			return "⚔️ Dmg Boost"
+		"hex_synergy":
+			return "☠️+ Hex Syn"
+		"utility":
+			return "🔧 Utility"
+		_:
+			return tag.capitalize()
+
+
+func _get_tag_color(tag: String) -> Color:
+	"""Get color for a tag based on its type."""
+	# Core types
+	match tag:
+		"gun":
+			return Color(0.9, 0.5, 0.3)  # Orange
+		"hex":
+			return Color(0.7, 0.3, 0.9)  # Purple
+		"barrier":
+			return Color(0.9, 0.7, 0.3)  # Gold
+		"defense":
+			return Color(0.4, 0.7, 0.9)  # Cyan
+		"skill":
+			return Color(0.5, 0.9, 0.5)  # Green
+		"buff":
+			return Color(0.5, 0.7, 1.0)  # Blue
+		"aoe", "explosive":
+			return Color(1.0, 0.6, 0.2)  # Orange
+		"piercing", "beam":
+			return Color(0.9, 0.9, 0.4)  # Yellow
+		"heal":
+			return Color(0.4, 0.9, 0.4)  # Green
+		"armor":
+			return Color(0.6, 0.8, 1.0)  # Light blue
+		_:
+			return Color(0.8, 0.8, 0.8)  # Gray default
+
+
 func _setup_animation_manager() -> void:
 	"""Initialize the CombatAnimationManager with UI references."""
 	if CombatAnimationManager:
@@ -164,6 +377,8 @@ func _setup_card_debug_overlay() -> void:
 var _last_highlighted_ring: int = -2  # Use -2 so first check always triggers
 var _highlight_all_mode: bool = false  # Track if we're in "highlight all" mode
 var _combat_lane_highlighted: bool = false  # Track if combat lane is highlighted for weapon drop
+var _dragging_instant_ring_card: bool = false  # Track if dragging an instant ring-targeting card
+var _highlighted_ring_for_drop: int = -1  # Track which ring is currently highlighted for drop
 
 func _card_affects_battlefield(card_def) -> bool:
 	"""Check if a card affects the battlefield (enemies/rings) vs self-only effects."""
@@ -193,19 +408,31 @@ func _card_affects_battlefield(card_def) -> bool:
 	return true
 
 func _process(_delta: float) -> void:
-	# While dragging a card, highlight the appropriate rings
-	if dragging_card_def != null and battlefield_arena:
+	# While dragging a card, provide visual feedback based on card type
+	if dragging_card_def != null:
 		var mouse_pos: Vector2 = get_global_mouse_position()
 		
-		# Persistent weapons can ONLY be dropped on combat lane (not battlefield)
-		if dragging_card_def.effect_type == "weapon_persistent":
-			# Clear any battlefield highlighting
-			if _highlight_all_mode or _last_highlighted_ring >= 0:
-				_highlight_all_mode = false
-				_last_highlighted_ring = -1
-				battlefield_arena.highlight_all_rings(false)
+		# Check if this is an instant card that requires ring targeting
+		if _dragging_instant_ring_card and battlefield_arena:
+			# Highlight the ring under the mouse for instant ring-targeting cards
+			var ring: int = battlefield_arena.get_ring_at_position(mouse_pos)
 			
-			# Only highlight combat lane for weapons
+			# Only highlight valid target rings
+			if ring >= 0 and ring in dragging_card_def.target_rings:
+				if ring != _highlighted_ring_for_drop:
+					# Clear previous highlight
+					if _highlighted_ring_for_drop >= 0:
+						battlefield_arena.highlight_ring(_highlighted_ring_for_drop, false)
+					# Highlight new ring
+					battlefield_arena.highlight_ring(ring, true)
+					_highlighted_ring_for_drop = ring
+			else:
+				# Mouse not over a valid ring - clear highlight
+				if _highlighted_ring_for_drop >= 0:
+					battlefield_arena.highlight_ring(_highlighted_ring_for_drop, false)
+					_highlighted_ring_for_drop = -1
+		else:
+			# V3: Combat cards go to the staging lane
 			if combat_lane:
 				var is_over_lane: bool = _is_over_combat_lane(mouse_pos)
 				if is_over_lane and not _combat_lane_highlighted:
@@ -214,72 +441,6 @@ func _process(_delta: float) -> void:
 				elif not is_over_lane and _combat_lane_highlighted:
 					_combat_lane_highlighted = false
 					_highlight_combat_lane(false)
-			return
-		
-		# First check: does this card even affect the battlefield?
-		if not _card_affects_battlefield(dragging_card_def):
-			# Cards that don't affect battlefield (self-target, draw, armor, etc.)
-			# should NOT highlight the battlefield at all
-			if _highlight_all_mode or _last_highlighted_ring >= 0:
-				_highlight_all_mode = false
-				_last_highlighted_ring = -1
-				battlefield_arena.highlight_all_rings(false)
-			return
-		
-		var ring_under_cursor: int = battlefield_arena.get_ring_at_position(mouse_pos)
-		
-		# Check if this card targets all enemies or all rings
-		var targets_all: bool = (
-			dragging_card_def.target_type == "all_enemies" or
-			(dragging_card_def.target_rings.size() == 4 and not dragging_card_def.requires_target)
-		)
-		
-		if targets_all:
-			# For cards that hit everything, highlight all rings when hovering battlefield
-			if ring_under_cursor >= 0:
-				if not _highlight_all_mode:
-					_highlight_all_mode = true
-					battlefield_arena.highlight_all_rings(true)
-			else:
-				if _highlight_all_mode:
-					_highlight_all_mode = false
-					battlefield_arena.highlight_all_rings(false)
-		else:
-			# Reset all-mode if we switched cards
-			if _highlight_all_mode:
-				_highlight_all_mode = false
-			
-			# Determine if this ring should be highlighted
-			var should_highlight: bool = false
-			if ring_under_cursor >= 0:
-				if dragging_card_def.requires_target:
-					# Targeting cards: only highlight if ring is in their target_rings
-					if dragging_card_def.target_rings.size() == 0:
-						# No restrictions - any ring is valid
-						should_highlight = true
-					elif ring_under_cursor in dragging_card_def.target_rings:
-						# Ring is in the allowed list
-						should_highlight = true
-				else:
-					# Non-targeting cards with specific rings: highlight those rings
-					if dragging_card_def.target_rings.size() > 0 and not dragging_card_def.requires_target:
-						# Auto-targeting card (like Shotgun) - highlight its target rings
-						if ring_under_cursor >= 0:
-							battlefield_arena.highlight_rings(dragging_card_def.target_rings, true)
-							_last_highlighted_ring = ring_under_cursor
-							return
-					else:
-						# Self-targeting or any-ring cards
-						should_highlight = true
-			
-			# Only update highlight when ring changes to reduce overhead
-			var target_ring: int = ring_under_cursor if should_highlight else -1
-			if target_ring != _last_highlighted_ring:
-				_last_highlighted_ring = target_ring
-				if should_highlight:
-					battlefield_arena.highlight_ring(ring_under_cursor, true)
-				else:
-					battlefield_arena.highlight_ring(-1, false)
 
 
 func _connect_signals() -> void:
@@ -289,7 +450,11 @@ func _connect_signals() -> void:
 	CombatManager.energy_changed.connect(_on_energy_changed)
 	CombatManager.wave_ended.connect(_on_wave_ended)
 	CombatManager.card_played.connect(_on_card_played)
-	CombatManager.weapon_triggered.connect(_on_weapon_triggered)
+	CombatManager.card_staged.connect(_on_card_staged)
+	CombatManager.instant_card_played.connect(_on_instant_card_played)
+	CombatManager.tag_played.connect(_on_tag_played)
+	CombatManager.execution_started.connect(_on_execution_started)
+	CombatManager.execution_completed.connect(_on_execution_completed)
 	CombatManager.ring_phase_started.connect(_on_ring_phase_started)
 	CombatManager.ring_phase_ended.connect(_on_ring_phase_ended)
 	CombatManager.enemy_attacking.connect(_on_enemy_attacking)
@@ -665,33 +830,46 @@ func _on_scrap_changed(amount: int) -> void:
 	scrap_label.text = str(amount)
 
 
-func _on_card_played(card, tier: int) -> void:
-	# Check if this is a persistent weapon that should be deployed to the combat lane
-	if card and card.effect_type == "weapon_persistent":
-		# Get the card's visual position that was stored when the card was dropped
-		# This is the ACTUAL position where the card appeared on screen when released
-		var card_visual_pos: Vector2 = _last_weapon_card_position
-		
-		# Find the weapon data from CombatManager to get trigger duration
-		var triggers: int = -1
-		for weapon: Dictionary in CombatManager.active_weapons:
-			if weapon.card_def.card_id == card.card_id:
-				triggers = weapon.triggers_remaining
-				break
-		
-		# Deploy to combat lane - animates from card's visual position to lane center
-		if combat_lane:
-			combat_lane.deploy_weapon(card, tier, triggers, card_visual_pos)
+func _on_card_played(_card, _tier: int) -> void:
+	# V3: Card played just updates the hand display
+	_update_hand()
+
+
+func _on_card_staged(card_def, tier: int, lane_index: int) -> void:
+	"""V3: Card was staged to the combat lane."""
+	# Deploy visual to combat lane
+	if combat_lane:
+		combat_lane.stage_card(card_def, tier, _last_weapon_card_position)
 	
-	# Update weapons text list display
-	_update_weapons_display()
+	_update_hand()
 
 
-func _on_weapon_triggered(_card_name: String, _damage: int, _weapon_index: int) -> void:
-	"""Called when a persistent weapon fires."""
-	# CombatLane handles the visual effects via its own signal connection
-	# No action needed here - this handler exists for potential future use
-	pass
+func _on_instant_card_played(card_def, tier: int) -> void:
+	"""V3: Instant card was played and resolved immediately."""
+	# Instant cards don't go to staging lane, just update hand
+	_update_hand()
+	_update_stats()
+	_update_threat_preview()
+	_update_intent_bar()
+	_refresh_enemy_displays()
+
+
+func _on_tag_played(tag: String) -> void:
+	"""Update the tag tracker when a tag is played."""
+	_update_tag_tracker()
+
+
+func _on_execution_started() -> void:
+	"""V3: Combat lane execution started."""
+	end_turn_button.disabled = true
+
+
+func _on_execution_completed() -> void:
+	"""V3: Combat lane execution completed."""
+	_update_hand()
+	_update_threat_preview()
+	_update_intent_bar()
+	_refresh_enemy_displays()
 
 
 # Ring phase indicator reference
@@ -772,28 +950,22 @@ func _show_simple_ring_indicator(ring_name: String) -> void:
 
 
 func _update_weapons_display() -> void:
-	"""Update the list of active persistent weapons in sidebar (text display)."""
-	if weapons_list:
-		for child in weapons_list.get_children():
-			child.queue_free()
+	"""V3: Update the staged cards count in sidebar (simplified)."""
+	# V3: Weapons section shows staged card count instead of persistent weapons
+	if weapons_section:
+		var staged_count: int = CombatManager.get_staged_card_count()
+		weapons_section.visible = staged_count > 0
 		
-		if CombatManager.active_weapons.size() == 0:
-			if weapons_section:
-				weapons_section.visible = false
-		else:
-			if weapons_section:
-				weapons_section.visible = true
+		if weapons_list:
+			for child in weapons_list.get_children():
+				child.queue_free()
 			
-			for weapon: Dictionary in CombatManager.active_weapons:
-				var card_def = weapon.card_def
-				var tier: int = weapon.tier
-				var damage: int = card_def.get_scaled_value("damage", tier)
-				
-				var weapon_label: Label = Label.new()
-				weapon_label.text = "⚡ " + card_def.card_name + " (" + str(damage) + " dmg)"
-				weapon_label.add_theme_font_size_override("font_size", 11)
-				weapon_label.add_theme_color_override("font_color", Color(0.9, 0.75, 0.4, 1.0))
-				weapons_list.add_child(weapon_label)
+			if staged_count > 0:
+				var staged_label: Label = Label.new()
+				staged_label.text = "⚔️ %d cards staged" % staged_count
+				staged_label.add_theme_font_size_override("font_size", 11)
+				staged_label.add_theme_color_override("font_color", Color(0.6, 0.9, 0.5, 1.0))
+				weapons_list.add_child(staged_label)
 
 
 func _on_wave_ended(success: bool) -> void:
@@ -850,111 +1022,97 @@ func _on_card_drag_started(card_def, _tier: int, hand_index: int) -> void:  # ca
 	pending_card_index = hand_index
 	pending_card_def = card_def
 	
-	# All cards need to be dropped on a ring, so highlight for all
+	# Track the card being dragged
 	dragging_card_def = card_def
+	
+	# Check if this is an instant card that requires ring targeting
+	_dragging_instant_ring_card = card_def.requires_ring_target() if card_def.has_method("requires_ring_target") else false
+	_highlighted_ring_for_drop = -1
 
 
-func _on_card_drag_ended(card_def, tier: int, hand_index: int, drop_position: Vector2) -> void:  # card_def: CardDefinition
-	"""Called when player releases a dragged card."""
-	# Clear drag tracking and ring highlighting
+func _on_card_drag_ended(card_def, tier: int, hand_index: int, drop_position: Vector2) -> void:
+	"""V3: Called when player releases a dragged card - stages to combat lane or plays instantly."""
+	# Store instant ring targeting state before clearing
+	var was_instant_ring_card: bool = _dragging_instant_ring_card
+	var target_ring: int = _highlighted_ring_for_drop
+	
+	# Clear drag tracking and lane highlighting
 	dragging_card_def = null
-	_last_highlighted_ring = -1
-	_highlight_all_mode = false
 	_combat_lane_highlighted = false
-	if battlefield_arena:
-		battlefield_arena.highlight_all_rings(false)
-	_highlight_combat_lane(false)  # Clear combat lane highlight
+	_highlight_combat_lane(false)
+	_dragging_instant_ring_card = false
+	
+	# Clear ring highlight
+	if _highlighted_ring_for_drop >= 0 and battlefield_arena:
+		battlefield_arena.highlight_ring(_highlighted_ring_for_drop, false)
+	_highlighted_ring_for_drop = -1
 	
 	if CombatManager.current_phase != CombatManager.CombatPhase.PLAYER_PHASE:
 		pending_card_index = -1
 		pending_card_def = null
 		return
 	
-	if not CombatManager.can_play_card(card_def, tier):
+	if not CombatManager.can_stage_card(card_def, tier):
 		pending_card_index = -1
 		pending_card_def = null
 		return
 	
-	# First check: card must be dragged outside the hand area
+	# Card must be dragged outside the hand area
 	if not _is_outside_hand_area(drop_position):
-		# Card wasn't dragged far enough out of hand area
 		pending_card_index = -1
 		pending_card_def = null
 		return
 	
-	var target_ring: int = -1
+	# Determine card type and target
+	var is_instant: bool = card_def.is_instant() if card_def.has_method("is_instant") else false
+	var requires_ring: bool = card_def.requires_ring_target() if card_def.has_method("requires_ring_target") else false
 	
-	# Get the card UI to capture its actual visual position
-	var card_ui_temp: Control = null
-	if hand_index < card_hand.get_child_count():
-		card_ui_temp = card_hand.get_child(hand_index)
-	
-	# Persistent weapons MUST be dropped on the combat lane (not battlefield)
-	if card_def.effect_type == "weapon_persistent":
-		if _is_over_combat_lane(drop_position):
-			target_ring = -1  # Weapons don't need a ring target
-			# Store the card's ACTUAL visual position (not mouse position) for weapon deployment
-			if card_ui_temp:
-				_last_weapon_card_position = card_ui_temp.global_position
-			else:
-				_last_weapon_card_position = drop_position  # Fallback to mouse position
-		else:
-			# Weapon dropped outside combat lane - reject
+	# INSTANT RING-TARGETING cards: must be dropped on a valid ring
+	if was_instant_ring_card and requires_ring:
+		if target_ring < 0 or target_ring not in card_def.target_rings:
+			# Not dropped on a valid ring - cancel
 			pending_card_index = -1
 			pending_card_def = null
 			return
-	else:
-		# All other cards must be dropped on a valid ring on the battlefield
-		if battlefield_arena:
-			target_ring = battlefield_arena.get_ring_at_position(drop_position)
-		
-		if target_ring < 0:
-			# Dropped outside valid ring area - cancel for all cards
-			pending_card_index = -1
-			pending_card_def = null
-			return
-		
-		# For targeting cards: additionally check if the ring is valid for this specific card
-		if card_def.requires_target:
-			if card_def.target_rings.size() > 0 and target_ring not in card_def.target_rings:
-				# Invalid ring for this card
-				pending_card_index = -1
-				pending_card_def = null
-				return
+	# COMBAT cards: must be dropped on the combat lane
+	elif not is_instant and not _is_over_combat_lane(drop_position):
+		pending_card_index = -1
+		pending_card_def = null
+		return
 	
-	# Get the card UI for animation before playing
+	# Get the card UI for animation
 	var card_ui: Control = null
 	if hand_index < card_hand.get_child_count():
 		card_ui = card_hand.get_child(hand_index)
 	
-	# Mark card as being played to prevent return animation
+	# Store visual position for staging animation
 	if card_ui:
-		# Set flag to prevent return animation
+		_last_weapon_card_position = card_ui.global_position
+		
+		# Mark card as being played to prevent return animation
 		if "is_being_played" in card_ui:
 			card_ui.is_being_played = true
-		# Kill any existing tweens on the card
+		# Kill any existing tweens
 		if "active_tween" in card_ui and card_ui.active_tween and card_ui.active_tween.is_valid():
 			card_ui.active_tween.kill()
 			card_ui.active_tween = null
-	
-	print("[CombatScreen DEBUG] Playing card - card: ", card_def.card_name,
-		  " | hand_index: ", hand_index, " | card_ui valid: ", is_instance_valid(card_ui),
-		  " | card_ui global pos: ", card_ui.global_position if card_ui else Vector2.ZERO,
-		  " | drop_position: ", drop_position)
+	else:
+		_last_weapon_card_position = drop_position
 	
 	# Play card fly animation
 	if card_ui:
 		await _play_card_fly_animation(card_ui, drop_position, card_def.effect_type)
 	
-	# Play the card
-	print("[CombatScreen DEBUG] ========== CALLING CombatManager.play_card ==========")
-	print("[CombatScreen DEBUG] hand_index: ", hand_index, " | target_ring: ", target_ring)
-	CombatManager.play_card(hand_index, target_ring)
-	print("[CombatScreen DEBUG] CombatManager.play_card completed")
-	
-	_update_hand()
-	_update_threat_preview()
-	_refresh_enemy_displays()
+	# V3: Stage the card (CombatManager handles instant vs combat internally)
+	# For instant ring-targeting cards, pass the target ring
+	if requires_ring and target_ring >= 0:
+		var card_type_str: String = "INSTANT (Ring %d)" % target_ring
+		print("[CombatScreen] Playing %s card: %s at hand_index: %d" % [card_type_str, card_def.card_name, hand_index])
+		CombatManager.stage_card(hand_index, target_ring)
+	else:
+		var card_type_str: String = "INSTANT" if is_instant else "COMBAT"
+		print("[CombatScreen] Playing %s card: %s at hand_index: %d" % [card_type_str, card_def.card_name, hand_index])
+		CombatManager.stage_card(hand_index)
 	
 	pending_card_index = -1
 	pending_card_def = null
@@ -1029,13 +1187,11 @@ func _highlight_combat_lane(highlight: bool) -> void:
 		combat_lane.set_drop_highlight(highlight)
 
 
-func _show_drag_hint(is_weapon: bool = false) -> void:
+func _show_drag_hint(_is_weapon: bool = false) -> void:
 	"""Show a brief hint that this card should be dragged."""
 	var hint: Label = Label.new()
-	if is_weapon:
-		hint.text = "Drag weapon onto combat lane to deploy"
-	else:
-		hint.text = "Drag card onto battlefield to play"
+	# V3: All cards go to staging lane
+	hint.text = "Drag cards to staging lane, then click EXECUTE"
 	hint.add_theme_font_size_override("font_size", 18)
 	hint.add_theme_color_override("font_color", Color(1.0, 0.9, 0.4, 1.0))
 	hint.add_theme_color_override("font_outline_color", Color(0, 0, 0, 1))
