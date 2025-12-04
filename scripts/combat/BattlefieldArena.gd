@@ -31,6 +31,10 @@ var combat_lane: Control = null
 var enemy_groups: Dictionary = {}  # group_id -> {ring, enemy_id, enemies, angular_position}
 var _next_group_id: int = 0
 
+# Projectile tracking - enemies with projectiles in flight get deferred damage visuals
+var _enemies_with_pending_projectile: Dictionary = {}  # instance_id -> {damage, is_hex}
+var _pending_damage_visuals: Dictionary = {}  # instance_id -> {damage, is_hex}
+
 # Layout
 var center: Vector2 = Vector2.ZERO
 var max_radius: float = 200.0
@@ -74,6 +78,9 @@ func _connect_child_signals() -> void:
 		stack_system.stack_hover_exited.connect(_on_stack_hover_exited)
 		stack_system.mini_panel_hover_entered.connect(_on_mini_panel_hover_entered)
 		stack_system.mini_panel_hover_exited.connect(_on_mini_panel_hover_exited)
+	
+	if effects_node:
+		effects_node.projectile_hit_enemy.connect(_on_projectile_hit_enemy)
 
 
 func _connect_combat_signals() -> void:
@@ -82,6 +89,7 @@ func _connect_combat_signals() -> void:
 	CombatManager.enemy_damaged.connect(_on_enemy_damaged)
 	CombatManager.enemy_killed.connect(_on_enemy_died)
 	CombatManager.enemy_moved.connect(_on_enemy_moved)
+	CombatManager.enemy_targeted.connect(_on_enemy_targeted)
 	CombatManager.player_damaged.connect(_on_player_damaged)
 	CombatManager.barrier_triggered.connect(_on_barrier_triggered)
 	CombatManager.turn_started.connect(_on_turn_started)
@@ -91,8 +99,15 @@ func _connect_combat_signals() -> void:
 
 func _recalculate_layout() -> void:
 	"""Recalculate battlefield layout based on size."""
-	center = size / 2
-	max_radius = min(size.x, size.y) / 2 * 0.9
+	# For semicircle layout, center is at the bottom of the control
+	# This matches BattlefieldRings.recalculate_layout()
+	const SEMICIRCLE_PADDING: float = 18.0
+	center = Vector2(size.x / 2, size.y - SEMICIRCLE_PADDING)
+	
+	# Calculate max radius - use whichever dimension is smaller to ensure fit
+	var max_by_width: float = (size.x / 2) * 0.98
+	var max_by_height: float = (size.y - SEMICIRCLE_PADDING * 2) * 0.98
+	max_radius = min(max_by_width, max_by_height)
 	
 	# Update child nodes
 	if rings:
@@ -223,11 +238,8 @@ func _create_or_update_enemy_visual(enemy) -> void:
 	var enemy_count: int = group_data.enemies.size()
 	
 	if enemy_count >= STACK_THRESHOLD:
-		# Should be a stack
+		# Should be a stack - _ensure_stack_exists handles hiding all individual visuals
 		_ensure_stack_exists(group_id, group_data)
-		# Hide individual visual if it exists
-		if enemy_manager and enemy_manager.has_enemy_visual(enemy.instance_id):
-			enemy_manager.hide_enemy_visual(enemy.instance_id)
 	else:
 		# Should be individual
 		if enemy_manager and not enemy_manager.has_enemy_visual(enemy.instance_id):
@@ -250,16 +262,74 @@ func _find_or_create_group(ring: int, enemy_id: String, enemy) -> String:
 				group.enemies.append(enemy)
 			return group_id
 	
-	# Create new group
+	# Create new group with unique angular position
 	_next_group_id += 1
 	var group_id: String = "group_" + str(_next_group_id)
+	
+	# Calculate a unique angular position for this group within the ring
+	var angular_pos: float = _calculate_unique_angular_position(ring, group_id)
+	
 	enemy_groups[group_id] = {
 		"ring": ring,
 		"enemy_id": enemy_id,
 		"enemies": [enemy],
-		"angular_position": PI * 1.5  # Default to top
+		"angular_position": angular_pos
 	}
+	
+	# Store the angular position in stack_system by group_id (persists across ring changes)
+	if stack_system:
+		stack_system.set_group_angular_position(group_id, angular_pos)
+	
 	return group_id
+
+
+func _calculate_unique_angular_position(ring: int, _new_group_id: String) -> float:
+	"""Calculate a unique angular position for a new group in a ring.
+	Spreads groups evenly across a semicircle (PI to 2*PI, from left to right via top)."""
+	
+	# Count existing groups in this ring (not including the new one)
+	var groups_in_ring: Array[String] = []
+	for gid: String in enemy_groups.keys():
+		if enemy_groups[gid].ring == ring:
+			groups_in_ring.append(gid)
+	
+	# Total groups including the new one
+	var total_groups: int = groups_in_ring.size() + 1
+	
+	# Find the index for the new group (it will be last)
+	var new_group_index: int = total_groups - 1
+	
+	# Distribute across semicircle (PI to 2*PI, i.e., left side to right side via top)
+	# This matches the visual layout where PI*1.5 is the top center
+	# Single group -> top center (PI * 1.5)
+	# Two groups -> evenly spread (e.g., PI*1.25 and PI*1.75)
+	# etc.
+	
+	if total_groups == 1:
+		return PI * 1.5  # Top center
+	
+	# Calculate spacing - spread across semicircle with padding on edges
+	var arc_start: float = PI * 1.1   # ~20° from left
+	var arc_end: float = PI * 1.9     # ~20° from right
+	var arc_range: float = arc_end - arc_start
+	
+	var spacing: float = arc_range / float(total_groups - 1) if total_groups > 1 else 0.0
+	var angle: float = arc_start + spacing * new_group_index
+	
+	# Also reposition existing groups to maintain even spacing
+	for i: int in range(groups_in_ring.size()):
+		var existing_gid: String = groups_in_ring[i]
+		var existing_angle: float = arc_start + spacing * i
+		enemy_groups[existing_gid].angular_position = existing_angle
+		if stack_system:
+			stack_system.set_group_angular_position(existing_gid, existing_angle)
+			# Also update the visual position if a stack exists
+			var existing_group: Dictionary = enemy_groups[existing_gid]
+			var stack_key: String = str(existing_group.ring) + "_" + existing_group.enemy_id + "_" + existing_gid
+			if stack_system.has_stack(stack_key):
+				stack_system.update_stack_position(stack_key, true)  # Animate to new position
+	
+	return angle
 
 
 func _ensure_stack_exists(group_id: String, group_data: Dictionary) -> void:
@@ -268,10 +338,21 @@ func _ensure_stack_exists(group_id: String, group_data: Dictionary) -> void:
 	
 	if stack_system and not stack_system.has_stack(stack_key):
 		stack_system.create_stack(group_data.ring, group_data.enemy_id, group_data.enemies, stack_key)
+		
+		# Hide ALL individual visuals for enemies in this group (not just the current enemy)
+		# This fixes the bug where enemies spawned before the stack threshold still show individually
+		if enemy_manager:
+			for e in group_data.enemies:
+				if enemy_manager.has_enemy_visual(e.instance_id):
+					enemy_manager.hide_enemy_visual(e.instance_id)
 
 
 func _refresh_all_visuals() -> void:
 	"""Refresh all enemy visuals."""
+	# Clear hover state FIRST to prevent orphaned info cards
+	if hover_system:
+		hover_system.clear()
+	
 	# Clear existing
 	if enemy_manager:
 		enemy_manager.clear_all()
@@ -300,12 +381,16 @@ func _update_threat_levels() -> void:
 		var has_bomber: bool = false
 		
 		for enemy in enemies:
-			var enemy_def = EnemyDatabase.get_enemy(enemy.enemy_id)
-			if enemy_def:
-				if ring == 0 and enemy.will_attack_this_turn():
-					total_damage += enemy_def.get_scaled_damage(RunManager.current_wave)
-				if enemy_def.behavior_type == EnemyDefinition.BehaviorType.BOMBER and ring == 0:
-					has_bomber = true
+			var enemy_def: EnemyDefinition = EnemyDatabase.get_enemy(enemy.enemy_id)
+			if enemy_def == null:
+				continue
+			
+			var predicted_attack: int = enemy.get_predicted_attack_damage(RunManager.current_wave, enemy_def)
+			if predicted_attack > 0:
+				total_damage += predicted_attack
+			
+			if enemy_def.behavior_type == EnemyDefinition.BehaviorType.BOMBER and ring == 0:
+				has_bomber = true
 		
 		var threat_level: int = 0  # ThreatLevel.SAFE
 		if total_damage > 0:
@@ -329,23 +414,93 @@ func _on_enemy_spawned(enemy) -> void:
 	_update_threat_levels()
 
 
-func _on_enemy_damaged(enemy, amount: int, _source) -> void:
+func _on_enemy_damaged(enemy, amount: int, is_hex) -> void:
 	"""Handle enemy taking damage."""
+	# Check if this enemy has a projectile in flight - if so, defer visuals
+	if _enemies_with_pending_projectile.has(enemy.instance_id):
+		# Store damage data to be shown when projectile hits
+		_pending_damage_visuals[enemy.instance_id] = {"damage": amount, "is_hex": is_hex}
+		# Still update HP immediately (just don't show visual feedback yet)
+		_update_enemy_hp_display(enemy)
+		return
+	
+	# Show immediate damage visuals (for non-projectile damage like barriers)
+	_show_damage_visuals(enemy, amount, is_hex)
+
+
+func _show_damage_visuals(enemy, amount: int, is_hex: bool) -> void:
+	"""Show the damage visual effects (shake, flash, damage number)."""
 	shake_enemy(enemy)
 	flash_enemy(enemy)
-	show_damage_on_enemy(enemy, amount)
+	show_damage_on_enemy(enemy, amount, is_hex)
+	_update_enemy_hp_display(enemy)
 	
-	# Update HP display
+	# Update mini-panel HP if stack is expanded
+	_update_mini_panel_hp(enemy)
+
+
+func _update_enemy_hp_display(enemy) -> void:
+	"""Update the HP display for an enemy (both individual and stack visuals)."""
 	if enemy_manager and enemy_manager.has_enemy_visual(enemy.instance_id):
 		enemy_manager.update_enemy_hp(enemy)
-	elif stack_system:
+	
+	# Also update stack aggregate HP if in a stack
+	if stack_system:
 		var stack_key: String = stack_system.get_stack_key_for_enemy(enemy)
 		if not stack_key.is_empty():
 			stack_system.update_stack_hp(stack_key)
+			# Also update mini-panels if expanded
+			_update_mini_panel_hp(enemy, stack_key)
+
+
+func _update_mini_panel_hp(enemy, stack_key: String = "") -> void:
+	"""Update the mini-panel HP for an enemy in an expanded stack."""
+	if not stack_system:
+		return
+	
+	if stack_key.is_empty():
+		stack_key = stack_system.get_stack_key_for_enemy(enemy)
+	
+	if stack_key.is_empty():
+		return
+	
+	# Find and update the specific mini-panel for this enemy
+	if stack_system.stack_visuals.has(stack_key):
+		var stack_data: Dictionary = stack_system.stack_visuals[stack_key]
+		var mini_panels: Array = stack_data.get("mini_panels", [])
+		for mini_panel in mini_panels:
+			if is_instance_valid(mini_panel):
+				var panel_enemy = mini_panel.get_meta("enemy_instance", null)
+				if panel_enemy and panel_enemy.instance_id == enemy.instance_id:
+					# Update HP and hex display on the mini-panel
+					if mini_panel.has_method("update_hp"):
+						mini_panel.update_hp()
+					if mini_panel.has_method("update_hex"):
+						mini_panel.update_hex()
+					break
+
+
+func _on_projectile_hit_enemy(enemy, _impact_pos: Vector2) -> void:
+	"""Handle when a projectile hits an enemy - show deferred damage visuals."""
+	if enemy == null:
+		return
+	
+	# Clear projectile tracking
+	_enemies_with_pending_projectile.erase(enemy.instance_id)
+	
+	# Show any pending damage visuals
+	if _pending_damage_visuals.has(enemy.instance_id):
+		var data: Dictionary = _pending_damage_visuals[enemy.instance_id]
+		_pending_damage_visuals.erase(enemy.instance_id)
+		_show_damage_visuals(enemy, data.damage, data.is_hex)
 
 
 func _on_enemy_died(enemy) -> void:
 	"""Handle enemy death."""
+	# Clear any pending projectile tracking for this enemy
+	_enemies_with_pending_projectile.erase(enemy.instance_id)
+	_pending_damage_visuals.erase(enemy.instance_id)
+	
 	# Remove from groups
 	for group_id: String in enemy_groups.keys():
 		var group: Dictionary = enemy_groups[group_id]
@@ -354,11 +509,98 @@ func _on_enemy_died(enemy) -> void:
 				group.enemies.remove_at(i)
 				break
 	
-	# Play death animation
+	# Play death animation for individual enemy
 	if enemy_manager and enemy_manager.has_enemy_visual(enemy.instance_id):
 		enemy_manager.play_death_animation(enemy)
 	
+	# Handle stack death - remove mini-panel and update stack count
+	if stack_system:
+		var stack_key: String = stack_system.get_stack_key_for_enemy(enemy)
+		if not stack_key.is_empty():
+			_remove_enemy_from_stack_visual(enemy, stack_key)
+	
 	_update_threat_levels()
+
+
+func _remove_enemy_from_stack_visual(enemy, stack_key: String) -> void:
+	"""Remove a dead enemy's mini-panel from a stack and update the stack."""
+	if not stack_system or not stack_system.stack_visuals.has(stack_key):
+		return
+	
+	var stack_data: Dictionary = stack_system.stack_visuals[stack_key]
+	var mini_panels: Array = stack_data.get("mini_panels", [])
+	
+	# Find and animate out the dead enemy's mini-panel
+	for i: int in range(mini_panels.size() - 1, -1, -1):
+		var mini_panel: Panel = mini_panels[i]
+		if is_instance_valid(mini_panel):
+			var panel_enemy = mini_panel.get_meta("enemy_instance", null)
+			if panel_enemy and panel_enemy.instance_id == enemy.instance_id:
+				# Animate the mini-panel death
+				var tween: Tween = mini_panel.create_tween()
+				tween.set_parallel(true)
+				tween.tween_property(mini_panel, "modulate", Color(1.0, 0.3, 0.3, 1.0), 0.1)
+				tween.tween_property(mini_panel, "scale", Vector2(1.2, 1.2), 0.1)
+				tween.set_parallel(false)
+				tween.tween_property(mini_panel, "modulate:a", 0.0, 0.15)
+				tween.tween_property(mini_panel, "scale", Vector2(0.5, 0.5), 0.15)
+				tween.tween_callback(mini_panel.queue_free)
+				
+				# Remove from array
+				mini_panels.remove_at(i)
+				break
+	
+	# Update stack's enemy list
+	var enemies: Array = stack_data.get("enemies", [])
+	for i: int in range(enemies.size() - 1, -1, -1):
+		if enemies[i].instance_id == enemy.instance_id:
+			enemies.remove_at(i)
+			break
+	
+	# Update stack panel count and HP
+	var main_panel: Panel = stack_data.panel
+	if is_instance_valid(main_panel) and main_panel.has_method("update_count"):
+		main_panel.update_count(enemies)
+	
+	# If stack is now empty or has only 1 enemy, clean up
+	if enemies.size() == 0:
+		# Schedule stack removal (let death animation play first)
+		get_tree().create_timer(0.3).timeout.connect(func():
+			if stack_system:
+				stack_system.remove_stack(stack_key)
+		)
+	
+	# Reposition remaining mini-panels
+	_reposition_stack_mini_panels(stack_key)
+
+
+func _reposition_stack_mini_panels(stack_key: String) -> void:
+	"""Reposition remaining mini-panels after one is removed."""
+	if not stack_system or not stack_system.stack_visuals.has(stack_key):
+		return
+	
+	var stack_data: Dictionary = stack_system.stack_visuals[stack_key]
+	var mini_panels: Array = stack_data.get("mini_panels", [])
+	var main_panel: Panel = stack_data.panel
+	
+	if not is_instance_valid(main_panel) or mini_panels.is_empty():
+		return
+	
+	# Calculate new layout (using same logic as BattlefieldStackSystem)
+	var mini_size: Vector2 = Vector2(55.0, 50.0)  # MINI_PANEL_SIZE from BattlefieldStackSystem
+	var vertical_gap: float = 16.0
+	var spacing: float = mini_size.x + 6.0
+	var total_width: float = spacing * mini_panels.size() - 6.0 if mini_panels.size() > 0 else 0.0
+	var start_x: float = main_panel.position.x + main_panel.size.x / 2.0 - total_width / 2.0
+	var base_y: float = maxf(main_panel.position.y - mini_size.y - vertical_gap, 0.0)
+	
+	# Animate remaining mini-panels to new positions
+	for i: int in range(mini_panels.size()):
+		var mini_panel: Panel = mini_panels[i]
+		if is_instance_valid(mini_panel):
+			var target_pos: Vector2 = Vector2(start_x + i * spacing, base_y)
+			var tween: Tween = mini_panel.create_tween()
+			tween.tween_property(mini_panel, "position", target_pos, 0.2).set_ease(Tween.EASE_OUT)
 
 
 func _on_enemy_death_finished(_enemy) -> void:
@@ -366,21 +608,87 @@ func _on_enemy_death_finished(_enemy) -> void:
 	pass  # Could refresh visuals if needed
 
 
-func _on_enemy_moved(enemy, _from_ring: int, to_ring: int) -> void:
+func _on_enemy_moved(enemy, from_ring: int, to_ring: int) -> void:
 	"""Handle enemy movement."""
-	# Update group ring
+	# Find the group for this enemy and track if ring changed
+	var moved_group_id: String = ""
 	for group_id: String in enemy_groups.keys():
 		var group: Dictionary = enemy_groups[group_id]
 		for e in group.enemies:
 			if e.instance_id == enemy.instance_id:
+				if group.ring != to_ring:
+					moved_group_id = group_id
 				group.ring = to_ring
 				break
+		if not moved_group_id.is_empty():
+			break
 	
 	# Update visual position
 	if enemy_manager and enemy_manager.has_enemy_visual(enemy.instance_id):
 		enemy_manager.update_enemy_position(enemy, true)
 	
+	if stack_system:
+		var stack_key: String = stack_system.get_stack_key_for_enemy(enemy)
+		if not stack_key.is_empty():
+			stack_system.update_stack_ring(stack_key, to_ring, true)
+	
+	# Rebalance groups in both old and new rings when a group moves
+	if not moved_group_id.is_empty():
+		_rebalance_groups_in_ring(from_ring)
+		_rebalance_groups_in_ring(to_ring)
+	
 	_update_threat_levels()
+
+
+func _rebalance_groups_in_ring(ring: int) -> void:
+	"""Rebalance angular positions of all groups in a ring for even spacing."""
+	# Collect all groups in this ring
+	var groups_in_ring: Array[String] = []
+	for gid: String in enemy_groups.keys():
+		if enemy_groups[gid].ring == ring:
+			groups_in_ring.append(gid)
+	
+	if groups_in_ring.is_empty():
+		return
+	
+	# Single group -> center
+	if groups_in_ring.size() == 1:
+		var gid: String = groups_in_ring[0]
+		var angle: float = PI * 1.5  # Top center
+		enemy_groups[gid].angular_position = angle
+		if stack_system:
+			stack_system.set_group_angular_position(gid, angle)
+			_update_stack_visual_position(gid)
+		return
+	
+	# Multiple groups -> distribute evenly
+	var arc_start: float = PI * 1.1   # ~20° from left
+	var arc_end: float = PI * 1.9     # ~20° from right
+	var arc_range: float = arc_end - arc_start
+	var spacing: float = arc_range / float(groups_in_ring.size() - 1)
+	
+	for i: int in range(groups_in_ring.size()):
+		var gid: String = groups_in_ring[i]
+		var angle: float = arc_start + spacing * i
+		enemy_groups[gid].angular_position = angle
+		if stack_system:
+			stack_system.set_group_angular_position(gid, angle)
+			_update_stack_visual_position(gid)
+
+
+func _update_stack_visual_position(group_id: String) -> void:
+	"""Update the visual position of a stack for a given group."""
+	if not stack_system:
+		return
+	
+	if not enemy_groups.has(group_id):
+		return
+	
+	var group: Dictionary = enemy_groups[group_id]
+	var stack_key: String = str(group.ring) + "_" + group.enemy_id + "_" + group_id
+	
+	if stack_system.has_stack(stack_key):
+		stack_system.update_stack_position(stack_key, true)  # Animate to new position
 
 
 
@@ -397,6 +705,37 @@ func _on_barrier_triggered(ring: int, _damage_absorbed: int) -> void:
 	if effects_node and rings:
 		var barrier_pos: Vector2 = center + Vector2(0, -rings.get_ring_center_radius(ring))
 		effects_node.fire_barrier_sparks(barrier_pos, center)
+
+
+func _on_enemy_targeted(enemy) -> void:
+	"""Handle visual feedback when an enemy is targeted by a projectile."""
+	if enemy == null:
+		return
+	
+	var target_pos: Vector2 = get_enemy_center_position(enemy)
+	
+	# Keep stacks expanded while they're being aimed at
+	if stack_system:
+		var stack_key: String = stack_system.get_stack_key_for_enemy(enemy)
+		if not stack_key.is_empty():
+			stack_system.hold_stack_open(stack_key)
+			var timer: SceneTreeTimer = get_tree().create_timer(1.5)
+			timer.timeout.connect(func():
+				if stack_system:
+					stack_system.release_stack_hold(stack_key)
+			)
+	
+	if not effects_node:
+		return
+	
+	var weapon_index: int = CombatManager.current_firing_weapon_index
+	if weapon_index >= 0:
+		# Track that this enemy has a projectile in flight - defer damage visuals
+		_enemies_with_pending_projectile[enemy.instance_id] = true
+		# Fire weapon projectile at the enemy (damage visuals will be triggered on hit)
+		effects_node.fire_weapon_projectile_at_enemy(enemy, target_pos, Color(1.0, 0.9, 0.3), weapon_index)
+	else:
+		effects_node.fire_projectile_to_position(target_pos, Color(1.0, 0.9, 0.3))
 
 
 

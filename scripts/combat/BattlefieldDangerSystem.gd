@@ -2,7 +2,7 @@ extends RefCounted
 class_name BattlefieldDangerSystem
 ## Manages danger highlighting and pulsing glow effects on high-priority threats.
 
-# EnemyDatabase is accessed via Engine.get_singleton at runtime
+# EnemyDatabase is an autoload singleton
 
 # Danger level system
 enum DangerLevel { NONE, LOW, MEDIUM, HIGH, CRITICAL }
@@ -32,8 +32,7 @@ func get_glow_color(level: DangerLevel) -> Color:
 
 func get_enemy_danger_level(enemy) -> DangerLevel:
 	"""Calculate the danger level for an enemy based on threat priority."""
-	var enemy_db = Engine.get_singleton("EnemyDatabase")
-	var enemy_def = enemy_db.get_enemy(enemy.enemy_id)
+	var enemy_def: EnemyDefinition = EnemyDatabase.get_enemy(enemy.enemy_id)
 	if not enemy_def:
 		return DangerLevel.NONE
 	

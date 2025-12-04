@@ -38,6 +38,9 @@ func _ready() -> void:
 
 func setup(enemy, panel_size: Vector2, color: Color, key: String = "") -> void:
 	"""Initialize the mini panel with enemy data."""
+	if not is_node_ready():
+		await ready
+	
 	enemy_instance = enemy
 	enemy_id = enemy.enemy_id
 	instance_id = enemy.instance_id
@@ -61,8 +64,7 @@ func setup(enemy, panel_size: Vector2, color: Color, key: String = "") -> void:
 	var height: float = panel_size.y
 	
 	# Get enemy definition
-	var enemy_db = Engine.get_singleton("EnemyDatabase")
-	var enemy_def = enemy_db.get_enemy(enemy_id) if enemy_db else null
+	var enemy_def: EnemyDefinition = EnemyDatabase.get_enemy(enemy_id)
 	
 	# Create behavior badge
 	if enemy_def and not behavior_badge:
@@ -175,4 +177,3 @@ static func create(enemy, panel_size: Vector2, color: Color, key: String = "") -
 	# Defer setup until node is ready
 	instance.call_deferred("setup", enemy, panel_size, color, key)
 	return instance
-

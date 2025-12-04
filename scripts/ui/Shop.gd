@@ -1077,5 +1077,3 @@ func _animate_collection_cards() -> void:
 		tween.tween_property(card_ui, "position", Vector2(x_pos, y_pos), 0.15)
 		tween.tween_property(card_ui, "scale", Vector2(current_scale, current_scale), 0.15)
 		card_ui.z_index = target_z
-
-

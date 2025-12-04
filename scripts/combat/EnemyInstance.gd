@@ -90,6 +90,10 @@ func take_damage(base_damage: int) -> Dictionary:
 	var total_damage: int = base_damage + hex_bonus
 	current_hp -= total_damage
 	
+	# Clamp HP to 0 (never show negative HP)
+	if current_hp < 0:
+		current_hp = 0
+	
 	return {
 		"total_damage": total_damage,
 		"hex_triggered": hex_triggered,
@@ -136,4 +140,34 @@ func get_turns_until_melee() -> int:
 	# Round up: if 3 rings at speed 2, takes 2 turns (ceil(3/2) = 2)
 	var turns: int = int(ceil(float(rings_to_travel) / float(speed)))
 	return turns
+
+
+func will_attack_this_turn(enemy_def: EnemyDefinition = null) -> bool:
+	"""Predict whether this enemy will attempt an attack this turn."""
+	var resolved_def: EnemyDefinition = enemy_def
+	if resolved_def == null:
+		resolved_def = get_definition()
+	if resolved_def == null:
+		return false
+	if resolved_def.attack_type == "suicide":
+		return false
+	if ring == 0:
+		return true
+	if resolved_def.attack_type == "ranged":
+		var is_at_target_ring: bool = ring == resolved_def.target_ring
+		var within_attack_range: bool = ring <= resolved_def.attack_range
+		return is_at_target_ring and within_attack_range
+	return false
+
+
+func get_predicted_attack_damage(wave: int, enemy_def: EnemyDefinition = null) -> int:
+	"""Return the damage this enemy would deal if it attacks this turn."""
+	var resolved_def: EnemyDefinition = enemy_def
+	if resolved_def == null:
+		resolved_def = get_definition()
+	if resolved_def == null:
+		return 0
+	if not will_attack_this_turn(resolved_def):
+		return 0
+	return resolved_def.get_scaled_damage(wave)
 

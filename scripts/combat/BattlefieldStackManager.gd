@@ -3,7 +3,7 @@ class_name BattlefieldStackManager
 ## Manages enemy stacking, grouping, and stack expansion/collapse in the battlefield.
 ## Handles persistent groups, stack visuals, and mini-panel management.
 
-# EnemyDatabase is accessed via Engine.get_singleton at runtime
+# EnemyDatabase is provided via autoload singleton
 const BattlefieldInfoCardsHelper = preload("res://scripts/combat/BattlefieldInfoCards.gd")
 
 # Stacking configuration constants

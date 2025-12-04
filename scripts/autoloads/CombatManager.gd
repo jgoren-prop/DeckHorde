@@ -887,8 +887,9 @@ func deal_damage_to_random_enemy(ring_mask: int, damage: int, show_targeting: bo
 		# Emit targeting signal BEFORE damage (for visual indicator)
 		if show_targeting:
 			enemy_targeted.emit(target)
-			# Brief delay for targeting visual (stack expand + fast projectile)
-			await get_tree().create_timer(0.3).timeout
+			# Delay for full weapon animation: gun aim/fire (~0.4s) + projectile travel (~0.2s)
+			# The visual damage effects are deferred until projectile hits
+			await get_tree().create_timer(0.6).timeout
 		
 		# Use take_damage to handle hex triggering
 		var result: Dictionary = target.take_damage(damage)

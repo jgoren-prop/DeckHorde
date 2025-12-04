@@ -130,8 +130,8 @@ script = ExtResource("3_lane")
 [node name="BattlefieldArena" parent="." instance=ExtResource("2_arena")]
 layout_mode = 1
 anchors_preset = -1
-anchor_bottom = 0.4
 offset_top = 50.0
+offset_bottom = -585.0
 
 [node name="PlayerStatsPanel" type="PanelContainer" parent="."]
 layout_mode = 1

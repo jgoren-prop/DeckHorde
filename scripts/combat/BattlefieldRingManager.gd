@@ -300,8 +300,7 @@ func draw_barrier_indicator(canvas: CanvasItem, ring_index: int, radius: float, 
 	canvas.draw_string(font, label_pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, barrier_color)
 
 
-func _get_enemy_def(enemy_id: String):
+func _get_enemy_def(enemy_id: String) -> EnemyDefinition:
 	"""Get enemy definition from database."""
-	var enemy_db = Engine.get_singleton("EnemyDatabase")
-	return enemy_db.get_enemy(enemy_id)
+	return EnemyDatabase.get_enemy(enemy_id)
 

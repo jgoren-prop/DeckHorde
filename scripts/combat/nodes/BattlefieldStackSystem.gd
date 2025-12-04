@@ -13,6 +13,8 @@ signal stack_collapsed(stack_key: String)
 const EnemyStackPanelScene = preload("res://scenes/combat/components/EnemyStackPanel.tscn")
 const MiniEnemyPanelScene = preload("res://scenes/combat/components/MiniEnemyPanel.tscn")
 const BattlefieldEffectsHelper = preload("res://scripts/combat/BattlefieldEffects.gd")
+const MINI_PANEL_SIZE: Vector2 = Vector2(55.0, 50.0)
+const MINI_PANEL_VERTICAL_GAP: float = 16.0
 
 # Enemy colors reference
 const ENEMY_COLORS: Dictionary = {
@@ -122,16 +124,29 @@ func update_stack_position(stack_key: String, animate: bool = false) -> void:
 		panel.position = target_pos
 
 
+func update_stack_ring(stack_key: String, new_ring: int, animate: bool = true) -> void:
+	"""Update the stored ring for a stack and move it to the new location."""
+	if not stack_visuals.has(stack_key):
+		return
+	
+	var stack_data: Dictionary = stack_visuals[stack_key]
+	stack_data.ring = new_ring
+	update_stack_position(stack_key, animate)
+	
+	if stack_data.get("expanded", false):
+		_reposition_expanded_stack(stack_key)
+
+
 func update_stack_hp(stack_key: String) -> void:
-	"""Update HP display for a stack."""
+	"""Update HP display for a stack (aggregate HP bar)."""
 	if not stack_visuals.has(stack_key):
 		return
 	
 	var stack_data: Dictionary = stack_visuals[stack_key]
 	var panel: Panel = stack_data.panel
 	
-	if is_instance_valid(panel) and panel.has_method("update_hp"):
-		panel.update_hp()
+	if is_instance_valid(panel) and panel.has_method("update_aggregate_hp"):
+		panel.update_aggregate_hp()
 
 
 func get_stack_panel(stack_key: String) -> Panel:
@@ -199,11 +214,11 @@ func expand_stack(stack_key: String) -> void:
 		return
 	
 	# Calculate mini-panel positions
-	var mini_size: Vector2 = Vector2(55, 50)
-	var spacing: float = mini_size.x + 6
-	var total_width: float = spacing * enemies.size() - 6
-	var start_x: float = panel.position.x + panel.size.x / 2 - total_width / 2
-	var base_y: float = panel.position.y + panel.size.y + 8
+	var mini_size: Vector2 = MINI_PANEL_SIZE
+	var layout: Dictionary = _calculate_mini_layout(panel, enemies.size(), mini_size)
+	var start_x: float = layout.start_x
+	var base_y: float = layout.base_y
+	var spacing: float = layout.spacing
 	
 	# Create mini-panels
 	for i: int in range(enemies.size()):
@@ -228,6 +243,8 @@ func expand_stack(stack_key: String) -> void:
 		tween.set_parallel(true)
 		tween.tween_property(mini_panel, "modulate:a", 1.0, 0.15).set_delay(i * 0.03)
 		tween.tween_property(mini_panel, "scale", Vector2.ONE, 0.15).set_delay(i * 0.03).set_ease(Tween.EASE_OUT)
+	
+	_reposition_expanded_stack(stack_key)
 	
 	stack_expanded.emit(stack_key)
 
@@ -360,6 +377,10 @@ func remove_stack(stack_key: String) -> void:
 	
 	var stack_data: Dictionary = stack_visuals[stack_key]
 	
+	# Emit exit signal so hover system can clean up if this stack was being hovered
+	if is_instance_valid(stack_data.panel):
+		stack_hover_exited.emit(stack_data.panel, stack_key)
+	
 	# Kill tweens
 	_kill_stack_tweens(stack_key)
 	
@@ -406,15 +427,37 @@ func _calculate_stack_position(ring: int, stack_key: String) -> Vector2:
 	var inner_radius: float = 0.0
 	if ring > 0:
 		inner_radius = arena_max_radius * ring_proportions[ring - 1]
-	var ring_radius: float = (inner_radius + outer_radius) / 2.0
+	# Position at 35% from inner to outer edge (clearly inside the ring, not at center)
+	var ring_radius: float = inner_radius + (outer_radius - inner_radius) * 0.35
 	
-	# Use stored angular position or default to top
-	var angle: float = _group_angular_positions.get(stack_key, PI * 1.5)
+	# Extract group_id from stack_key (format: "ring_enemytype_group_X")
+	# Look up angular position by group_id which persists across ring changes
+	var group_id: String = _extract_group_id_from_stack_key(stack_key)
+	var angle: float = _group_angular_positions.get(group_id, PI * 1.5)
 	
 	var offset: Vector2 = Vector2(cos(angle), sin(angle)) * ring_radius
 	var visual_size: Vector2 = _get_stack_visual_size()
 	
 	return arena_center + offset - visual_size / 2
+
+
+func _extract_group_id_from_stack_key(stack_key: String) -> String:
+	"""Extract group_id from stack_key. Format: 'ring_enemytype_group_X' -> 'group_X'"""
+	# Find the last occurrence of "group_" and return from there
+	var group_idx: int = stack_key.rfind("group_")
+	if group_idx >= 0:
+		return stack_key.substr(group_idx)
+	return stack_key  # Fallback to full key if no group_ found
+
+
+func set_group_angular_position(group_id: String, angle: float) -> void:
+	"""Set the angular position for a group. Persists across ring changes."""
+	_group_angular_positions[group_id] = angle
+
+
+func get_group_angular_position(group_id: String) -> float:
+	"""Get the angular position for a group."""
+	return _group_angular_positions.get(group_id, PI * 1.5)
 
 
 func _animate_stack_to_position(stack_key: String, panel: Panel, target_pos: Vector2) -> void:
@@ -427,6 +470,47 @@ func _animate_stack_to_position(stack_key: String, panel: Panel, target_pos: Vec
 	var tween: Tween = create_tween()
 	tween.tween_property(panel, "position", target_pos, 0.3).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
 	_stack_position_tweens[stack_key] = tween
+
+
+func _calculate_mini_layout(panel: Panel, count: int, mini_size: Vector2) -> Dictionary:
+	"""Calculate layout values for expanded mini-panels."""
+	var spacing: float = mini_size.x + 6.0
+	var total_width: float = 0.0
+	if count > 0:
+		total_width = spacing * count - 6.0
+	var start_x: float = panel.position.x + panel.size.x / 2.0 - total_width / 2.0
+	var base_y: float = max(panel.position.y - mini_size.y - MINI_PANEL_VERTICAL_GAP, 0.0)
+	return {
+		"start_x": start_x,
+		"base_y": base_y,
+		"spacing": spacing
+	}
+
+
+func _reposition_expanded_stack(stack_key: String) -> void:
+	"""Reposition mini-panels for an already expanded stack."""
+	if not stack_visuals.has(stack_key):
+		return
+	
+	var stack_data: Dictionary = stack_visuals[stack_key]
+	var panel: Panel = stack_data.panel
+	if not is_instance_valid(panel):
+		return
+	
+	var mini_panels: Array = stack_data.get("mini_panels", [])
+	if mini_panels.is_empty():
+		return
+	
+	var mini_size: Vector2 = MINI_PANEL_SIZE
+	var layout: Dictionary = _calculate_mini_layout(panel, mini_panels.size(), mini_size)
+	var start_x: float = layout.start_x
+	var base_y: float = layout.base_y
+	var spacing: float = layout.spacing
+	
+	for i: int in range(mini_panels.size()):
+		var mini_panel: Panel = mini_panels[i]
+		if is_instance_valid(mini_panel):
+			mini_panel.position = Vector2(start_x + i * spacing, base_y)
 
 
 func _kill_stack_tweens(stack_key: String) -> void:
@@ -453,9 +537,9 @@ func _on_stack_hover_enter(panel: Panel, stack_key: String) -> void:
 func _on_stack_hover_exit(panel: Panel, stack_key: String) -> void:
 	"""Handle stack hover exit."""
 	stack_hover_exited.emit(panel, stack_key)
-	# Schedule collapse after delay
+	# Schedule collapse after delay (0.1s to match info card hide for snappy feel)
 	if not _in_weapons_phase:
-		var timer: SceneTreeTimer = get_tree().create_timer(0.3)
+		var timer: SceneTreeTimer = get_tree().create_timer(0.1)
 		timer.timeout.connect(func():
 			if stack_visuals.has(stack_key) and stack_visuals[stack_key].expanded:
 				collapse_stack(stack_key)
@@ -470,4 +554,3 @@ func _on_mini_panel_hover_enter(panel: Panel, enemy, stack_key: String) -> void:
 func _on_mini_panel_hover_exit(panel: Panel, stack_key: String) -> void:
 	"""Handle mini-panel hover exit."""
 	mini_panel_hover_exited.emit(panel, stack_key)
-

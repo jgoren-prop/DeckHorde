@@ -2,6 +2,8 @@ extends Control
 class_name BattlefieldEffectsNode
 ## Handles all visual effects on the battlefield: projectiles, impacts, damage numbers.
 
+signal projectile_hit_enemy(enemy, impact_pos: Vector2)
+
 const DamageNumberClass = preload("res://scripts/combat/components/DamageNumber.gd")
 const BattlefieldEffectsHelper = preload("res://scripts/combat/BattlefieldEffects.gd")
 
@@ -10,6 +12,9 @@ var arena_center: Vector2 = Vector2.ZERO
 
 # Reference to combat_lane for weapon positions
 var combat_lane: Control = null
+
+# Pending projectile data for synchronized damage
+var _pending_projectile_enemy = null
 
 
 func _ready() -> void:
@@ -47,13 +52,28 @@ func fire_projectile_to_position(to_pos: Vector2, color: Color = Color(1.0, 0.9,
 
 
 func fire_fast_projectile_to_position(to_pos: Vector2, color: Color = Color(1.0, 0.9, 0.3), weapon_index: int = -1) -> void:
-	"""Fire a fast projectile, optionally from a weapon card."""
+	"""Fire a fast projectile, optionally from a weapon card. Non-blocking version."""
+	await _fire_projectile_internal(to_pos, color, weapon_index, null)
+
+
+func fire_weapon_projectile_at_enemy(enemy, to_pos: Vector2, color: Color, weapon_index: int) -> float:
+	"""Fire a weapon projectile at an enemy. Returns total animation time.
+	The projectile_hit_enemy signal will be emitted when the projectile hits."""
+	_pending_projectile_enemy = enemy
+	return await _fire_projectile_internal(to_pos, color, weapon_index, enemy)
+
+
+func _fire_projectile_internal(to_pos: Vector2, color: Color, weapon_index: int, enemy) -> float:
+	"""Internal projectile firing logic. Returns total animation time."""
 	var from_pos: Vector2 = arena_center
+	var gun_anim_time: float = 0.0
 	
-	# Get weapon position if available
+	# Get weapon position and animate gun if available
 	if weapon_index >= 0 and combat_lane:
 		if combat_lane.has_method("animate_pistol_fire_at_index"):
 			var target_global: Vector2 = to_pos + global_position
+			# Gun animation takes ~0.4s (aim + fire + return)
+			gun_anim_time = 0.4
 			await combat_lane.animate_pistol_fire_at_index(weapon_index, target_global)
 		
 		if combat_lane.has_method("get_pistol_barrel_position"):
@@ -88,10 +108,17 @@ func fire_fast_projectile_to_position(to_pos: Vector2, color: Color = Color(1.0,
 	tween.tween_property(projectile, "position", to_pos - projectile.size / 2, travel_time).set_ease(Tween.EASE_OUT)
 	tween.tween_callback(projectile.queue_free)
 	
+	# Schedule impact effects and signal
 	var impact_timer: SceneTreeTimer = get_tree().create_timer(travel_time)
+	var captured_enemy = enemy
 	impact_timer.timeout.connect(func():
 		create_impact_flash(to_pos, color)
+		if captured_enemy != null:
+			projectile_hit_enemy.emit(captured_enemy, to_pos)
 	)
+	
+	# Return total animation time for caller to await if needed
+	return gun_anim_time + travel_time
 
 
 func create_impact_flash(pos: Vector2, color: Color) -> void:

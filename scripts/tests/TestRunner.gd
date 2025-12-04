@@ -166,8 +166,8 @@ func _run_combat_manager_tests() -> void:
 	_assert(enemies.size() > 0, "enemies spawned on battlefield")
 	
 	# Test: Can play card check
-	var pistol = CardDatabase.get_card("infernal_pistol")
-	var can_play: bool = CombatManager.can_play_card(pistol, 1)
+	var pistol_card = CardDatabase.get_card("rusty_pistol")
+	var can_play: bool = CombatManager.can_play_card(pistol_card, 1)
 	_assert(can_play == true, "can_play_card returns true for playable card")
 	
 	await get_tree().process_frame
@@ -177,21 +177,21 @@ func _run_card_effect_tests() -> void:
 	print("[CardEffectResolver Tests]")
 	
 	# V2: Infernal Pistol is a sniper - targets Mid/Far only
-	var pistol = CardDatabase.get_card("infernal_pistol")
-	_assert(pistol != null, "infernal_pistol exists in database")
-	_assert(pistol.target_rings.size() == 2, "V2 pistol targets Mid/Far (2 rings)")
-	_assert(2 in pistol.target_rings, "V2 pistol can hit Mid ring")
-	_assert(3 in pistol.target_rings, "V2 pistol can hit Far ring")
+	var pistol = CardDatabase.get_card("rusty_pistol")
+	_assert(pistol != null, "rusty_pistol exists in database")
+	_assert(pistol.target_rings.size() == 4, "rusty_pistol targets all rings (4 entries)")
+	_assert(0 in pistol.target_rings, "rusty_pistol can hit Melee ring")
+	_assert(3 in pistol.target_rings, "rusty_pistol can hit Far ring")
 	
 	# Test: Card damage values
 	var damage: int = pistol.get_scaled_value("damage", 1)
-	_assert(damage == 4, "pistol base damage is 4")
+	_assert(damage == 3, "rusty_pistol base damage is 3")
 	
-	# Test: Shotgun targets Melee/Close rings
-	var shotgun = CardDatabase.get_card("choirbreaker_shotgun")
-	_assert(shotgun != null, "choirbreaker_shotgun exists")
-	_assert(0 in shotgun.target_rings, "V2 shotgun targets Melee ring")
-	_assert(1 in shotgun.target_rings, "V2 shotgun targets Close ring")
+	# Test: Spark Coil is Close-range defensive AoE
+	var spark_coil = CardDatabase.get_card("spark_coil")
+	_assert(spark_coil != null, "spark_coil exists")
+	_assert(spark_coil.target_rings.size() == 1, "spark_coil only targets Close ring")
+	_assert(0 in spark_coil.target_rings, "spark_coil targets the Close ring")
 	
 	await get_tree().process_frame
 
@@ -704,6 +704,39 @@ func _run_enemy_instance_tests() -> void:
 	# Test: Get definition
 	var def = enemy.get_definition()
 	_assert(def != null, "get_definition returns EnemyDefinition")
+	
+	# Test: Melee enemy attack prediction
+	var melee_attacker: EnemyInstance = EnemyInstanceScript.new()
+	melee_attacker.enemy_id = "husk"
+	melee_attacker.ring = 0
+	var melee_def: EnemyDefinition = EnemyDatabase.get_enemy("husk")
+	_assert(melee_def != null, "melee enemy definition exists")
+	_assert(melee_attacker.will_attack_this_turn(melee_def) == true, "melee enemy attacks in melee ring")
+	var melee_wave: int = 1
+	var melee_damage: int = melee_attacker.get_predicted_attack_damage(melee_wave, melee_def)
+	_assert(melee_damage == melee_def.get_scaled_damage(melee_wave), "predicted melee damage matches definition")
+	
+	# Test: Ranged enemy attack prediction
+	var ranged_attacker: EnemyInstance = EnemyInstanceScript.new()
+	ranged_attacker.enemy_id = "spitter"
+	var ranged_def: EnemyDefinition = EnemyDatabase.get_enemy("spitter")
+	_assert(ranged_def != null, "ranged enemy definition exists")
+	ranged_attacker.ring = ranged_def.target_ring
+	_assert(ranged_attacker.will_attack_this_turn(ranged_def) == true, "ranged enemy attacks at target ring")
+	var ranged_wave: int = 1
+	var ranged_damage: int = ranged_attacker.get_predicted_attack_damage(ranged_wave, ranged_def)
+	_assert(ranged_damage == ranged_def.get_scaled_damage(ranged_wave), "predicted ranged damage matches definition")
+	ranged_attacker.ring = 3
+	_assert(ranged_attacker.will_attack_this_turn(ranged_def) == false, "ranged enemy unable to attack outside target ring")
+	
+	# Test: Bombers and other suicide enemies never attack through threat calc
+	var bomber_enemy: EnemyInstance = EnemyInstanceScript.new()
+	bomber_enemy.enemy_id = "bomber"
+	bomber_enemy.ring = 0
+	var bomber_def: EnemyDefinition = EnemyDatabase.get_enemy("bomber")
+	_assert(bomber_def != null, "bomber definition exists")
+	_assert(bomber_enemy.will_attack_this_turn(bomber_def) == false, "suicide enemy does not attack directly")
+	_assert(bomber_enemy.get_predicted_attack_damage(1, bomber_def) == 0, "suicide enemy predicted damage is zero")
 	
 	await get_tree().process_frame
 

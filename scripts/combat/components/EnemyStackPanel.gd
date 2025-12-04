@@ -73,6 +73,8 @@ func setup(p_enemy_id: String, p_ring: int, p_enemies: Array, p_color: Color, p_
 	set_meta("stack_key", stack_key)
 	set_meta("enemy_id", enemy_id)
 	set_meta("ring", ring)
+	if not enemies.is_empty():
+		set_meta("representative_enemy", enemies[0])
 	
 	# Set panel size
 	custom_minimum_size = visual_size
@@ -161,6 +163,8 @@ func update_count(new_enemies: Array) -> void:
 	"""Update the enemy count when enemies are added or removed."""
 	enemies = new_enemies.duplicate()
 	count_label.text = "x" + str(enemies.size())
+	if not enemies.is_empty():
+		set_meta("representative_enemy", enemies[0])
 	update_aggregate_hp()
 
 
@@ -204,7 +208,7 @@ func _setup_intent_indicator(enemy_def, _panel_width: float) -> void:
 		return
 	
 	var representative = enemies[0]
-	if not is_instance_valid(representative):
+	if representative == null:
 		return
 	
 	var current_ring: int = representative.ring
@@ -217,16 +221,12 @@ func _setup_intent_indicator(enemy_def, _panel_width: float) -> void:
 		move_distance = min(enemy_def.movement_speed, current_ring - enemy_def.target_ring)
 	
 	# Calculate attack intent
-	var will_attack: bool = false
+	var will_attack: bool = representative.will_attack_this_turn(enemy_def)
 	var total_attack_damage: int = 0
 	var wave: int = RunManager.current_wave
 	var damage_per_enemy: int = enemy_def.get_scaled_damage(wave)
 	
-	if current_ring == 0:
-		will_attack = true
-		total_attack_damage = damage_per_enemy * enemy_count
-	elif enemy_def.attack_type == "ranged" and current_ring == enemy_def.target_ring:
-		will_attack = true
+	if will_attack:
 		total_attack_damage = damage_per_enemy * enemy_count
 	
 	var y_offset: float = 0.0
@@ -346,4 +346,3 @@ static func create(p_enemy_id: String, p_ring: int, p_enemies: Array, p_color: C
 	var instance: EnemyStackPanel = scene.instantiate()
 	instance.call_deferred("setup", p_enemy_id, p_ring, p_enemies, p_color, p_stack_key, visual_size)
 	return instance
-

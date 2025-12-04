@@ -266,6 +266,25 @@ func take_damage(amount: int) -> void:
 		AudioManager.play_damage_taken()
 
 
+func heal(amount: int) -> void:
+	"""Restore HP by the requested amount (scaled by heal power)."""
+	if amount <= 0:
+		return
+	
+	var scaled_amount: int = int(float(amount) * get_heal_power_multiplier())
+	if scaled_amount <= 0:
+		return
+	
+	var new_hp: int = mini(current_hp + scaled_amount, player_stats.max_hp)
+	if new_hp == current_hp:
+		return
+	
+	current_hp = new_hp
+	hp_changed.emit(current_hp, max_hp)
+	health_changed.emit(current_hp, max_hp)
+	AudioManager.play_heal()
+
+
 func add_armor(amount: int) -> void:
 	# V2: Apply armor gain multiplier
 	var scaled_amount: int = int(float(amount) * get_armor_gain_multiplier())

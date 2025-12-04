@@ -144,6 +144,17 @@
 
 ## In Progress
 
+### Battlefield UI Polish
+- ✅ Enlarged battlefield semicircle footprint (BattlefieldArena offset + BattlefieldRings padding) so the arc ends just above the Combat Lane.
+- ✅ Adjusted stack expansion layout (16px gap) so mini enemy cards sit above their group card instead of overlapping it.
+- ✅ Repositioned the encyclopedia/info card to the right of the group card, aligned just below the mini cards, and removed the hover delay so it appears alongside the mini row.
+- ✅ **Weapon animation timing sync**: Gun aim → muzzle flash → bullet fires → bullet hits enemy → damage visuals. Previously damage appeared before bullet arrived.
+- ✅ **Real-time mini-panel HP**: Individual mini-panel HP bars now update immediately when an enemy in an expanded stack takes damage.
+- ✅ **Unit death display**: Enemy HP clamped to 0 (no negative HP). Mini-panels animate death (flash red, scale, fade) and remaining panels reposition.
+- ✅ **Encyclopedia card cleanup**: Info cards now properly hide when stacks are removed or hover state is lost. Previously they could stay up indefinitely.
+- ✅ **Group angular positioning**: Multiple enemy groups in the same ring are now evenly spread across the semicircle instead of all appearing at the same position. Groups rebalance when others are added or removed.
+- ✅ **Ring movement preserves relative position**: When enemy groups move between rings, they maintain their angular position for smooth visual transitions. Groups in both old and new rings rebalance automatically.
+
 ### Code Refactoring (Best Practices)
 Extracted UI panel builders, helpers, and scene components to keep files under 500 lines:
 
@@ -198,12 +209,16 @@ This is a significant architectural overhaul beyond simple refactoring.
 - [ ] Test explosive damage and splash mechanics
 - [ ] Test beam chaining with hex spread
 - [ ] Test piercing overflow mechanics
+- [x] Regression: MiniEnemyPanel autoload + setup coverage (`scenes/tests/TestMiniEnemyPanel.tscn`)
 - [ ] Test shock slow application
 - [ ] Test corrosive armor shred
 - [ ] Test all 32 new artifact triggers
 - [ ] Verify Overclock fires all deployed guns
 - [ ] Verify Tag Infusion adds tags to guns
 - [ ] Test cross-tag synergies (beam+hex, explosive+barrier, etc.)
+- [x] Verify Battlefield enemy center position damage numbers (TestEnemyCenterPosition)
+- [x] Regression: Battlefield stack hover + layout (TestBattlefieldUI)
+- [x] Regression: Threat rings use EnemyInstance attack predictions (BattlefieldArena/TestRunner)
 
 ---
 

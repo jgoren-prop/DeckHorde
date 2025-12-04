@@ -49,6 +49,7 @@ var _barrier_pulse_time: float = 0.0
 # Layout
 var arena_center: Vector2 = Vector2.ZERO
 var arena_max_radius: float = 200.0
+const SEMICIRCLE_PADDING: float = 18.0
 
 
 func _ready() -> void:
@@ -60,7 +61,7 @@ func _process(delta: float) -> void:
 	_threat_pulse_time += delta * 4.0
 	_barrier_pulse_time += delta * 3.0
 	
-	# Only redraw if we have critical threats or barriers
+	# Only redraw if we have critical threats, barriers, or highlights
 	var needs_redraw: bool = false
 	for level: ThreatLevel in ring_threat_levels:
 		if level == ThreatLevel.CRITICAL:
@@ -69,6 +70,12 @@ func _process(delta: float) -> void:
 	
 	if not ring_barriers.is_empty():
 		needs_redraw = true
+	
+	# Also redraw if any rings are highlighted (for smooth visual updates)
+	for is_highlighted: bool in _highlighted_rings:
+		if is_highlighted:
+			needs_redraw = true
+			break
 	
 	if needs_redraw:
 		queue_redraw()
@@ -91,15 +98,24 @@ func _draw() -> void:
 		
 		# Fill - draw as a filled arc (polygon)
 		var fill_color: Color = RING_COLORS[i]
+		
+		# Apply highlight effect when ring is highlighted (card targeting)
+		if _highlighted_rings[i]:
+			fill_color = Color(0.25, 0.55, 0.25, 0.35)  # Green tint for valid target
+		
 		_draw_semicircle_fill(arena_center, inner_radius, outer_radius, ARC_START, ARC_END, fill_color)
 		
-		# Border with threat color
+		# Border with threat color (or highlight color)
 		var threat_level: ThreatLevel = ring_threat_levels[i]
 		var border_color: Color = THREAT_COLORS[threat_level]
 		var border_width: float = THREAT_BORDER_WIDTH[threat_level]
 		
-		# Pulse critical rings
-		if threat_level == ThreatLevel.CRITICAL:
+		# Override border for highlighted rings
+		if _highlighted_rings[i]:
+			border_color = Color(0.3, 0.9, 0.3, 1.0)  # Bright green border
+			border_width = 4.0
+		# Pulse critical rings (only if not highlighted)
+		elif threat_level == ThreatLevel.CRITICAL:
 			var pulse: float = (sin(_threat_pulse_time) + 1.0) / 2.0
 			border_color = border_color.lightened(pulse * 0.3)
 			border_width += pulse * 2.0
@@ -219,13 +235,13 @@ func recalculate_layout() -> void:
 	"""Recalculate layout based on current size for a semicircle."""
 	# For a semicircle facing upward, place center at bottom-center of arena
 	# with some padding so the warden circle is visible
-	var padding: float = 30.0
+	var padding: float = SEMICIRCLE_PADDING
 	arena_center = Vector2(size.x / 2, size.y - padding)
 	
 	# Radius can use full width (since it's a semicircle) or height minus padding
 	# Use whichever is smaller to ensure it fits
-	var max_by_width: float = (size.x / 2) * 0.95  # 95% of half-width
-	var max_by_height: float = (size.y - padding * 2) * 0.95  # 95% of available height
+	var max_by_width: float = (size.x / 2) * 0.98  # allow rings to push further horizontally
+	var max_by_height: float = (size.y - padding * 2) * 0.98  # reduce unused space vertically
 	arena_max_radius = min(max_by_width, max_by_height)
 	
 	queue_redraw()

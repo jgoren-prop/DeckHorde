@@ -62,8 +62,8 @@ Enemies spawn in the **FAR** ring and advance toward the player each turn:
 
 #### Visual Layout + Scaling
 
-- `scenes/Combat.tscn` anchors `BattlefieldArena` across the full viewport with 70px margins
-- `BattlefieldArena.gd` sets `max_radius = min(size.x, size.y) * 0.58`
+- `scenes/Combat.tscn` now anchors `BattlefieldArena` from `offset_top = 50` down to `offset_bottom = -585`, so the semicircle center lands a few pixels above the Combat Lane regardless of resolution.
+- `BattlefieldRings.gd` dropped its padding to 18px and now consumes 98% of the available half-width/height, making the rings visibly larger without bleeding into the lane.
 - Enemy panels scale with viewport: width = `clamp(shortest_side * 0.11, 70, 150)`
 
 #### Enemy Display System (Horde Handling)
@@ -75,6 +75,24 @@ Enemies spawn in the **FAR** ring and advance toward the player each turn:
 - Identical enemies collapse into a "stack" panel with count badge (e.g., "x5")
 - Stack shows aggregate HP bar
 - **Expand on Hover**: Hovering fans out mini-panels showing individual HP
+
+##### Mini Enemy Stack Panels
+- `MiniEnemyPanel.gd` waits for the node's `ready` signal before laying out child controls so `@onready` references exist even when created via factories and added to the tree later.
+- Enemy metadata (icon glyph, behavior badge tooltip) always resolves through the `EnemyDatabase` autoload rather than `Engine.get_singleton`, matching the rest of combat systems and preventing null singletons.
+- Regression coverage lives in `scenes/tests/TestMiniEnemyPanel.tscn` (`scripts/tests/TestMiniEnemyPanel.gd`), which instantiates a panel with a stub husk enemy, awaits `setup`, and asserts both the icon text and behavior badge match the database definition.
+- Stack hover/layout regression coverage lives in `scenes/tests/TestBattlefieldUI.tscn` (`scripts/tests/TestBattlefieldUI.gd`), which asserts mini-panels remain above the stack card and verifies only the parent stack (not mini-panels) spawns the info card tooltip.
+- Expanded mini-panels now fan out **above** their parent stack card with a fixed 16px gap so the group panel stays fully visible.
+- Hovering the main stack card spawns the encyclopedia-style info card immediately, anchored to the right edge of the stack card and vertically aligned just below the mini-panel row; hovering individual mini-panels still suppresses info cards to keep the UI clean.
+- **Real-time HP updates**: When an enemy in an expanded stack takes damage, its individual mini-panel HP bar updates immediately alongside the stack's aggregate HP bar.
+- **Death animation**: When a unit dies, its mini-panel flashes red, scales up briefly, then fades out. Remaining mini-panels reposition smoothly to fill the gap. Enemy HP is clamped to 0 (never shows negative).
+- **Group angular positioning**: Multiple enemy groups of different types in the same ring are distributed evenly across a semicircle arc (PI*1.1 to PI*1.9, ~20° padding from edges). Single group in a ring centers at the top (PI*1.5). When groups are added/removed, existing groups animate to rebalanced positions.
+- **Ring movement position preservation**: When a group moves from one ring to another, its angular position is preserved via `_group_angular_positions` dictionary (keyed by group_id, not stack_key). Groups in both source and destination rings rebalance to maintain even spacing.
+- **Encyclopedia card lifecycle**: Info cards properly hide when: (1) stacks are removed, (2) hover state is lost, (3) `_refresh_all_visuals()` is called. The hover system clears pending timers and anchor rects when `clear()` is called.
+
+#### Enemy Center Targeting & Damage Numbers
+- `BattlefieldEnemyManager.get_enemy_center_position(instance_id: int)` resolves centers using only the integer `instance_id`, matching how `CombatManager.deal_damage_to_random_enemy()` references targets.
+- Destroyed visuals linger in `destroyed_visuals`, and the helper now falls back to those panels so late projectiles and death particles still aim at the correct coordinates instead of `(0,0)`.
+- Regression coverage lives in `scenes/tests/TestEnemyCenterPosition.tscn` (`scripts/tests/TestEnemyCenterPosition.gd`), which instantiates the manager, spawns an enemy, and asserts the helper matches the panel midpoint.
 
 ### Turn Structure
 
@@ -690,6 +708,8 @@ Ring borders dynamically color-coded by threat level:
 | High | Red | 21+ damage OR bomber present |
 | Critical | Pulsing Red | Lethal damage (would kill player) |
 
+Threat evaluation pulls directly from each `EnemyInstance` via `will_attack_this_turn()` and `get_predicted_attack_damage()`: melee foes only count when already in ring 0, ranged enemies only count once they reach their target ring and are within `attack_range`, and suicide/bomber types are explicitly excluded so they only flip the "bomber present" flag, not the damage total. The same prediction helper drives stack intent panels so every attack indicator mirrors the actual combat resolution rules.
+
 ### Aggregated Intent Bar
 
 Top bar summarizing battlefield state:
@@ -755,7 +775,7 @@ A Hearthstone-style "board" for deployed persistent weapons, positioned between 
 | Feature | Description |
 |---------|-------------|
 | Deployment Animation | Cards fly from hand to lane with shrink effect |
-| Weapon Fire Effect | Cards pulse briefly when triggering (no glow borders) |
+| Weapon Fire Effect | Cards pulse briefly and pistol visuals fire a fast projectile from the lane to the targeted enemy. Animation is fully synchronized: gun aims → muzzle flash → bullet fires → bullet hits → damage visuals appear |n
 | Damage Floater | "-X⚔" rises from card when damage dealt |
 | Capacity Limit | Maximum 7 weapons deployed at once |
 | Card Scale | Cards auto-resize to ~80% of lane height whenever the lane resizes |

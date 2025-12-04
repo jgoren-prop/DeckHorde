@@ -2,7 +2,7 @@ extends RefCounted
 class_name BattlefieldTargetingHints
 ## Manages card targeting hint display - shows which enemies would be hit on card hover.
 
-# EnemyDatabase is accessed via Engine.get_singleton at runtime
+# EnemyDatabase is provided via autoload singleton
 
 # Colors
 const TARGETING_HINT_COLOR: Color = Color(1.0, 0.95, 0.4, 0.3)
