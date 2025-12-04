@@ -68,6 +68,25 @@ Enemies spawn in the **FAR** ring and advance toward the player each turn:
 
 #### Enemy Display System (Horde Handling)
 
+**Lane-Based Placement System** (12 fixed lanes):
+- Groups occupy specific lane slots (0-11) distributed evenly across 180° semicircle
+- Lane 0 = far left (angle PI), Lane 11 = far right (angle 2*PI), Lane 6 = center top
+- New groups assigned random available lane
+- Lane index persists when groups move between rings (Far→Mid→Close→Melee)
+- Maintains relative left/right ordering at all times
+
+**Collision Prevention**:
+- 12px pixel buffer between group panels
+- Size clamping: panels scale to 0.7x minimum when >6 groups in a ring
+- Adjacent panels nudged apart if overlap detected after positioning
+
+**Z-Order by Ring**:
+- Melee (ring 0): z_index = 4 (renders on top)
+- Close (ring 1): z_index = 3
+- Mid (ring 2): z_index = 2
+- Far (ring 3): z_index = 1
+- Ensures groups in closer rings render above groups in farther rings
+
 **Multi-Row Distribution** (5-8 enemies in a ring):
 - Enemies distributed across inner (35% depth) and outer (75% depth) rows
 
@@ -85,8 +104,10 @@ Enemies spawn in the **FAR** ring and advance toward the player each turn:
 - Hovering the main stack card spawns the encyclopedia-style info card immediately, anchored to the right edge of the stack card and vertically aligned just below the mini-panel row; hovering individual mini-panels still suppresses info cards to keep the UI clean.
 - **Real-time HP updates**: When an enemy in an expanded stack takes damage, its individual mini-panel HP bar updates immediately alongside the stack's aggregate HP bar.
 - **Death animation**: When a unit dies, its mini-panel flashes red, scales up briefly, then fades out. Remaining mini-panels reposition smoothly to fill the gap. Enemy HP is clamped to 0 (never shows negative).
-- **Group angular positioning**: Multiple enemy groups of different types in the same ring are distributed evenly across a semicircle arc (PI*1.1 to PI*1.9, ~20° padding from edges). Single group in a ring centers at the top (PI*1.5). When groups are added/removed, existing groups animate to rebalanced positions.
-- **Ring movement position preservation**: When a group moves from one ring to another, its angular position is preserved via `_group_angular_positions` dictionary (keyed by group_id, not stack_key). Groups in both source and destination rings rebalance to maintain even spacing.
+- **Lane-based group positioning**: Groups use a fixed 12-lane system instead of dynamic angular distribution. Lane 0 = far left, Lane 11 = far right. New groups randomly assigned to available lanes in their ring.
+- **Ring movement lane preservation**: When a group moves between rings, its lane index is preserved. The group moves radially (same angle, different radius) without lateral drift. `_occupied_lanes[ring][lane] = group_id` tracks occupancy.
+- **Non-overlap enforcement**: 12px collision buffer, panels nudged apart if overlapping. Size clamping (min 0.7x scale) when >6 groups per ring.
+- **Z-order by ring**: Melee groups render above Close, above Mid, above Far (z_index = 4, 3, 2, 1 respectively).
 - **Encyclopedia card lifecycle**: Info cards properly hide when: (1) stacks are removed, (2) hover state is lost, (3) `_refresh_all_visuals()` is called. The hover system clears pending timers and anchor rects when `clear()` is called.
 
 #### Enemy Center Targeting & Damage Numbers

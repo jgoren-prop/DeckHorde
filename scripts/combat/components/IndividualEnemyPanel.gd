@@ -210,3 +210,4 @@ static func create(enemy, color: Color, visual_size: Vector2) -> IndividualEnemy
 	instance.call_deferred("setup", enemy, color, visual_size)
 	return instance
 
+

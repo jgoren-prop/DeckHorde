@@ -2,7 +2,9 @@ extends Control
 class_name BattlefieldHoverSystem
 ## Handles hover states and info cards for enemies and stacks.
 
+@warning_ignore("unused_signal")
 signal info_card_requested(enemy, position: Vector2)
+@warning_ignore("unused_signal")
 signal info_card_hide_requested()
 
 const BattlefieldInfoCardsHelper = preload("res://scripts/combat/BattlefieldInfoCards.gd")

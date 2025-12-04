@@ -40,7 +40,7 @@ var center: Vector2 = Vector2.ZERO
 var max_radius: float = 200.0
 
 # Stacking config
-const STACK_THRESHOLD: int = 3
+const STACK_THRESHOLD: int = 2
 
 
 func _ready() -> void:
@@ -238,17 +238,49 @@ func _create_or_update_enemy_visual(enemy) -> void:
 	var enemy_count: int = group_data.enemies.size()
 	
 	if enemy_count >= STACK_THRESHOLD:
-		# Should be a stack - _ensure_stack_exists handles hiding all individual visuals
-		_ensure_stack_exists(group_id, group_data)
+		# Should be a stack
+		var stack_key: String = str(group_data.ring) + "_" + group_data.enemy_id + "_" + group_id
+		
+		if stack_system and stack_system.has_stack(stack_key):
+			# Update existing stack with new enemy count
+			_update_stack_enemies(stack_key, group_data)
+		else:
+			# Create new stack - _ensure_stack_exists handles hiding all individual visuals
+			_ensure_stack_exists(group_id, group_data)
 	else:
-		# Should be individual
+		# Should be individual - calculate unique position for each enemy in the group
 		if enemy_manager and not enemy_manager.has_enemy_visual(enemy.instance_id):
+			var angular_pos: float = _calculate_intra_group_position(enemy, group_data)
+			enemy_manager.set_enemy_angular_position(enemy.instance_id, angular_pos)
 			enemy_manager.create_enemy_visual(enemy)
 
 
+func _update_stack_enemies(stack_key: String, group_data: Dictionary) -> void:
+	"""Update an existing stack's enemy list and visuals."""
+	if not stack_system or not stack_system.stack_visuals.has(stack_key):
+		return
+	
+	var stack_data: Dictionary = stack_system.stack_visuals[stack_key]
+	
+	# Update the enemies array
+	stack_data.enemies = group_data.enemies.duplicate()
+	
+	# Update the panel count display
+	var panel: Panel = stack_data.panel
+	if is_instance_valid(panel) and panel.has_method("update_count"):
+		panel.update_count(group_data.enemies)
+	
+	# Hide any individual visuals for enemies in this group
+	if enemy_manager:
+		for e in group_data.enemies:
+			if enemy_manager.has_enemy_visual(e.instance_id):
+				enemy_manager.hide_enemy_visual(e.instance_id)
+
+
 func _find_or_create_group(ring: int, enemy_id: String, enemy) -> String:
-	"""Find an existing group or create a new one for an enemy."""
-	# Look for existing group
+	"""Find an existing group or create a new one for an enemy.
+	All enemies of the same type in the same ring are merged into one group."""
+	# Look for existing group with same enemy type in same ring
 	for group_id: String in enemy_groups.keys():
 		var group: Dictionary = enemy_groups[group_id]
 		if group.ring == ring and group.enemy_id == enemy_id:
@@ -260,76 +292,41 @@ func _find_or_create_group(ring: int, enemy_id: String, enemy) -> String:
 					break
 			if not found:
 				group.enemies.append(enemy)
+			# Set the group_id on the enemy so it can be tracked
+			enemy.group_id = group_id
 			return group_id
 	
-	# Create new group with unique angular position
+	# Create new group with random lane assignment
 	_next_group_id += 1
 	var group_id: String = "group_" + str(_next_group_id)
 	
-	# Calculate a unique angular position for this group within the ring
-	var angular_pos: float = _calculate_unique_angular_position(ring, group_id)
+	# Assign a random lane for this group (lane persists across ring changes)
+	var assigned_lane: int = 6  # Default center lane
+	if stack_system:
+		assigned_lane = stack_system.assign_random_lane(ring, group_id)
+	
+	# Convert lane to angular position for legacy compatibility
+	var angular_pos: float = PI + (float(assigned_lane) / float(11)) * PI  # Lane 0-11 maps to PI-2*PI
 	
 	enemy_groups[group_id] = {
 		"ring": ring,
 		"enemy_id": enemy_id,
 		"enemies": [enemy],
-		"angular_position": angular_pos
+		"angular_position": angular_pos,
+		"lane": assigned_lane
 	}
 	
-	# Store the angular position in stack_system by group_id (persists across ring changes)
-	if stack_system:
-		stack_system.set_group_angular_position(group_id, angular_pos)
+	# Set the group_id on the enemy so it can be tracked
+	enemy.group_id = group_id
 	
 	return group_id
 
 
-func _calculate_unique_angular_position(ring: int, _new_group_id: String) -> float:
-	"""Calculate a unique angular position for a new group in a ring.
-	Spreads groups evenly across a semicircle (PI to 2*PI, from left to right via top)."""
-	
-	# Count existing groups in this ring (not including the new one)
-	var groups_in_ring: Array[String] = []
-	for gid: String in enemy_groups.keys():
-		if enemy_groups[gid].ring == ring:
-			groups_in_ring.append(gid)
-	
-	# Total groups including the new one
-	var total_groups: int = groups_in_ring.size() + 1
-	
-	# Find the index for the new group (it will be last)
-	var new_group_index: int = total_groups - 1
-	
-	# Distribute across semicircle (PI to 2*PI, i.e., left side to right side via top)
-	# This matches the visual layout where PI*1.5 is the top center
-	# Single group -> top center (PI * 1.5)
-	# Two groups -> evenly spread (e.g., PI*1.25 and PI*1.75)
-	# etc.
-	
-	if total_groups == 1:
-		return PI * 1.5  # Top center
-	
-	# Calculate spacing - spread across semicircle with padding on edges
-	var arc_start: float = PI * 1.1   # ~20° from left
-	var arc_end: float = PI * 1.9     # ~20° from right
-	var arc_range: float = arc_end - arc_start
-	
-	var spacing: float = arc_range / float(total_groups - 1) if total_groups > 1 else 0.0
-	var angle: float = arc_start + spacing * new_group_index
-	
-	# Also reposition existing groups to maintain even spacing
-	for i: int in range(groups_in_ring.size()):
-		var existing_gid: String = groups_in_ring[i]
-		var existing_angle: float = arc_start + spacing * i
-		enemy_groups[existing_gid].angular_position = existing_angle
-		if stack_system:
-			stack_system.set_group_angular_position(existing_gid, existing_angle)
-			# Also update the visual position if a stack exists
-			var existing_group: Dictionary = enemy_groups[existing_gid]
-			var stack_key: String = str(existing_group.ring) + "_" + existing_group.enemy_id + "_" + existing_gid
-			if stack_system.has_stack(stack_key):
-				stack_system.update_stack_position(stack_key, true)  # Animate to new position
-	
-	return angle
+func _calculate_angular_position_for_lane(lane: int) -> float:
+	"""Calculate the angular position for a given lane index.
+	Lane 0 = PI (far left), Lane 11 = 2*PI (far right)."""
+	var total_lanes: int = 12  # Match BattlefieldStackSystem.TOTAL_LANES
+	return PI + (float(lane) / float(total_lanes - 1)) * PI
 
 
 func _ensure_stack_exists(group_id: String, group_data: Dictionary) -> void:
@@ -609,7 +606,7 @@ func _on_enemy_death_finished(_enemy) -> void:
 
 
 func _on_enemy_moved(enemy, from_ring: int, to_ring: int) -> void:
-	"""Handle enemy movement."""
+	"""Handle enemy movement. Lane is preserved across ring transitions."""
 	# Find the group for this enemy and track if ring changed
 	var moved_group_id: String = ""
 	for group_id: String in enemy_groups.keys():
@@ -623,7 +620,15 @@ func _on_enemy_moved(enemy, from_ring: int, to_ring: int) -> void:
 		if not moved_group_id.is_empty():
 			break
 	
-	# Update visual position
+	# Update occupied lanes tracking when a group changes rings
+	if not moved_group_id.is_empty() and stack_system:
+		# Release lane in old ring
+		stack_system.release_lane(moved_group_id, from_ring)
+		# Re-occupy lane in new ring (same lane index preserved)
+		var lane: int = stack_system.get_group_lane(moved_group_id)
+		stack_system.set_group_lane(moved_group_id, lane, to_ring)
+	
+	# Update visual position (lane stays the same, only radius changes)
 	if enemy_manager and enemy_manager.has_enemy_visual(enemy.instance_id):
 		enemy_manager.update_enemy_position(enemy, true)
 	
@@ -632,48 +637,24 @@ func _on_enemy_moved(enemy, from_ring: int, to_ring: int) -> void:
 		if not stack_key.is_empty():
 			stack_system.update_stack_ring(stack_key, to_ring, true)
 	
-	# Rebalance groups in both old and new rings when a group moves
-	if not moved_group_id.is_empty():
-		_rebalance_groups_in_ring(from_ring)
-		_rebalance_groups_in_ring(to_ring)
-	
 	_update_threat_levels()
 
 
-func _rebalance_groups_in_ring(ring: int) -> void:
-	"""Rebalance angular positions of all groups in a ring for even spacing."""
-	# Collect all groups in this ring
-	var groups_in_ring: Array[String] = []
+func _update_group_visuals_in_ring(ring: int) -> void:
+	"""Update visual positions for all groups in a ring.
+	With lane-based positioning, groups keep their assigned lanes - no rebalancing needed."""
 	for gid: String in enemy_groups.keys():
-		if enemy_groups[gid].ring == ring:
-			groups_in_ring.append(gid)
-	
-	if groups_in_ring.is_empty():
-		return
-	
-	# Single group -> center
-	if groups_in_ring.size() == 1:
-		var gid: String = groups_in_ring[0]
-		var angle: float = PI * 1.5  # Top center
-		enemy_groups[gid].angular_position = angle
-		if stack_system:
-			stack_system.set_group_angular_position(gid, angle)
+		var group: Dictionary = enemy_groups[gid]
+		if group.ring == ring:
+			# Get lane-based angle
+			var lane: int = group.get("lane", 6)
+			var angle: float = _calculate_angular_position_for_lane(lane)
+			group.angular_position = angle
+			
+			# Update stack visual if exists
 			_update_stack_visual_position(gid)
-		return
-	
-	# Multiple groups -> distribute evenly
-	var arc_start: float = PI * 1.1   # ~20° from left
-	var arc_end: float = PI * 1.9     # ~20° from right
-	var arc_range: float = arc_end - arc_start
-	var spacing: float = arc_range / float(groups_in_ring.size() - 1)
-	
-	for i: int in range(groups_in_ring.size()):
-		var gid: String = groups_in_ring[i]
-		var angle: float = arc_start + spacing * i
-		enemy_groups[gid].angular_position = angle
-		if stack_system:
-			stack_system.set_group_angular_position(gid, angle)
-			_update_stack_visual_position(gid)
+			# Update individual enemy positions
+			_update_individual_enemy_positions(gid, angle)
 
 
 func _update_stack_visual_position(group_id: String) -> void:
@@ -689,6 +670,55 @@ func _update_stack_visual_position(group_id: String) -> void:
 	
 	if stack_system.has_stack(stack_key):
 		stack_system.update_stack_position(stack_key, true)  # Animate to new position
+
+
+func _update_individual_enemy_positions(group_id: String, _angle: float) -> void:
+	"""Update the visual positions of all individual enemies in a group."""
+	if not enemy_manager:
+		return
+	
+	if not enemy_groups.has(group_id):
+		return
+	
+	var group: Dictionary = enemy_groups[group_id]
+	for enemy in group.enemies:
+		if enemy_manager.has_enemy_visual(enemy.instance_id):
+			var actual_angle: float = _calculate_intra_group_position(enemy, group)
+			enemy_manager.set_enemy_angular_position(enemy.instance_id, actual_angle)
+			enemy_manager.update_enemy_position(enemy, true)  # Animate to new position
+
+
+func _calculate_intra_group_position(enemy, group_data: Dictionary) -> float:
+	"""Calculate the angular position for an individual enemy within a group.
+	Spreads enemies slightly apart when there are multiple individuals in the same group."""
+	# Get lane-based angle (ensures we use lane, not legacy angular_position)
+	var lane: int = group_data.get("lane", 6)
+	var base_angle: float = _calculate_angular_position_for_lane(lane)
+	var enemies: Array = group_data.enemies
+	var enemy_count: int = enemies.size()
+	
+	# If only 1 enemy, use the group's base position
+	if enemy_count <= 1:
+		return base_angle
+	
+	# Find this enemy's index in the group
+	var enemy_index: int = -1
+	for i: int in range(enemies.size()):
+		if enemies[i].instance_id == enemy.instance_id:
+			enemy_index = i
+			break
+	
+	if enemy_index < 0:
+		return base_angle
+	
+	# Spread enemies apart within the group
+	# Use angular offset (~0.25 radians = ~14 degrees between enemies)
+	# This provides good visual separation for 2 individual enemies
+	var spread_angle: float = 0.25  # radians (~14 degrees)
+	var total_spread: float = spread_angle * (enemy_count - 1)
+	var start_offset: float = -total_spread / 2.0
+	
+	return base_angle + start_offset + (enemy_index * spread_angle)
 
 
 

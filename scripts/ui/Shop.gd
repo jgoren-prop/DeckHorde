@@ -2,8 +2,8 @@ extends Control
 ## Shop - Post-wave shop screen with cards, artifacts, merges, and services
 ## Uses ShopPanelBuilder and ShopStatsFormatter for UI creation (see scripts/ui/shop/)
 
-const ShopPanelBuilder = preload("res://scripts/ui/shop/ShopPanelBuilder.gd")
-const ShopStatsFormatter = preload("res://scripts/ui/shop/ShopStatsFormatter.gd")
+# Note: ShopPanelBuilder and ShopStatsFormatter are globally available via class_name
+# No const needed - use the class_name directly
 
 @onready var scrap_label: Label = $MarginContainer/VBox/Header/ScrapContainer/ScrapLabel
 @onready var card_slots: HBoxContainer = $MarginContainer/VBox/CardsSection/CardSlots

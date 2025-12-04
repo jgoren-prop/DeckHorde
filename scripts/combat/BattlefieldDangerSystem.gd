@@ -149,7 +149,7 @@ func _remove_danger_glow(key: String) -> void:
 		_danger_glow_panels.erase(key)
 
 
-func update_all_danger_highlights(enemy_visuals: Dictionary, stack_visuals: Dictionary, arena: Node, enemy_colors: Dictionary) -> void:
+func update_all_danger_highlights(enemy_visuals: Dictionary, stack_visuals: Dictionary, arena: Node, _enemy_colors: Dictionary) -> void:
 	"""Update danger highlighting for all visible enemies."""
 	# Update individual enemy visuals
 	for instance_id: int in enemy_visuals.keys():

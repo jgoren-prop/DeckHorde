@@ -254,9 +254,9 @@ static func create_attack_reticle(panel_size: Vector2, is_mini: bool = false) ->
 	reticle.add_child(tl)
 	
 	# Top-right corner
-	var tr: Panel = _create_corner_panel(corner_size, line_width, reticle_color, false, true)
-	tr.position = Vector2(panel_size.x - corner_size, 0)
-	reticle.add_child(tr)
+	var top_right: Panel = _create_corner_panel(corner_size, line_width, reticle_color, false, true)
+	top_right.position = Vector2(panel_size.x - corner_size, 0)
+	reticle.add_child(top_right)
 	
 	# Bottom-left corner
 	var bl: Panel = _create_corner_panel(corner_size, line_width, reticle_color, true, false)
@@ -308,4 +308,5 @@ static func flash_panel(panel: Panel, color: Color, duration: float = 0.15) -> v
 	# Create tween to restore
 	var tween: Tween = panel.create_tween()
 	tween.tween_property(panel, "modulate", original_modulate, duration)
+
 

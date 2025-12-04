@@ -4,8 +4,8 @@ extends Control
 
 const BattlefieldStateScript = preload("res://scripts/combat/BattlefieldState.gd")
 const DebugStatPanelClass = preload("res://scripts/ui/DebugStatPanel.gd")
-const CombatOverlayBuilder = preload("res://scripts/ui/combat/CombatOverlayBuilder.gd")
-const GlossaryData = preload("res://scripts/ui/combat/GlossaryData.gd")
+# Note: CombatOverlayBuilder and GlossaryData are globally available via class_name
+# No const needed - use the class_name directly
 
 # UI References - Top bar (just wave/turn/scrap)
 @onready var wave_label: Label = $TopBar/HBox/WaveInfo/WaveLabel

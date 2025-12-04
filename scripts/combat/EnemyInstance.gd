@@ -10,6 +10,10 @@ var max_hp: int = 10
 # Persistent group tracking - enemies stay in groups even when count drops
 var group_id: String = ""  # Empty string means not in a group
 
+# Spawn batch tracking - enemies spawned together share a batch ID
+# Used to prevent merging groups from different spawn waves
+var spawn_batch_id: int = 0
+
 # Status effects: Dictionary of effect_name -> {value: int, duration: int}
 var status_effects: Dictionary = {}
 

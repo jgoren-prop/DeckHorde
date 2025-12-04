@@ -978,7 +978,7 @@ static func _resolve_energy_refund(card_def, _tier: int, combat: Node) -> void:
 	print("[CardEffectResolver] Energy refund: +", energy_refund)
 
 
-static func _resolve_hex_transfer(card_def, _tier: int, combat: Node) -> void:
+static func _resolve_hex_transfer(_card_def, _tier: int, combat: Node) -> void:
 	"""Move all hex from one enemy to another."""
 	var candidates: Array = combat.battlefield.get_all_enemies()
 	if candidates.size() < 2:

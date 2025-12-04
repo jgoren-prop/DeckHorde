@@ -2,6 +2,7 @@ extends Control
 ## CombatLane - Visual display area for deployed persistent weapons
 ## Displays weapons as scaled-down cards in a "your side" lane, similar to Hearthstone
 
+@warning_ignore("unused_signal")
 signal weapon_clicked(card_def, tier: int, lane_index: int)
 
 const CardUIScene: PackedScene = preload("res://scenes/ui/CardUI.tscn")
@@ -39,7 +40,8 @@ var hovered_weapon: Dictionary = {}  # Currently hovered weapon data
 # State tracking
 var deployed_weapons: Array[Dictionary] = []  # {card_def, tier, card_ui, triggers_remaining, pistol_visual}
 
-# Animation tracking
+# Animation tracking (reserved for future deploy animation queue)
+@warning_ignore("unused_private_class_variable")
 var _pending_deploys: Array[Dictionary] = []  # Queue for deploy animations
 
 
@@ -389,7 +391,7 @@ func _on_weapon_hover_enter(card_ui: Control, card_def, tier: int) -> void:
 	tween.tween_property(preview_card, "modulate:a", 1.0, PREVIEW_FADE_DURATION)
 
 
-func _on_weapon_hover_exit(card_ui: Control) -> void:
+func _on_weapon_hover_exit(_card_ui: Control) -> void:
 	"""Hide preview when mouse leaves the weapon."""
 	# Fade out and hide preview
 	if preview_card and is_instance_valid(preview_card):

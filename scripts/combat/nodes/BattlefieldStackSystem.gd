@@ -16,6 +16,16 @@ const BattlefieldEffectsHelper = preload("res://scripts/combat/BattlefieldEffect
 const MINI_PANEL_SIZE: Vector2 = Vector2(55.0, 50.0)
 const MINI_PANEL_VERTICAL_GAP: float = 16.0
 
+# Lane system constants
+const TOTAL_LANES: int = 12  # Fixed number of lane slots across the semicircle
+const COLLISION_BUFFER: float = 12.0  # Pixel buffer between groups
+const MAX_GROUPS_BEFORE_SCALE: int = 6  # Start scaling down after this many groups per ring
+const MIN_SCALE: float = 0.7  # Minimum scale factor for crowded rings
+const SCALE_REDUCTION_PER_GROUP: float = 0.05  # Scale reduction per extra group
+
+# Z-index values per ring (Melee renders above Close, etc.)
+const RING_Z_INDEX: Array[int] = [4, 3, 2, 1]  # Melee, Close, Mid, Far
+
 # Enemy colors reference
 const ENEMY_COLORS: Dictionary = {
 	"husk": Color(0.7, 0.4, 0.3),
@@ -40,7 +50,11 @@ var _stack_base_positions: Dictionary = {}  # stack_key -> Vector2
 var _stack_position_tweens: Dictionary = {}  # stack_key -> Tween
 var _stack_scale_tweens: Dictionary = {}  # stack_key -> Tween
 var _group_positions: Dictionary = {}  # group_id -> Vector2
-var _group_angular_positions: Dictionary = {}  # group_id -> float
+var _group_angular_positions: Dictionary = {}  # group_id -> float (DEPRECATED - kept for compatibility)
+
+# Lane system state
+var _occupied_lanes: Dictionary = {}  # ring -> {lane_index: group_id}
+var _group_lanes: Dictionary = {}  # group_id -> lane_index (persists across rings)
 
 # Stack hold system
 var _stack_hold_counts: Dictionary = {}  # stack_key -> int
@@ -90,6 +104,9 @@ func create_stack(ring: int, enemy_id: String, enemies: Array, stack_key: String
 	
 	add_child(panel)
 	
+	# Set z_index based on ring (Melee renders above Close, etc.)
+	panel.z_index = _get_ring_z_index(ring)
+	
 	# Store stack data
 	stack_visuals[stack_key] = {
 		"panel": panel,
@@ -103,7 +120,17 @@ func create_stack(ring: int, enemy_id: String, enemies: Array, stack_key: String
 	# Position the stack
 	update_stack_position(stack_key)
 	
+	# Apply scale factor based on ring crowding
+	apply_ring_scale(ring)
+	
 	return stack_key
+
+
+func _get_ring_z_index(ring: int) -> int:
+	"""Get the z_index for a given ring. Melee (0) is highest, Far (3) is lowest."""
+	if ring >= 0 and ring < RING_Z_INDEX.size():
+		return RING_Z_INDEX[ring]
+	return 1  # Default to Far's z_index
 
 
 func update_stack_position(stack_key: String, animate: bool = false) -> void:
@@ -122,6 +149,9 @@ func update_stack_position(stack_key: String, animate: bool = false) -> void:
 		_animate_stack_to_position(stack_key, panel, target_pos)
 	elif is_instance_valid(panel):
 		panel.position = target_pos
+	
+	# Check for collisions after positioning
+	check_and_resolve_collisions(ring)
 
 
 func update_stack_ring(stack_key: String, new_ring: int, animate: bool = true) -> void:
@@ -131,6 +161,12 @@ func update_stack_ring(stack_key: String, new_ring: int, animate: bool = true) -
 	
 	var stack_data: Dictionary = stack_visuals[stack_key]
 	stack_data.ring = new_ring
+	
+	# Update z_index when ring changes
+	var panel: Panel = stack_data.panel
+	if is_instance_valid(panel):
+		panel.z_index = _get_ring_z_index(new_ring)
+	
 	update_stack_position(stack_key, animate)
 	
 	if stack_data.get("expanded", false):
@@ -376,6 +412,12 @@ func remove_stack(stack_key: String) -> void:
 		return
 	
 	var stack_data: Dictionary = stack_visuals[stack_key]
+	var ring: int = stack_data.get("ring", -1)
+	
+	# Release lane occupation
+	var group_id: String = _extract_group_id_from_stack_key(stack_key)
+	if ring >= 0:
+		release_lane(group_id, ring)
 	
 	# Emit exit signal so hover system can clean up if this stack was being hovered
 	if is_instance_valid(stack_data.panel):
@@ -395,6 +437,10 @@ func remove_stack(stack_key: String) -> void:
 	
 	stack_visuals.erase(stack_key)
 	_stack_base_positions.erase(stack_key)
+	
+	# Update scales for remaining stacks in the ring
+	if ring >= 0:
+		apply_ring_scale(ring)
 
 
 func clear_all() -> void:
@@ -406,6 +452,8 @@ func clear_all() -> void:
 	_stack_base_positions.clear()
 	_group_positions.clear()
 	_group_angular_positions.clear()
+	_occupied_lanes.clear()
+	_group_lanes.clear()
 
 
 # ============== PRIVATE METHODS ==============
@@ -422,7 +470,7 @@ func _generate_stack_key(ring: int, enemy_id: String) -> String:
 
 
 func _calculate_stack_position(ring: int, stack_key: String) -> Vector2:
-	"""Calculate position for a stack based on ring."""
+	"""Calculate position for a stack based on ring and lane."""
 	var outer_radius: float = arena_max_radius * ring_proportions[ring]
 	var inner_radius: float = 0.0
 	if ring > 0:
@@ -430,15 +478,245 @@ func _calculate_stack_position(ring: int, stack_key: String) -> Vector2:
 	# Position at 35% from inner to outer edge (clearly inside the ring, not at center)
 	var ring_radius: float = inner_radius + (outer_radius - inner_radius) * 0.35
 	
-	# Extract group_id from stack_key (format: "ring_enemytype_group_X")
-	# Look up angular position by group_id which persists across ring changes
+	# Extract group_id from stack_key and get lane-based angle
 	var group_id: String = _extract_group_id_from_stack_key(stack_key)
-	var angle: float = _group_angular_positions.get(group_id, PI * 1.5)
+	@warning_ignore("integer_division")
+	var lane: int = _group_lanes.get(group_id, TOTAL_LANES / 2)  # Default to center lane
+	var angle: float = _lane_to_angle(lane)
 	
 	var offset: Vector2 = Vector2(cos(angle), sin(angle)) * ring_radius
 	var visual_size: Vector2 = _get_stack_visual_size()
 	
 	return arena_center + offset - visual_size / 2
+
+
+func _lane_to_angle(lane: int) -> float:
+	"""Convert a lane index (0-11) to an angle on the semicircle.
+	Lane 0 = PI (far left), Lane 11 = 2*PI (far right), center lanes near top."""
+	# Clamp lane to valid range
+	lane = clampi(lane, 0, TOTAL_LANES - 1)
+	# Map lane index to angle: PI (left) to 2*PI (right)
+	return PI + (float(lane) / float(TOTAL_LANES - 1)) * PI
+
+
+func _angle_to_lane(angle: float) -> int:
+	"""Convert an angle to the nearest lane index."""
+	# Normalize angle to PI to 2*PI range
+	while angle < PI:
+		angle += TAU
+	while angle > TAU:
+		angle -= TAU
+	# Map angle to lane: PI -> 0, 2*PI -> TOTAL_LANES-1
+	var normalized: float = (angle - PI) / PI
+	return clampi(roundi(normalized * float(TOTAL_LANES - 1)), 0, TOTAL_LANES - 1)
+
+
+# ============== LANE ASSIGNMENT ==============
+
+func assign_random_lane(ring: int, group_id: String) -> int:
+	"""Assign a random available lane to a group. Returns the assigned lane index."""
+	var available: Array[int] = get_available_lanes(ring)
+	
+	var lane: int
+	if available.is_empty():
+		# All lanes occupied - find the least crowded lane or reuse
+		lane = _find_least_crowded_lane(ring)
+	else:
+		# Pick a random available lane
+		lane = available[randi() % available.size()]
+	
+	set_group_lane(group_id, lane, ring)
+	return lane
+
+
+func get_available_lanes(ring: int) -> Array[int]:
+	"""Get list of unoccupied lanes for a ring."""
+	var available: Array[int] = []
+	var occupied: Dictionary = _occupied_lanes.get(ring, {})
+	
+	for lane: int in range(TOTAL_LANES):
+		if not occupied.has(lane):
+			available.append(lane)
+	
+	return available
+
+
+func set_group_lane(group_id: String, lane: int, ring: int) -> void:
+	"""Set a group's lane and mark it as occupied in the specified ring."""
+	# Store lane for group (persists across ring changes)
+	_group_lanes[group_id] = lane
+	
+	# Initialize ring's occupied lanes if needed
+	if not _occupied_lanes.has(ring):
+		_occupied_lanes[ring] = {}
+	
+	# Mark lane as occupied by this group
+	_occupied_lanes[ring][lane] = group_id
+	
+	# Also store as angular position for legacy compatibility
+	_group_angular_positions[group_id] = _lane_to_angle(lane)
+
+
+func get_group_lane(group_id: String) -> int:
+	"""Get the lane assigned to a group. Returns center lane if not assigned."""
+	@warning_ignore("integer_division")
+	return _group_lanes.get(group_id, TOTAL_LANES / 2)
+
+
+func release_lane(group_id: String, ring: int) -> void:
+	"""Release a lane when a group is removed or moves to another ring."""
+	if not _occupied_lanes.has(ring):
+		return
+	
+	var lane: int = _group_lanes.get(group_id, -1)
+	if lane >= 0 and _occupied_lanes[ring].has(lane):
+		# Only release if this group owns the lane
+		if _occupied_lanes[ring][lane] == group_id:
+			_occupied_lanes[ring].erase(lane)
+
+
+func _find_least_crowded_lane(_ring: int) -> int:
+	"""Find a lane to use when all lanes are occupied. Returns center-ish lane."""
+	# When overcrowded, prefer center lanes as they have more visual space
+	@warning_ignore("integer_division")
+	var center: int = TOTAL_LANES / 2
+	# Try lanes outward from center
+	for offset: int in range(TOTAL_LANES):
+		var lane1: int = center + offset
+		var lane2: int = center - offset
+		if lane1 < TOTAL_LANES:
+			return lane1
+		if lane2 >= 0:
+			return lane2
+	return center
+
+
+func get_groups_in_ring(ring: int) -> int:
+	"""Get the count of groups currently in a ring."""
+	if not _occupied_lanes.has(ring):
+		return 0
+	return _occupied_lanes[ring].size()
+
+
+# ============== COLLISION DETECTION ==============
+
+func check_and_resolve_collisions(ring: int) -> void:
+	"""Check for collisions between stacks in a ring and apply offsets if needed."""
+	var stacks_in_ring: Array[String] = _get_stacks_in_ring(ring)
+	if stacks_in_ring.size() < 2:
+		return
+	
+	# Sort stacks by their lane (left to right)
+	stacks_in_ring.sort_custom(func(a: String, b: String) -> bool:
+		var lane_a: int = _get_stack_lane(a)
+		var lane_b: int = _get_stack_lane(b)
+		return lane_a < lane_b
+	)
+	
+	# Check adjacent stacks for overlap
+	for i: int in range(stacks_in_ring.size() - 1):
+		var key_a: String = stacks_in_ring[i]
+		var key_b: String = stacks_in_ring[i + 1]
+		
+		if not stack_visuals.has(key_a) or not stack_visuals.has(key_b):
+			continue
+		
+		var panel_a: Panel = stack_visuals[key_a].panel
+		var panel_b: Panel = stack_visuals[key_b].panel
+		
+		if not is_instance_valid(panel_a) or not is_instance_valid(panel_b):
+			continue
+		
+		# Check if panels overlap horizontally (including buffer)
+		var right_edge_a: float = panel_a.position.x + panel_a.size.x + COLLISION_BUFFER
+		var left_edge_b: float = panel_b.position.x
+		
+		if right_edge_a > left_edge_b:
+			# Collision detected - nudge panels apart
+			var overlap: float = right_edge_a - left_edge_b
+			var half_offset: float = overlap / 2.0
+			panel_a.position.x -= half_offset
+			panel_b.position.x += half_offset
+			
+			# Update base positions
+			_stack_base_positions[key_a] = panel_a.position
+			_stack_base_positions[key_b] = panel_b.position
+
+
+func _get_stacks_in_ring(ring: int) -> Array[String]:
+	"""Get all stack keys for a given ring."""
+	var result: Array[String] = []
+	for key: String in stack_visuals.keys():
+		var stack_data: Dictionary = stack_visuals[key]
+		if stack_data.get("ring", -1) == ring:
+			result.append(key)
+	return result
+
+
+func _get_stack_lane(stack_key: String) -> int:
+	"""Get the lane index for a stack."""
+	var group_id: String = _extract_group_id_from_stack_key(stack_key)
+	@warning_ignore("integer_division")
+	return _group_lanes.get(group_id, TOTAL_LANES / 2)
+
+
+func has_collision(ring: int, lane: int, exclude_group: String = "") -> bool:
+	"""Check if a lane in a ring would cause a collision."""
+	if not _occupied_lanes.has(ring):
+		return false
+	
+	# Lane is occupied by another group
+	if _occupied_lanes[ring].has(lane):
+		var occupant: String = _occupied_lanes[ring][lane]
+		if occupant != exclude_group:
+			return true
+	
+	return false
+
+
+# ============== SIZE CLAMPING ==============
+
+func get_scale_factor_for_ring(ring: int) -> float:
+	"""Calculate scale factor for stacks in a ring based on crowding.
+	When many groups exist, scale down to avoid visual clutter."""
+	var group_count: int = get_groups_in_ring(ring)
+	
+	if group_count <= MAX_GROUPS_BEFORE_SCALE:
+		return 1.0
+	
+	# Scale down for each extra group beyond threshold
+	var extra_groups: int = group_count - MAX_GROUPS_BEFORE_SCALE
+	var scale_factor: float = 1.0 - (float(extra_groups) * SCALE_REDUCTION_PER_GROUP)
+	
+	return maxf(scale_factor, MIN_SCALE)
+
+
+func apply_ring_scale(ring: int) -> void:
+	"""Apply appropriate scale to all stacks in a ring based on crowding."""
+	var scale_factor: float = get_scale_factor_for_ring(ring)
+	var stacks: Array[String] = _get_stacks_in_ring(ring)
+	
+	for stack_key: String in stacks:
+		if not stack_visuals.has(stack_key):
+			continue
+		
+		var panel: Panel = stack_visuals[stack_key].panel
+		if is_instance_valid(panel):
+			# Animate scale change for smooth transition
+			if _stack_scale_tweens.has(stack_key):
+				var old_tween: Tween = _stack_scale_tweens[stack_key]
+				if old_tween and old_tween.is_valid():
+					old_tween.kill()
+			
+			var tween: Tween = create_tween()
+			tween.tween_property(panel, "scale", Vector2(scale_factor, scale_factor), 0.2).set_ease(Tween.EASE_OUT)
+			_stack_scale_tweens[stack_key] = tween
+
+
+func update_all_ring_scales() -> void:
+	"""Update scale factors for all rings."""
+	for ring: int in range(4):
+		apply_ring_scale(ring)
 
 
 func _extract_group_id_from_stack_key(stack_key: String) -> String:
@@ -554,3 +832,4 @@ func _on_mini_panel_hover_enter(panel: Panel, enemy, stack_key: String) -> void:
 func _on_mini_panel_hover_exit(panel: Panel, stack_key: String) -> void:
 	"""Handle mini-panel hover exit."""
 	mini_panel_hover_exited.emit(panel, stack_key)
+

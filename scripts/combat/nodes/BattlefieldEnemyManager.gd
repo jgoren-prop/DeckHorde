@@ -35,10 +35,19 @@ var _enemy_base_positions: Dictionary = {}  # instance_id -> Vector2
 var _enemy_position_tweens: Dictionary = {}  # instance_id -> Tween
 var _enemy_scale_tweens: Dictionary = {}  # instance_id -> Tween
 
+# Angular position tracking for individual enemy placement
+var _enemy_angular_positions: Dictionary = {}  # instance_id -> float
+
+# Lane tracking for individual enemies (to ensure consistency with stack system)
+var _enemy_lanes: Dictionary = {}  # instance_id -> int
+
 # Layout info (set by parent)
 var arena_center: Vector2 = Vector2.ZERO
 var arena_max_radius: float = 200.0
 var ring_proportions: Array[float] = [0.18, 0.42, 0.68, 0.95]
+
+# Z-index values per ring (Melee renders above Close, etc.)
+const RING_Z_INDEX: Array[int] = [4, 3, 2, 1]  # Melee, Close, Mid, Far
 
 
 func _ready() -> void:
@@ -48,6 +57,26 @@ func _ready() -> void:
 func get_enemy_color(enemy_id: String) -> Color:
 	"""Get the color for an enemy type."""
 	return ENEMY_COLORS.get(enemy_id, Color(0.8, 0.3, 0.3))
+
+
+func set_enemy_angular_position(instance_id: int, angle: float) -> void:
+	"""Set the angular position for an enemy. Called before creating the visual."""
+	_enemy_angular_positions[instance_id] = angle
+
+
+func get_enemy_angular_position(instance_id: int) -> float:
+	"""Get the angular position for an enemy. Returns default (top center) if not set."""
+	return _enemy_angular_positions.get(instance_id, PI * 1.5)
+
+
+func set_enemy_lane(instance_id: int, lane: int) -> void:
+	"""Set the lane for an enemy. Lane persists for z-ordering and positioning."""
+	_enemy_lanes[instance_id] = lane
+
+
+func get_enemy_lane(instance_id: int) -> int:
+	"""Get the lane for an enemy. Returns center lane (6) if not set."""
+	return _enemy_lanes.get(instance_id, 6)
 
 
 func create_enemy_visual(enemy) -> Panel:
@@ -65,10 +94,20 @@ func create_enemy_visual(enemy) -> Panel:
 	add_child(visual)
 	enemy_visuals[enemy.instance_id] = visual
 	
+	# Set z_index based on ring (Melee renders above Close, etc.)
+	visual.z_index = _get_ring_z_index(enemy.ring)
+	
 	# Set initial position
 	update_enemy_position(enemy)
 	
 	return visual
+
+
+func _get_ring_z_index(ring: int) -> int:
+	"""Get the z_index for a given ring. Melee (0) is highest, Far (3) is lowest."""
+	if ring >= 0 and ring < RING_Z_INDEX.size():
+		return RING_Z_INDEX[ring]
+	return 1  # Default to Far's z_index
 
 
 func update_enemy_position(enemy, animate: bool = false) -> void:
@@ -81,6 +120,9 @@ func update_enemy_position(enemy, animate: bool = false) -> void:
 	
 	# Store base position
 	_enemy_base_positions[enemy.instance_id] = target_pos
+	
+	# Update z_index when ring changes
+	visual.z_index = _get_ring_z_index(enemy.ring)
 	
 	if animate:
 		_animate_to_position(enemy.instance_id, visual, target_pos)
@@ -219,6 +261,8 @@ func clear_all() -> void:
 			visual.queue_free()
 	enemy_visuals.clear()
 	_enemy_base_positions.clear()
+	_enemy_angular_positions.clear()
+	_enemy_lanes.clear()
 	
 	for instance_id: int in destroyed_visuals.keys():
 		var visual: Panel = destroyed_visuals[instance_id]
@@ -244,7 +288,7 @@ func _get_enemy_visual_size() -> Vector2:
 
 
 func _calculate_enemy_position(enemy) -> Vector2:
-	"""Calculate the position for an enemy based on their ring and index."""
+	"""Calculate the position for an enemy based on their ring and angular position."""
 	var ring: int = enemy.ring
 	
 	# Get ring radius
@@ -252,10 +296,11 @@ func _calculate_enemy_position(enemy) -> Vector2:
 	var inner_radius: float = 0.0
 	if ring > 0:
 		inner_radius = arena_max_radius * ring_proportions[ring - 1]
-	var ring_radius: float = (inner_radius + outer_radius) / 2.0
+	# Position at 35% from inner to outer edge (match stack positioning)
+	var ring_radius: float = inner_radius + (outer_radius - inner_radius) * 0.35
 	
-	# Use stored angular position if available, otherwise calculate
-	var angle: float = PI * 1.5  # Default to top
+	# Use stored angular position, falling back to top center if not set
+	var angle: float = _enemy_angular_positions.get(enemy.instance_id, PI * 1.5)
 	
 	# Calculate position
 	var offset: Vector2 = Vector2(cos(angle), sin(angle)) * ring_radius

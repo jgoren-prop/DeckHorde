@@ -173,3 +173,4 @@ func _on_event_banner_finished() -> void:
 				_create_event_banner(next_banner.icon, next_banner.text, next_banner.type, next_banner.duration)
 			)
 
+

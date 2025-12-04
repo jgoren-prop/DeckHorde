@@ -23,7 +23,9 @@ signal wave_ended(success: bool)
 signal weapon_triggered(card_name: String, damage: int, weapon_index: int)  # Persistent weapon fired
 signal enemy_ability_triggered(enemy, ability: String, value: int)  # Special ability fired
 signal enemy_targeted(enemy)  # Enemy is about to be attacked (for visual indicator)
+@warning_ignore("unused_signal")  # Emitted from CardEffectResolver.gd
 signal enemy_hexed(enemy, hex_amount: int)  # Enemy received hex (for visual indicator)
+@warning_ignore("unused_signal")  # Emitted from CardEffectResolver.gd
 signal barrier_placed(ring: int, damage: int, duration: int)  # Barrier created
 signal barrier_triggered(enemy, ring: int, damage: int)  # Barrier dealt damage to enemy
 signal ring_phase_started(ring: int, ring_name: String)  # Ring is being processed
@@ -31,16 +33,24 @@ signal ring_phase_ended(ring: int)  # Ring processing complete
 signal enemy_attacking(enemy, damage: int)  # Enemy is about to attack
 signal weapons_phase_started()  # Persistent weapons starting to fire
 signal weapons_phase_ended()  # All persistent weapons finished firing
-# V2 Signals
+# V2 Signals (reserved for future artifact triggers)
+@warning_ignore("unused_signal")
 signal gun_deployed(card_def)  # Persistent gun deployed
 signal gun_fired(card_def, damage: int)  # Gun fired (for artifact triggers)
+@warning_ignore("unused_signal")
 signal gun_out_of_ammo(card_def)  # Gun ran out of ammo
+@warning_ignore("unused_signal")
 signal engine_triggered(card_def)  # Engine effect triggered
 signal self_damage_dealt(amount: int)  # Player took self-damage (volatile cards)
+@warning_ignore("unused_signal")
 signal explosive_hit(damage: int, ring: int, splash_damage: int)  # Explosive damage dealt
+@warning_ignore("unused_signal")
 signal beam_chain(damage: int, chain_index: int)  # Beam chain hit
+@warning_ignore("unused_signal")
 signal piercing_overflow(damage: int, overflow: int)  # Piercing overkill
+@warning_ignore("unused_signal")
 signal shock_hit(damage: int, target)  # Shock damage dealt
+@warning_ignore("unused_signal")
 signal corrosive_hit(damage: int, shred: int, target)  # Corrosive damage dealt
 signal overkill(damage: int, overkill_amount: int, target)  # Overkill damage
 signal weapon_expired(card_def, destination: String)  # Weapon duration ended
@@ -70,6 +80,9 @@ var current_wave_def = null
 var active_weapons: Array = []
 var current_firing_weapon_index: int = -1  # Track which weapon INDEX is currently firing for projectile origin
 
+# Spawn batch tracking - ensures enemies from different spawns don't merge groups
+var _spawn_batch_counter: int = 0
+
 
 func _ready() -> void:
 	print("[CombatManager] Initialized")
@@ -83,6 +96,7 @@ func initialize_combat(wave_def) -> void:
 	max_energy = RunManager.base_energy
 	active_weapons.clear()
 	kills_this_turn = 0
+	_spawn_batch_counter = 0  # Reset spawn batch tracking
 	
 	# Reset per-wave state (Glass Warden cheat death, etc.)
 	RunManager.reset_wave_state()
@@ -340,6 +354,13 @@ func end_player_turn() -> void:
 	
 	# Discard remaining hand
 	deck_manager.discard_hand()
+	
+	# Check if all enemies are already defeated - skip enemy phase if so
+	if battlefield.get_total_enemy_count() == 0:
+		print("[CombatManager] All enemies defeated - skipping enemy phase")
+		turn_ended.emit(current_turn)
+		_check_wave_end()
+		return
 	
 	# Process enemy phase
 	_process_enemy_phase()
@@ -625,14 +646,19 @@ func _process_enemy_abilities_visual() -> void:
 				enemy_ability_triggered.emit(enemy, "spawn_minions", enemy_def.spawn_count)
 				await get_tree().create_timer(0.2).timeout
 				
+				# Increment spawn batch counter - all minions from this spawner share the same batch
+				_spawn_batch_counter += 1
+				var batch_id: int = _spawn_batch_counter
+				
 				# Spawn all minions and create a group for them
 				var spawned_minions: Array = []
 				for i: int in range(enemy_def.spawn_count):
 					var spawned = battlefield.spawn_enemy(enemy_def.spawn_enemy_id, spawn_ring)
 					if spawned:
+						spawned.spawn_batch_id = batch_id  # Tag with spawn batch
 						spawned_minions.append(spawned)
 						enemy_spawned.emit(spawned)
-						print("[CombatManager] ", enemy_def.enemy_name, " spawned ", enemy_def.spawn_enemy_id)
+						print("[CombatManager] ", enemy_def.enemy_name, " spawned ", enemy_def.spawn_enemy_id, " (batch ", batch_id, ")")
 					await get_tree().create_timer(0.15).timeout
 				
 				# Create a group for spawned minions
@@ -669,13 +695,18 @@ func _spawn_enemies(enemy_id: String, count: int, ring: int) -> void:
 	"""Spawn multiple enemies and create a persistent group for them."""
 	var spawned_enemies: Array = []
 	
+	# Increment spawn batch counter - all enemies in this call share the same batch
+	_spawn_batch_counter += 1
+	var batch_id: int = _spawn_batch_counter
+	
 	# Spawn all enemies first
 	for i in range(count):
 		var enemy = battlefield.spawn_enemy(enemy_id, ring)
 		if enemy:
+			enemy.spawn_batch_id = batch_id  # Tag with spawn batch
 			spawned_enemies.append(enemy)
 			enemy_spawned.emit(enemy)
-			print("[CombatManager] Spawned ", enemy_id, " in ring ", ring)
+			print("[CombatManager] Spawned ", enemy_id, " in ring ", ring, " (batch ", batch_id, ")")
 	
 	# Create a persistent group for all enemies of the same type spawned together
 	# This allows groups to persist even when enemies die

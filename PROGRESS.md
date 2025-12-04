@@ -152,8 +152,11 @@
 - ✅ **Real-time mini-panel HP**: Individual mini-panel HP bars now update immediately when an enemy in an expanded stack takes damage.
 - ✅ **Unit death display**: Enemy HP clamped to 0 (no negative HP). Mini-panels animate death (flash red, scale, fade) and remaining panels reposition.
 - ✅ **Encyclopedia card cleanup**: Info cards now properly hide when stacks are removed or hover state is lost. Previously they could stay up indefinitely.
-- ✅ **Group angular positioning**: Multiple enemy groups in the same ring are now evenly spread across the semicircle instead of all appearing at the same position. Groups rebalance when others are added or removed.
-- ✅ **Ring movement preserves relative position**: When enemy groups move between rings, they maintain their angular position for smooth visual transitions. Groups in both old and new rings rebalance automatically.
+- ✅ **Lane-based group positioning**: Replaced dynamic angular distribution with fixed 12-lane system. Lane 0 = far left, Lane 11 = far right. New groups randomly assigned to available lanes.
+- ✅ **Ring movement lane preservation**: Groups keep their lane index when moving Far→Mid→Close→Melee. Lane occupancy tracked per ring.
+- ✅ **Non-overlap enforcement**: 12px collision buffer between panels, size clamping (min 0.7x) when >6 groups per ring.
+- ✅ **Z-order by ring**: Melee renders above Close above Mid above Far (z_index 4, 3, 2, 1).
+- ✅ **Lane placement tests**: Automated test scene `TestLanePlacement.tscn` verifies no-overlap, lane preservation, 12-lane filling, and z-ordering.
 
 ### Code Refactoring (Best Practices)
 Extracted UI panel builders, helpers, and scene components to keep files under 500 lines:

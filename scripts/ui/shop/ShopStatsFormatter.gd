@@ -3,7 +3,7 @@ class_name ShopStatsFormatter
 ## ShopStatsFormatter - Formatting utilities for shop stat displays
 ## Extracted from Shop.gd to keep files under 500 lines
 
-const TagConstants = preload("res://scripts/constants/TagConstants.gd")
+# Note: TagConstants is globally available via class_name - use directly
 
 
 static func format_player_stats(stats, current_hp: int, armor: int, scrap: int, wave: int, warden) -> String:
@@ -171,4 +171,5 @@ static func _get_family_tag_icon(tag: String) -> String:
 			return "🔋"
 		_:
 			return "•"
+
 

@@ -9,7 +9,7 @@ const BattlefieldInfoCardsHelper = preload("res://scripts/combat/BattlefieldInfo
 # Stacking configuration constants
 const MAX_ENEMIES_BEFORE_MULTIROW: int = 4
 const MAX_ENEMIES_PER_ROW: int = 5
-const STACK_THRESHOLD: int = 3
+const STACK_THRESHOLD: int = 2
 const MAX_TOTAL_BEFORE_STACKING: int = 2
 const INNER_ROW_RATIO: float = 0.35
 const OUTER_ROW_RATIO: float = 0.75

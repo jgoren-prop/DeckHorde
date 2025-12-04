@@ -3,7 +3,7 @@ class_name ShopPanelBuilder
 ## ShopPanelBuilder - Factory for creating Shop UI panels
 ## Extracted from Shop.gd to keep files under 500 lines
 
-const TagConstants = preload("res://scripts/constants/TagConstants.gd")
+# Note: TagConstants is globally available via class_name - use directly
 
 
 static func create_dev_panel(parent: Control) -> PanelContainer:

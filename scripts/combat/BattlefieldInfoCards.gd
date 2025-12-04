@@ -349,3 +349,4 @@ static func create_stat_label(text: String, color: Color) -> Label:
 	label.add_theme_color_override("font_color", color)
 	return label
 
+

@@ -157,7 +157,7 @@ func _draw_semicircle_fill(center: Vector2, inner_r: float, outer_r: float, star
 	draw_colored_polygon(points, color)
 
 
-func _draw_barrier_ring(ring: int, radius: float, arc_start: float = PI, arc_end: float = TAU) -> void:
+func _draw_barrier_ring(_ring: int, radius: float, arc_start: float = PI, arc_end: float = TAU) -> void:
 	"""Draw a barrier effect on a ring (as a semicircle arc)."""
 	var pulse: float = (sin(_barrier_pulse_time) + 1.0) / 2.0
 	var barrier_color: Color = BARRIER_COLOR.lightened(pulse * 0.2)

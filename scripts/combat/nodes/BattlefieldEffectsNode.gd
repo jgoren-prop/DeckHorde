@@ -201,3 +201,4 @@ func create_attack_reticle(panel_size: Vector2, is_mini: bool = false) -> Contro
 	add_child(reticle)
 	return reticle
 
+
