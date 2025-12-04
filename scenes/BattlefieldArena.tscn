@@ -1,6 +1,11 @@
-[gd_scene load_steps=2 format=3 uid="uid://cbe1qr0xnyd0m"]
+[gd_scene load_steps=7 format=3 uid="uid://cbe1qr0xnyd0m"]
 
 [ext_resource type="Script" path="res://scripts/combat/BattlefieldArena.gd" id="1_arena"]
+[ext_resource type="PackedScene" uid="uid://battlefield_rings" path="res://scenes/combat/nodes/BattlefieldRings.tscn" id="2_rings"]
+[ext_resource type="PackedScene" uid="uid://battlefield_enemy_manager" path="res://scenes/combat/nodes/BattlefieldEnemyManager.tscn" id="3_enemy"]
+[ext_resource type="PackedScene" uid="uid://battlefield_stack_system" path="res://scenes/combat/nodes/BattlefieldStackSystem.tscn" id="4_stack"]
+[ext_resource type="PackedScene" uid="uid://battlefield_effects_node" path="res://scenes/combat/nodes/BattlefieldEffectsNode.tscn" id="5_effects"]
+[ext_resource type="PackedScene" uid="uid://battlefield_hover_system" path="res://scenes/combat/nodes/BattlefieldHoverSystem.tscn" id="6_hover"]
 
 [node name="BattlefieldArena" type="Control"]
 layout_mode = 3
@@ -11,34 +16,17 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_arena")
 
-[node name="RingsContainer" type="Control" parent="."]
+[node name="BattlefieldRings" parent="." instance=ExtResource("2_rings")]
 layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
 
-[node name="EnemyContainer" type="Control" parent="."]
+[node name="BattlefieldEnemyManager" parent="." instance=ExtResource("3_enemy")]
 layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
 
-[node name="EffectsContainer" type="Control" parent="."]
+[node name="BattlefieldStackSystem" parent="." instance=ExtResource("4_stack")]
 layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
 
-[node name="DamageNumbers" type="Control" parent="."]
+[node name="BattlefieldEffectsNode" parent="." instance=ExtResource("5_effects")]
 layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
+
+[node name="BattlefieldHoverSystem" parent="." instance=ExtResource("6_hover")]
+layout_mode = 1

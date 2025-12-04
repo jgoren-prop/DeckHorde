@@ -1,0 +1,99 @@
+[gd_scene load_steps=2 format=3 uid="uid://enemy_stack_panel_scene"]
+
+[ext_resource type="Script" path="res://scripts/combat/components/EnemyStackPanel.gd" id="1_script"]
+
+[node name="EnemyStackPanel" type="Panel"]
+custom_minimum_size = Vector2(110, 120)
+offset_right = 110.0
+offset_bottom = 120.0
+z_index = 15
+mouse_filter = 0
+script = ExtResource("1_script")
+
+[node name="IconLabel" type="Label" parent="."]
+layout_mode = 0
+offset_left = 40.0
+offset_top = 4.0
+offset_right = 70.0
+offset_bottom = 34.0
+mouse_filter = 2
+theme_override_font_sizes/font_size = 24
+text = "👤"
+
+[node name="CountBadge" type="Panel" parent="."]
+layout_mode = 0
+offset_left = 78.0
+offset_top = 2.0
+offset_right = 106.0
+offset_bottom = 24.0
+mouse_filter = 2
+
+[node name="CountLabel" type="Label" parent="CountBadge"]
+layout_mode = 0
+offset_top = 1.0
+offset_right = 28.0
+offset_bottom = 21.0
+mouse_filter = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 12
+text = "x3"
+horizontal_alignment = 1
+
+[node name="DamageLabel" type="Label" parent="."]
+layout_mode = 0
+offset_top = 45.6
+offset_right = 110.0
+offset_bottom = 65.6
+mouse_filter = 2
+theme_override_colors/font_color = Color(1, 0.5, 0.5, 1)
+theme_override_font_sizes/font_size = 12
+text = "⚔ 5 each"
+horizontal_alignment = 1
+
+[node name="HPBackground" type="ColorRect" parent="."]
+layout_mode = 0
+offset_left = 4.0
+offset_top = 69.6
+offset_right = 106.0
+offset_bottom = 79.6
+mouse_filter = 2
+color = Color(0.1, 0.1, 0.1, 1)
+
+[node name="HPFill" type="ColorRect" parent="."]
+layout_mode = 0
+offset_left = 4.0
+offset_top = 69.6
+offset_right = 106.0
+offset_bottom = 79.6
+mouse_filter = 2
+color = Color(0.2, 0.85, 0.2, 1)
+
+[node name="HPText" type="Label" parent="."]
+layout_mode = 0
+offset_top = 86.4
+offset_right = 110.0
+offset_bottom = 104.4
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.95, 0.95, 0.95, 1)
+theme_override_font_sizes/font_size = 11
+text = "100/100 total"
+horizontal_alignment = 1
+
+[node name="NameLabel" type="Label" parent="."]
+layout_mode = 0
+offset_top = 103.2
+offset_right = 110.0
+offset_bottom = 121.2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.8, 0.8, 0.8, 1)
+theme_override_font_sizes/font_size = 10
+text = "Enemy Name"
+horizontal_alignment = 1
+
+[node name="IntentIndicator" type="Control" parent="."]
+layout_mode = 0
+offset_left = -38.0
+offset_right = 0.0
+offset_bottom = 100.0
+mouse_filter = 2
+

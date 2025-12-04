@@ -1,8 +1,11 @@
 extends Control
 ## CombatScreen - Main combat UI controller
+## Uses CombatOverlayBuilder and GlossaryData for UI creation (see scripts/ui/combat/)
 
 const BattlefieldStateScript = preload("res://scripts/combat/BattlefieldState.gd")
 const DebugStatPanelClass = preload("res://scripts/ui/DebugStatPanel.gd")
+const CombatOverlayBuilder = preload("res://scripts/ui/combat/CombatOverlayBuilder.gd")
+const GlossaryData = preload("res://scripts/ui/combat/GlossaryData.gd")
 
 # UI References - Top bar (just wave/turn/scrap)
 @onready var wave_label: Label = $TopBar/HBox/WaveInfo/WaveLabel
@@ -99,14 +102,45 @@ var _loading_settings: bool = false
 
 func _ready() -> void:
 	_connect_signals()
-	_create_intent_bar()
-	_create_deck_viewer_overlay()
-	_create_dev_panel()
+	_setup_intent_bar()
+	_setup_deck_viewer_overlay()
+	_setup_dev_panel()
 	_create_v2_debug_stat_panel()
 	_setup_animation_manager()
 	_hide_settings_overlay()
 	# Defer combat start to ensure UI layout is computed first
 	call_deferred("_start_combat")
+
+
+func _setup_intent_bar() -> void:
+	"""Create intent bar using CombatOverlayBuilder."""
+	var result: Dictionary = CombatOverlayBuilder.create_intent_bar(self)
+	intent_bar = result.panel
+	intent_damage_label = result.damage_label
+	intent_bomber_label = result.bomber_label
+	intent_buffer_label = result.buffer_label
+	intent_spawner_label = result.spawner_label
+	intent_fast_label = result.fast_label
+
+
+func _setup_deck_viewer_overlay() -> void:
+	"""Create deck viewer overlay using CombatOverlayBuilder."""
+	var result: Dictionary = CombatOverlayBuilder.create_deck_viewer_overlay(self)
+	deck_viewer_overlay = result.overlay
+	deck_viewer_grid = result.grid
+	deck_viewer_title = result.title
+	result.close_button.pressed.connect(_on_deck_viewer_close)
+
+
+func _setup_dev_panel() -> void:
+	"""Create dev panel using CombatOverlayBuilder."""
+	var result: Dictionary = CombatOverlayBuilder.create_dev_panel(self)
+	var dev_vbox: VBoxContainer = result.vbox
+	
+	CombatOverlayBuilder.create_dev_button(dev_vbox, "🏆 Force Win", _dev_force_win)
+	CombatOverlayBuilder.create_dev_button(dev_vbox, "💀 Force Lose", _dev_force_lose)
+	CombatOverlayBuilder.create_dev_button(dev_vbox, "⚡ +3 Energy", _dev_add_energy)
+	CombatOverlayBuilder.create_dev_button(dev_vbox, "⚙️ +1000 Scrap", _dev_add_scrap)
 
 
 func _setup_animation_manager() -> void:
@@ -270,129 +304,6 @@ func _connect_signals() -> void:
 	
 	# Create debug overlay for card tracking
 	_setup_card_debug_overlay()
-
-
-func _create_intent_bar() -> void:
-	"""Create the aggregated intent bar at the top of the combat screen."""
-	intent_bar = PanelContainer.new()
-	intent_bar.name = "IntentBar"
-	
-	# Position below the top bar
-	intent_bar.anchors_preset = Control.PRESET_TOP_WIDE
-	intent_bar.offset_top = 55
-	intent_bar.offset_bottom = 90
-	intent_bar.offset_left = 200
-	intent_bar.offset_right = -200
-	
-	# Style the panel
-	var style: StyleBoxFlat = StyleBoxFlat.new()
-	style.bg_color = Color(0.08, 0.05, 0.12, 0.92)
-	style.set_border_width_all(2)
-	style.border_color = Color(0.4, 0.3, 0.5, 0.8)
-	style.set_corner_radius_all(8)
-	style.content_margin_left = 15.0
-	style.content_margin_right = 15.0
-	style.content_margin_top = 4.0
-	style.content_margin_bottom = 4.0
-	intent_bar.add_theme_stylebox_override("panel", style)
-	
-	# Create HBox for intent items
-	var hbox: HBoxContainer = HBoxContainer.new()
-	hbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	hbox.add_theme_constant_override("separation", 25)
-	intent_bar.add_child(hbox)
-	
-	# Incoming Damage section
-	var damage_section: HBoxContainer = HBoxContainer.new()
-	damage_section.add_theme_constant_override("separation", 6)
-	var damage_icon: Label = Label.new()
-	damage_icon.text = "⚔️"
-	damage_icon.add_theme_font_size_override("font_size", 18)
-	damage_section.add_child(damage_icon)
-	intent_damage_label = Label.new()
-	intent_damage_label.text = "0 Incoming"
-	intent_damage_label.add_theme_font_size_override("font_size", 16)
-	intent_damage_label.add_theme_color_override("font_color", Color(0.9, 0.9, 0.9))
-	damage_section.add_child(intent_damage_label)
-	hbox.add_child(damage_section)
-	
-	# Separator
-	var sep1: VSeparator = VSeparator.new()
-	hbox.add_child(sep1)
-	
-	# Bomber section
-	var bomber_section: HBoxContainer = HBoxContainer.new()
-	bomber_section.name = "BomberSection"
-	bomber_section.add_theme_constant_override("separation", 6)
-	var bomber_icon: Label = Label.new()
-	bomber_icon.text = "💣"
-	bomber_icon.add_theme_font_size_override("font_size", 18)
-	bomber_section.add_child(bomber_icon)
-	intent_bomber_label = Label.new()
-	intent_bomber_label.text = "0 Bombers"
-	intent_bomber_label.add_theme_font_size_override("font_size", 16)
-	intent_bomber_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
-	bomber_section.add_child(intent_bomber_label)
-	hbox.add_child(bomber_section)
-	
-	# Separator
-	var sep2: VSeparator = VSeparator.new()
-	hbox.add_child(sep2)
-	
-	# Buffer section
-	var buffer_section: HBoxContainer = HBoxContainer.new()
-	buffer_section.name = "BufferSection"
-	buffer_section.add_theme_constant_override("separation", 6)
-	var buffer_icon: Label = Label.new()
-	buffer_icon.text = "📢"
-	buffer_icon.add_theme_font_size_override("font_size", 18)
-	buffer_section.add_child(buffer_icon)
-	intent_buffer_label = Label.new()
-	intent_buffer_label.text = "No Buff"
-	intent_buffer_label.add_theme_font_size_override("font_size", 16)
-	intent_buffer_label.add_theme_color_override("font_color", Color(0.7, 0.4, 1.0))
-	buffer_section.add_child(intent_buffer_label)
-	hbox.add_child(buffer_section)
-	
-	# Separator
-	var sep3: VSeparator = VSeparator.new()
-	hbox.add_child(sep3)
-	
-	# Spawner section
-	var spawner_section: HBoxContainer = HBoxContainer.new()
-	spawner_section.name = "SpawnerSection"
-	spawner_section.add_theme_constant_override("separation", 6)
-	var spawner_icon: Label = Label.new()
-	spawner_icon.text = "⚙️"
-	spawner_icon.add_theme_font_size_override("font_size", 18)
-	spawner_section.add_child(spawner_icon)
-	intent_spawner_label = Label.new()
-	intent_spawner_label.text = "No Spawners"
-	intent_spawner_label.add_theme_font_size_override("font_size", 16)
-	intent_spawner_label.add_theme_color_override("font_color", Color(0.3, 0.9, 0.9))
-	spawner_section.add_child(intent_spawner_label)
-	hbox.add_child(spawner_section)
-	
-	# Separator
-	var sep4: VSeparator = VSeparator.new()
-	hbox.add_child(sep4)
-	
-	# Fast enemies section
-	var fast_section: HBoxContainer = HBoxContainer.new()
-	fast_section.name = "FastSection"
-	fast_section.add_theme_constant_override("separation", 6)
-	var fast_icon: Label = Label.new()
-	fast_icon.text = "⚡"
-	fast_icon.add_theme_font_size_override("font_size", 18)
-	fast_section.add_child(fast_icon)
-	intent_fast_label = Label.new()
-	intent_fast_label.text = "0 Fast"
-	intent_fast_label.add_theme_font_size_override("font_size", 16)
-	intent_fast_label.add_theme_color_override("font_color", Color(1.0, 0.6, 0.2))
-	fast_section.add_child(intent_fast_label)
-	hbox.add_child(fast_section)
-	
-	add_child(intent_bar)
 
 
 func _update_intent_bar() -> void:
@@ -729,25 +640,8 @@ func _on_turn_started(_turn: int) -> void:
 
 
 func _show_turn_banner(text: String) -> void:
-	"""Show a banner that slides in and out."""
-	var banner: Label = Label.new()
-	banner.text = text
-	banner.add_theme_font_size_override("font_size", 48)
-	banner.add_theme_color_override("font_color", Color(1.0, 0.9, 0.3))
-	banner.add_theme_color_override("font_outline_color", Color(0.1, 0.1, 0.1))
-	banner.add_theme_constant_override("outline_size", 4)
-	banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	banner.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	banner.anchors_preset = Control.PRESET_CENTER
-	banner.position = Vector2(get_viewport_rect().size.x / 2 - 100, -50)
-	add_child(banner)
-	
-	# Slide in, pause, slide out
-	var tween: Tween = create_tween()
-	tween.tween_property(banner, "position:y", get_viewport_rect().size.y / 3, 0.3).set_ease(Tween.EASE_OUT)
-	tween.tween_interval(0.5)
-	tween.tween_property(banner, "modulate:a", 0.0, 0.3)
-	tween.tween_callback(banner.queue_free)
+	"""Show a banner that slides in and out using CombatOverlayBuilder."""
+	CombatOverlayBuilder.create_turn_banner(self, text)
 
 
 func _on_energy_changed(current: int, max_energy: int) -> void:
@@ -1273,70 +1167,6 @@ func _on_settings_quit_pressed() -> void:
 
 # === Glossary Overlay Functions ===
 
-const GLOSSARY_ENTRIES: Array[Dictionary] = [
-	{
-		"title": "⚡ Energy",
-		"color": Color(1.0, 0.85, 0.2),
-		"description": "Resource spent to play cards. Each card has an energy cost shown in the top-left corner. Energy refills to your maximum (usually 3) at the start of each turn."
-	},
-	{
-		"title": "🛡️ Armor",
-		"color": Color(0.4, 0.8, 1.0),
-		"description": "Absorbs incoming damage before your HP is reduced. Armor persists between turns until it's used up. When you take damage, armor is consumed first."
-	},
-	{
-		"title": "☠️ Hex",
-		"color": Color(0.7, 0.4, 1.0),
-		"description": "A stacking debuff applied to enemies. When a hexed enemy takes ANY damage, they take bonus damage equal to their hex stacks, then all hex is consumed. Stack hex high, then trigger it with a damage card!"
-	},
-	{
-		"title": "🚧 Barrier",
-		"color": Color(0.5, 0.9, 0.6),
-		"description": "A defensive zone placed on a ring (Close, Mid, or Far). When enemies move INWARD through that ring, they take the barrier's damage. Barriers last for a set number of turns before expiring."
-	},
-	{
-		"title": "🔫 Persistent Weapon",
-		"color": Color(0.9, 0.6, 0.3),
-		"description": "Weapons that stay in play after being played. They automatically trigger at the start of each turn (dealing damage to enemies) until combat ends."
-	},
-	{
-		"title": "♥️ Lifesteal",
-		"color": Color(0.3, 0.9, 0.4),
-		"description": "Healing effect that triggers when dealing damage or killing enemies. Some cards heal you for a portion of damage dealt or per enemy killed."
-	},
-	{
-		"title": "↗️ Push",
-		"color": Color(0.6, 0.7, 1.0),
-		"description": "Crowd control effect that moves enemies outward to a farther ring. Useful for buying time or forcing enemies through barriers again."
-	},
-	{
-		"title": "📜 Draw",
-		"color": Color(0.5, 0.75, 1.0),
-		"description": "Draws additional cards from your deck into your hand. If your deck is empty, your discard pile is shuffled back into your deck first."
-	},
-	{
-		"title": "🎯 Targeting",
-		"color": Color(1.0, 0.7, 0.4),
-		"description": "Cards can target enemies in different ways:\n• Ring (choose): You pick which ring to affect\n• Ring (auto): Automatically hits specific rings\n• Random: Hits random enemies in valid rings\n• Self: Affects only you (buffs, armor, healing)"
-	},
-	{
-		"title": "🔴 Rings",
-		"color": Color(1.0, 0.5, 0.5),
-		"description": "The battlefield has 4 rings:\n• MELEE (red): Enemies here attack you!\n• CLOSE (orange): One step from melee\n• MID (yellow): Middle distance\n• FAR (blue): Where enemies spawn\n\nEnemies advance inward each turn."
-	},
-	{
-		"title": "⚔️ Card Types",
-		"color": Color(0.9, 0.4, 0.4),
-		"description": "• Weapon: Deal damage, some persist\n• Skill: Buffs, healing, utility\n• Hex: Apply hex debuff to enemies\n• Defense: Gain armor, create barriers"
-	},
-	{
-		"title": "⭐ Card Tiers",
-		"color": Color(1.0, 0.85, 0.3),
-		"description": "Cards have tiers (T1, T2, T3). Higher tiers have improved stats. Merge two identical cards at the same tier to upgrade them to the next tier!"
-	},
-]
-
-
 func _on_glossary_pressed() -> void:
 	AudioManager.play_button_click()
 	_show_glossary_overlay()
@@ -1348,7 +1178,7 @@ func _on_glossary_close_pressed() -> void:
 
 
 func _show_glossary_overlay() -> void:
-	_populate_glossary()
+	GlossaryData.populate_glossary_content(glossary_content)
 	glossary_overlay.visible = true
 
 
@@ -1356,130 +1186,7 @@ func _hide_glossary_overlay() -> void:
 	glossary_overlay.visible = false
 
 
-func _populate_glossary() -> void:
-	# Clear existing content
-	for child: Node in glossary_content.get_children():
-		child.queue_free()
-	
-	# Add each glossary entry
-	for entry: Dictionary in GLOSSARY_ENTRIES:
-		var entry_container: VBoxContainer = VBoxContainer.new()
-		entry_container.add_theme_constant_override("separation", 6)
-		
-		# Title
-		var title_label: Label = Label.new()
-		title_label.text = entry.title
-		title_label.add_theme_font_size_override("font_size", 20)
-		title_label.add_theme_color_override("font_color", entry.color)
-		entry_container.add_child(title_label)
-		
-		# Description
-		var desc_label: Label = Label.new()
-		desc_label.text = entry.description
-		desc_label.add_theme_font_size_override("font_size", 14)
-		desc_label.add_theme_color_override("font_color", Color(0.85, 0.85, 0.9))
-		desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		desc_label.custom_minimum_size = Vector2(620, 0)
-		entry_container.add_child(desc_label)
-		
-		# Separator line
-		var separator: HSeparator = HSeparator.new()
-		separator.add_theme_constant_override("separation", 8)
-		entry_container.add_child(separator)
-		
-		glossary_content.add_child(entry_container)
-
-
 # === Deck Viewer Overlay Functions ===
-
-func _create_deck_viewer_overlay() -> void:
-	"""Create the deck viewer overlay for viewing the current run deck."""
-	deck_viewer_overlay = CanvasLayer.new()
-	deck_viewer_overlay.name = "DeckViewerOverlay"
-	deck_viewer_overlay.layer = 50
-	deck_viewer_overlay.visible = false
-	add_child(deck_viewer_overlay)
-	
-	# Dimmer background
-	var dimmer: ColorRect = ColorRect.new()
-	dimmer.name = "Dimmer"
-	dimmer.set_anchors_preset(Control.PRESET_FULL_RECT)
-	dimmer.color = Color(0, 0, 0, 0.85)
-	deck_viewer_overlay.add_child(dimmer)
-	
-	# Main panel
-	var panel: PanelContainer = PanelContainer.new()
-	panel.name = "DeckPanel"
-	panel.set_anchors_preset(Control.PRESET_CENTER)
-	panel.offset_left = -450
-	panel.offset_top = -400
-	panel.offset_right = 450
-	panel.offset_bottom = 400
-	
-	var panel_style: StyleBoxFlat = StyleBoxFlat.new()
-	panel_style.bg_color = Color(0.06, 0.05, 0.1, 0.98)
-	panel_style.border_color = Color(0.5, 0.7, 0.9, 1.0)
-	panel_style.set_border_width_all(3)
-	panel_style.set_corner_radius_all(16)
-	panel_style.content_margin_left = 20.0
-	panel_style.content_margin_right = 20.0
-	panel_style.content_margin_top = 15.0
-	panel_style.content_margin_bottom = 15.0
-	panel_style.shadow_color = Color(0, 0, 0, 0.5)
-	panel_style.shadow_size = 8
-	panel.add_theme_stylebox_override("panel", panel_style)
-	deck_viewer_overlay.add_child(panel)
-	
-	# VBox for content
-	var vbox: VBoxContainer = VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 12)
-	panel.add_child(vbox)
-	
-	# Header with title and close button
-	var header: HBoxContainer = HBoxContainer.new()
-	vbox.add_child(header)
-	
-	deck_viewer_title = Label.new()
-	deck_viewer_title.text = "📚 YOUR DECK"
-	deck_viewer_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	deck_viewer_title.add_theme_font_size_override("font_size", 28)
-	deck_viewer_title.add_theme_color_override("font_color", Color(0.7, 0.85, 1.0))
-	header.add_child(deck_viewer_title)
-	
-	var close_btn: Button = Button.new()
-	close_btn.text = "✕"
-	close_btn.custom_minimum_size = Vector2(45, 45)
-	close_btn.add_theme_font_size_override("font_size", 22)
-	close_btn.flat = true
-	close_btn.pressed.connect(_on_deck_viewer_close)
-	header.add_child(close_btn)
-	
-	# Separator
-	var sep: HSeparator = HSeparator.new()
-	vbox.add_child(sep)
-	
-	# Info label
-	var info_label: Label = Label.new()
-	info_label.text = "These are the cards in your current run deck."
-	info_label.add_theme_font_size_override("font_size", 14)
-	info_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.7))
-	info_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(info_label)
-	
-	# Scroll container for cards
-	var scroll: ScrollContainer = ScrollContainer.new()
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll.custom_minimum_size = Vector2(860, 650)
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	vbox.add_child(scroll)
-	
-	# Grid for cards
-	deck_viewer_grid = GridContainer.new()
-	deck_viewer_grid.columns = 5
-	deck_viewer_grid.add_theme_constant_override("h_separation", 15)
-	deck_viewer_grid.add_theme_constant_override("v_separation", 15)
-	scroll.add_child(deck_viewer_grid)
-
 
 func _on_deck_view_pressed() -> void:
 	"""Called when the deck view button is pressed."""
@@ -1530,77 +1237,6 @@ func _on_deck_viewer_close() -> void:
 
 
 # === Dev Panel Functions ===
-
-func _create_dev_panel() -> void:
-	"""Create a dev cheat panel in the top-right corner."""
-	var dev_panel: PanelContainer = PanelContainer.new()
-	dev_panel.name = "DevPanel"
-	
-	# Position in top-right corner using manual anchors
-	dev_panel.anchor_left = 1.0
-	dev_panel.anchor_right = 1.0
-	dev_panel.anchor_top = 0.0
-	dev_panel.anchor_bottom = 0.0
-	dev_panel.offset_left = -180
-	dev_panel.offset_top = 55
-	dev_panel.offset_right = -10
-	dev_panel.offset_bottom = 210
-	
-	# Style the panel
-	var style: StyleBoxFlat = StyleBoxFlat.new()
-	style.bg_color = Color(0.15, 0.1, 0.2, 0.9)
-	style.set_border_width_all(2)
-	style.border_color = Color(1.0, 0.4, 0.4, 0.8)
-	style.set_corner_radius_all(8)
-	style.content_margin_left = 10.0
-	style.content_margin_right = 10.0
-	style.content_margin_top = 8.0
-	style.content_margin_bottom = 8.0
-	dev_panel.add_theme_stylebox_override("panel", style)
-	
-	# VBox for buttons
-	var vbox: VBoxContainer = VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 6)
-	dev_panel.add_child(vbox)
-	
-	# Title
-	var title: Label = Label.new()
-	title.text = "🔧 DEV"
-	title.add_theme_font_size_override("font_size", 14)
-	title.add_theme_color_override("font_color", Color(1.0, 0.5, 0.5))
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(title)
-	
-	# Force Win button
-	var win_btn: Button = Button.new()
-	win_btn.text = "🏆 Force Win"
-	win_btn.custom_minimum_size = Vector2(150, 30)
-	win_btn.pressed.connect(_dev_force_win)
-	vbox.add_child(win_btn)
-	
-	# Force Lose button
-	var lose_btn: Button = Button.new()
-	lose_btn.text = "💀 Force Lose"
-	lose_btn.custom_minimum_size = Vector2(150, 30)
-	lose_btn.pressed.connect(_dev_force_lose)
-	vbox.add_child(lose_btn)
-	
-	# Add Energy button
-	var energy_btn: Button = Button.new()
-	energy_btn.text = "⚡ +3 Energy"
-	energy_btn.custom_minimum_size = Vector2(150, 30)
-	energy_btn.pressed.connect(_dev_add_energy)
-	vbox.add_child(energy_btn)
-	
-	# Add Scrap button
-	var scrap_btn: Button = Button.new()
-	scrap_btn.text = "⚙️ +1000 Scrap"
-	scrap_btn.custom_minimum_size = Vector2(150, 30)
-	scrap_btn.pressed.connect(_dev_add_scrap)
-	vbox.add_child(scrap_btn)
-	
-	add_child(dev_panel)
-
 
 func _create_v2_debug_stat_panel() -> void:
 	"""Create the V2 debug stat panel (toggle with F3)."""

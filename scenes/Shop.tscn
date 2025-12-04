@@ -113,71 +113,84 @@ layout_mode = 2
 theme_override_constants/separation = 20
 alignment = 1
 
-[node name="ServicesSection" type="VBoxContainer" parent="MarginContainer/VBox"]
+[node name="RightPanel" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -420.0
+offset_top = -520.0
+offset_right = -10.0
+offset_bottom = -370.0
+grow_horizontal = 0
+grow_vertical = 0
+theme_override_constants/separation = 15
+alignment = 2
+
+[node name="ServicesSection" type="VBoxContainer" parent="RightPanel"]
 layout_mode = 2
 theme_override_constants/separation = 10
 
-[node name="SectionLabel" type="Label" parent="MarginContainer/VBox/ServicesSection"]
+[node name="SectionLabel" type="Label" parent="RightPanel/ServicesSection"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.7, 0.7, 0.7, 1)
 theme_override_font_sizes/font_size = 16
 text = "Services"
+horizontal_alignment = 1
 
-[node name="ServiceButtons" type="HBoxContainer" parent="MarginContainer/VBox/ServicesSection"]
+[node name="ServiceButtons" type="HBoxContainer" parent="RightPanel/ServicesSection"]
 layout_mode = 2
 theme_override_constants/separation = 20
 alignment = 1
 
-[node name="RemoveCard" type="VBoxContainer" parent="MarginContainer/VBox/ServicesSection/ServiceButtons"]
+[node name="RemoveCard" type="VBoxContainer" parent="RightPanel/ServicesSection/ServiceButtons"]
 layout_mode = 2
 
-[node name="Button" type="Button" parent="MarginContainer/VBox/ServicesSection/ServiceButtons/RemoveCard"]
+[node name="Button" type="Button" parent="RightPanel/ServicesSection/ServiceButtons/RemoveCard"]
 custom_minimum_size = Vector2(120, 50)
 layout_mode = 2
 text = "🗑️ Remove"
 
-[node name="Cost" type="Label" parent="MarginContainer/VBox/ServicesSection/ServiceButtons/RemoveCard"]
+[node name="Cost" type="Label" parent="RightPanel/ServicesSection/ServiceButtons/RemoveCard"]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.9, 0.5, 1)
 theme_override_font_sizes/font_size = 12
 text = "50 Scrap"
 horizontal_alignment = 1
 
-[node name="Reroll" type="VBoxContainer" parent="MarginContainer/VBox/ServicesSection/ServiceButtons"]
+[node name="Reroll" type="VBoxContainer" parent="RightPanel/ServicesSection/ServiceButtons"]
 layout_mode = 2
 
-[node name="Button" type="Button" parent="MarginContainer/VBox/ServicesSection/ServiceButtons/Reroll"]
+[node name="Button" type="Button" parent="RightPanel/ServicesSection/ServiceButtons/Reroll"]
 custom_minimum_size = Vector2(120, 50)
 layout_mode = 2
 text = "🔄 Reroll"
 
-[node name="Cost" type="Label" parent="MarginContainer/VBox/ServicesSection/ServiceButtons/Reroll"]
+[node name="Cost" type="Label" parent="RightPanel/ServicesSection/ServiceButtons/Reroll"]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.9, 0.5, 1)
 theme_override_font_sizes/font_size = 12
 text = "10 Scrap"
 horizontal_alignment = 1
 
-[node name="ViewDeck" type="VBoxContainer" parent="MarginContainer/VBox/ServicesSection/ServiceButtons"]
+[node name="ViewDeck" type="VBoxContainer" parent="RightPanel/ServicesSection/ServiceButtons"]
 layout_mode = 2
 
-[node name="Button" type="Button" parent="MarginContainer/VBox/ServicesSection/ServiceButtons/ViewDeck"]
+[node name="Button" type="Button" parent="RightPanel/ServicesSection/ServiceButtons/ViewDeck"]
 custom_minimum_size = Vector2(120, 50)
 layout_mode = 2
 text = "📚 Deck"
 
-[node name="Label" type="Label" parent="MarginContainer/VBox/ServicesSection/ServiceButtons/ViewDeck"]
+[node name="Label" type="Label" parent="RightPanel/ServicesSection/ServiceButtons/ViewDeck"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.6, 0.7, 0.9, 1)
 theme_override_font_sizes/font_size = 12
 text = "View Cards"
 horizontal_alignment = 1
 
-[node name="Spacer" type="Control" parent="MarginContainer/VBox"]
-layout_mode = 2
-size_flags_vertical = 3
-
-[node name="ContinueButton" type="Button" parent="MarginContainer/VBox"]
+[node name="ContinueButton" type="Button" parent="RightPanel"]
 custom_minimum_size = Vector2(200, 60)
 layout_mode = 2
 size_flags_horizontal = 4
@@ -257,8 +270,8 @@ custom_minimum_size = Vector2(0, 280)
 layout_mode = 2
 size_flags_horizontal = 3
 
-[connection signal="pressed" from="MarginContainer/VBox/ServicesSection/ServiceButtons/RemoveCard/Button" to="." method="_on_remove_card_pressed"]
-[connection signal="pressed" from="MarginContainer/VBox/ServicesSection/ServiceButtons/Reroll/Button" to="." method="_on_reroll_pressed"]
-[connection signal="pressed" from="MarginContainer/VBox/ServicesSection/ServiceButtons/ViewDeck/Button" to="." method="_on_view_deck_pressed"]
-[connection signal="pressed" from="MarginContainer/VBox/ContinueButton" to="." method="_on_continue_pressed"]
+[connection signal="pressed" from="RightPanel/ServicesSection/ServiceButtons/RemoveCard/Button" to="." method="_on_remove_card_pressed"]
+[connection signal="pressed" from="RightPanel/ServicesSection/ServiceButtons/Reroll/Button" to="." method="_on_reroll_pressed"]
+[connection signal="pressed" from="RightPanel/ServicesSection/ServiceButtons/ViewDeck/Button" to="." method="_on_view_deck_pressed"]
+[connection signal="pressed" from="RightPanel/ContinueButton" to="." method="_on_continue_pressed"]
 [connection signal="pressed" from="DeckViewPanel/VBox/CloseButton" to="." method="_on_deck_view_close"]

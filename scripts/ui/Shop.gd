@@ -1,13 +1,17 @@
 extends Control
 ## Shop - Post-wave shop screen with cards, artifacts, merges, and services
+## Uses ShopPanelBuilder and ShopStatsFormatter for UI creation (see scripts/ui/shop/)
+
+const ShopPanelBuilder = preload("res://scripts/ui/shop/ShopPanelBuilder.gd")
+const ShopStatsFormatter = preload("res://scripts/ui/shop/ShopStatsFormatter.gd")
 
 @onready var scrap_label: Label = $MarginContainer/VBox/Header/ScrapContainer/ScrapLabel
 @onready var card_slots: HBoxContainer = $MarginContainer/VBox/CardsSection/CardSlots
 @onready var artifact_slots: HBoxContainer = $MarginContainer/VBox/ArtifactsSection/ArtifactSlots
 @onready var merge_section: Control = $MarginContainer/VBox/MergeSection
 @onready var merge_slots: HBoxContainer = $MarginContainer/VBox/MergeSection/MergeSlots
-@onready var remove_cost_label: Label = $MarginContainer/VBox/ServicesSection/ServiceButtons/RemoveCard/Cost
-@onready var reroll_cost_label: Label = $MarginContainer/VBox/ServicesSection/ServiceButtons/Reroll/Cost
+@onready var remove_cost_label: Label = $RightPanel/ServicesSection/ServiceButtons/RemoveCard/Cost
+@onready var reroll_cost_label: Label = $RightPanel/ServicesSection/ServiceButtons/Reroll/Cost
 @onready var deck_view_panel: PanelContainer = $DeckViewPanel
 @onready var deck_grid: GridContainer = $DeckViewPanel/VBox/ScrollContainer/DeckGrid
 
@@ -21,6 +25,7 @@ extends Control
 var deck_viewer_overlay: CanvasLayer = null
 var deck_viewer_grid: GridContainer = null
 var deck_viewer_title: Label = null
+var deck_viewer_close_btn: Button = null
 
 # Stats panel (always visible in workshop)
 var stats_panel: PanelContainer = null
@@ -34,11 +39,9 @@ var owned_artifacts_panel: PanelContainer = null
 # Tooltip for artifacts
 var artifact_tooltip: PanelContainer = null
 
-# Merge popup (optional - created dynamically if needed)
-var merge_popup: PanelContainer = null
-var merge_card_name: Label = null
-var merge_preview: Label = null
-var merge_confirm_btn: Button = null
+# Dev panel reference
+var dev_panel: PanelContainer = null
+var dev_panel_vbox: VBoxContainer = null
 
 var card_ui_scene: PackedScene = preload("res://scenes/ui/CardUI.tscn")
 
@@ -60,23 +63,95 @@ func _ready() -> void:
 	# Apply interest and show XP summary when entering shop
 	_apply_wave_rewards()
 	
-	_create_deck_viewer_overlay()
-	_create_dev_panel()
-	_create_stats_panel()
-	_create_tag_tracker_panel()
-	_create_owned_artifacts_panel()
-	_create_card_collection_panel()
-	_create_artifact_tooltip()
+	# Use ShopPanelBuilder for dynamic UI creation
+	_setup_deck_viewer_overlay()
+	_setup_dev_panel()
+	_setup_stats_panel()
+	_setup_tag_tracker_panel()
+	_setup_owned_artifacts_panel()
+	_setup_card_collection_panel()
+	_setup_artifact_tooltip()
+	
 	_refresh_shop()
 	_update_ui()
 	_check_merges()
 	
 	RunManager.scrap_changed.connect(_on_scrap_changed)
 	MergeManager.merge_completed.connect(_on_merge_completed)
+
+
+func _setup_deck_viewer_overlay() -> void:
+	"""Create deck viewer overlay using ShopPanelBuilder."""
+	var result: Dictionary = ShopPanelBuilder.create_deck_viewer_overlay(self)
+	deck_viewer_overlay = result.overlay
+	deck_viewer_grid = result.grid
+	deck_viewer_title = result.title
+	deck_viewer_close_btn = result.close_button
+	deck_viewer_close_btn.pressed.connect(_on_deck_viewer_close)
+
+
+func _setup_dev_panel() -> void:
+	"""Create dev panel using ShopPanelBuilder."""
+	dev_panel = ShopPanelBuilder.create_dev_panel(self)
+	dev_panel_vbox = dev_panel.get_child(0) as VBoxContainer
 	
-	# Hide merge popup initially
-	if merge_popup:
-		merge_popup.visible = false
+	# Add dev buttons
+	ShopPanelBuilder.create_dev_button(dev_panel_vbox, "🏆 Skip Wave", _dev_skip_wave)
+	ShopPanelBuilder.create_dev_button(dev_panel_vbox, "⚙️ +1000 Scrap", _dev_add_scrap)
+	ShopPanelBuilder.create_dev_button(dev_panel_vbox, "❤️ Full Heal", _dev_full_heal)
+
+
+func _setup_stats_panel() -> void:
+	"""Create stats panel using ShopPanelBuilder."""
+	stats_panel = ShopPanelBuilder.create_stats_panel(self)
+	
+	# Connect to stats changes for live updates
+	if RunManager:
+		if RunManager.has_signal("stats_changed"):
+			RunManager.stats_changed.connect(_update_stats_panel)
+		if RunManager.has_signal("hp_changed"):
+			RunManager.hp_changed.connect(_on_stats_hp_changed)
+		if RunManager.has_signal("armor_changed"):
+			RunManager.armor_changed.connect(_on_stats_armor_changed)
+	
+	_update_stats_panel()
+
+
+func _setup_tag_tracker_panel() -> void:
+	"""Create tag tracker panel using ShopPanelBuilder."""
+	tag_tracker_panel = ShopPanelBuilder.create_tag_tracker_panel(self)
+	_update_tag_tracker()
+
+
+func _setup_owned_artifacts_panel() -> void:
+	"""Create owned artifacts panel using ShopPanelBuilder."""
+	owned_artifacts_panel = ShopPanelBuilder.create_owned_artifacts_panel(self)
+	_update_owned_artifacts()
+
+
+func _setup_card_collection_panel() -> void:
+	"""Style the card collection panel."""
+	if not card_collection_panel:
+		return
+	
+	var style: StyleBoxFlat = StyleBoxFlat.new()
+	style.bg_color = Color(0.03, 0.02, 0.06, 0.95)
+	style.border_width_top = 2
+	style.border_color = Color(0.4, 0.5, 0.7, 0.9)
+	style.corner_radius_top_left = 10
+	style.corner_radius_top_right = 10
+	style.content_margin_left = 15.0
+	style.content_margin_right = 15.0
+	style.content_margin_top = 8.0
+	style.content_margin_bottom = 8.0
+	card_collection_panel.add_theme_stylebox_override("panel", style)
+	
+	_update_card_collection()
+
+
+func _setup_artifact_tooltip() -> void:
+	"""Create artifact tooltip using ShopPanelBuilder."""
+	artifact_tooltip = ShopPanelBuilder.create_artifact_tooltip(self)
 
 
 func _apply_wave_rewards() -> void:
@@ -588,95 +663,6 @@ func _on_continue_pressed() -> void:
 
 # === Deck Viewer Overlay Functions ===
 
-func _create_deck_viewer_overlay() -> void:
-	"""Create the deck viewer overlay for viewing the current run deck."""
-	deck_viewer_overlay = CanvasLayer.new()
-	deck_viewer_overlay.name = "DeckViewerOverlay"
-	deck_viewer_overlay.layer = 50
-	deck_viewer_overlay.visible = false
-	add_child(deck_viewer_overlay)
-	
-	# Dimmer background
-	var dimmer: ColorRect = ColorRect.new()
-	dimmer.name = "Dimmer"
-	dimmer.set_anchors_preset(Control.PRESET_FULL_RECT)
-	dimmer.color = Color(0, 0, 0, 0.85)
-	deck_viewer_overlay.add_child(dimmer)
-	
-	# Main panel
-	var panel: PanelContainer = PanelContainer.new()
-	panel.name = "DeckPanel"
-	panel.set_anchors_preset(Control.PRESET_CENTER)
-	panel.offset_left = -450
-	panel.offset_top = -400
-	panel.offset_right = 450
-	panel.offset_bottom = 400
-	
-	var panel_style: StyleBoxFlat = StyleBoxFlat.new()
-	panel_style.bg_color = Color(0.06, 0.05, 0.1, 0.98)
-	panel_style.border_color = Color(0.5, 0.7, 0.9, 1.0)
-	panel_style.set_border_width_all(3)
-	panel_style.set_corner_radius_all(16)
-	panel_style.content_margin_left = 20.0
-	panel_style.content_margin_right = 20.0
-	panel_style.content_margin_top = 15.0
-	panel_style.content_margin_bottom = 15.0
-	panel_style.shadow_color = Color(0, 0, 0, 0.5)
-	panel_style.shadow_size = 8
-	panel.add_theme_stylebox_override("panel", panel_style)
-	deck_viewer_overlay.add_child(panel)
-	
-	# VBox for content
-	var vbox: VBoxContainer = VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 12)
-	panel.add_child(vbox)
-	
-	# Header with title and close button
-	var header: HBoxContainer = HBoxContainer.new()
-	vbox.add_child(header)
-	
-	deck_viewer_title = Label.new()
-	deck_viewer_title.text = "📚 YOUR DECK"
-	deck_viewer_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	deck_viewer_title.add_theme_font_size_override("font_size", 28)
-	deck_viewer_title.add_theme_color_override("font_color", Color(0.7, 0.85, 1.0))
-	header.add_child(deck_viewer_title)
-	
-	var close_btn: Button = Button.new()
-	close_btn.text = "✕"
-	close_btn.custom_minimum_size = Vector2(45, 45)
-	close_btn.add_theme_font_size_override("font_size", 22)
-	close_btn.flat = true
-	close_btn.pressed.connect(_on_deck_viewer_close)
-	header.add_child(close_btn)
-	
-	# Separator
-	var sep: HSeparator = HSeparator.new()
-	vbox.add_child(sep)
-	
-	# Info label
-	var info_label: Label = Label.new()
-	info_label.text = "These are the cards in your current run deck."
-	info_label.add_theme_font_size_override("font_size", 14)
-	info_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.7))
-	info_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(info_label)
-	
-	# Scroll container for cards
-	var scroll: ScrollContainer = ScrollContainer.new()
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll.custom_minimum_size = Vector2(860, 650)
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	vbox.add_child(scroll)
-	
-	# Grid for cards
-	deck_viewer_grid = GridContainer.new()
-	deck_viewer_grid.columns = 5
-	deck_viewer_grid.add_theme_constant_override("h_separation", 15)
-	deck_viewer_grid.add_theme_constant_override("v_separation", 15)
-	scroll.add_child(deck_viewer_grid)
-
-
 func _on_view_deck_pressed() -> void:
 	"""Called when the view deck button is pressed."""
 	AudioManager.play_button_click()
@@ -728,70 +714,6 @@ func _on_deck_viewer_close() -> void:
 
 # === Dev Panel Functions ===
 
-func _create_dev_panel() -> void:
-	"""Create a dev cheat panel in the top-right corner."""
-	var dev_panel: PanelContainer = PanelContainer.new()
-	dev_panel.name = "DevPanel"
-	
-	# Position in top-right corner using manual anchors
-	dev_panel.anchor_left = 1.0
-	dev_panel.anchor_right = 1.0
-	dev_panel.anchor_top = 0.0
-	dev_panel.anchor_bottom = 0.0
-	dev_panel.offset_left = -180
-	dev_panel.offset_top = 80
-	dev_panel.offset_right = -10
-	dev_panel.offset_bottom = 235
-	
-	# Style the panel
-	var style: StyleBoxFlat = StyleBoxFlat.new()
-	style.bg_color = Color(0.15, 0.1, 0.2, 0.9)
-	style.set_border_width_all(2)
-	style.border_color = Color(1.0, 0.4, 0.4, 0.8)
-	style.set_corner_radius_all(8)
-	style.content_margin_left = 10.0
-	style.content_margin_right = 10.0
-	style.content_margin_top = 8.0
-	style.content_margin_bottom = 8.0
-	dev_panel.add_theme_stylebox_override("panel", style)
-	
-	# VBox for buttons
-	var vbox: VBoxContainer = VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 6)
-	dev_panel.add_child(vbox)
-	
-	# Title
-	var title: Label = Label.new()
-	title.text = "🔧 DEV"
-	title.add_theme_font_size_override("font_size", 14)
-	title.add_theme_color_override("font_color", Color(1.0, 0.5, 0.5))
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(title)
-	
-	# Force Win button (skip to next wave)
-	var win_btn: Button = Button.new()
-	win_btn.text = "🏆 Skip Wave"
-	win_btn.custom_minimum_size = Vector2(150, 30)
-	win_btn.pressed.connect(_dev_skip_wave)
-	vbox.add_child(win_btn)
-	
-	# Add Scrap button
-	var scrap_btn: Button = Button.new()
-	scrap_btn.text = "⚙️ +1000 Scrap"
-	scrap_btn.custom_minimum_size = Vector2(150, 30)
-	scrap_btn.pressed.connect(_dev_add_scrap)
-	vbox.add_child(scrap_btn)
-	
-	# Full Heal button
-	var heal_btn: Button = Button.new()
-	heal_btn.text = "❤️ Full Heal"
-	heal_btn.custom_minimum_size = Vector2(150, 30)
-	heal_btn.pressed.connect(_dev_full_heal)
-	vbox.add_child(heal_btn)
-	
-	add_child(dev_panel)
-
-
 func _dev_skip_wave() -> void:
 	"""Skip directly to next wave."""
 	print("[DEV] Skip Wave triggered")
@@ -813,81 +735,6 @@ func _dev_full_heal() -> void:
 
 # === Stats Panel Functions ===
 
-func _create_stats_panel() -> void:
-	"""Create the full stats panel on the left side of the workshop."""
-	stats_panel = PanelContainer.new()
-	stats_panel.name = "StatsPanel"
-	
-	# Position on left side
-	stats_panel.anchor_left = 0.0
-	stats_panel.anchor_right = 0.0
-	stats_panel.anchor_top = 0.0
-	stats_panel.anchor_bottom = 0.0
-	stats_panel.offset_left = 10
-	stats_panel.offset_top = 10
-	stats_panel.offset_right = 260
-	stats_panel.offset_bottom = 470
-	
-	# Style the panel
-	var style: StyleBoxFlat = StyleBoxFlat.new()
-	style.bg_color = Color(0.05, 0.05, 0.1, 0.95)
-	style.border_width_left = 2
-	style.border_width_top = 2
-	style.border_width_right = 2
-	style.border_width_bottom = 2
-	style.border_color = Color(0.3, 0.5, 0.7, 0.9)
-	style.corner_radius_top_left = 8
-	style.corner_radius_top_right = 8
-	style.corner_radius_bottom_right = 8
-	style.corner_radius_bottom_left = 8
-	style.content_margin_left = 10.0
-	style.content_margin_right = 10.0
-	style.content_margin_top = 10.0
-	style.content_margin_bottom = 10.0
-	stats_panel.add_theme_stylebox_override("panel", style)
-	
-	# Content container
-	var vbox: VBoxContainer = VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 4)
-	stats_panel.add_child(vbox)
-	
-	# Title
-	var title: Label = Label.new()
-	title.text = "📊 BUILD STATS"
-	title.add_theme_color_override("font_color", Color(0.4, 0.7, 1.0))
-	title.add_theme_font_size_override("font_size", 16)
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(title)
-	
-	# Separator
-	var sep: HSeparator = HSeparator.new()
-	vbox.add_child(sep)
-	
-	# Stats display (RichTextLabel for BBCode)
-	var stats_label: RichTextLabel = RichTextLabel.new()
-	stats_label.name = "StatsLabel"
-	stats_label.bbcode_enabled = true
-	stats_label.fit_content = true
-	stats_label.scroll_active = false
-	stats_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	stats_label.add_theme_font_size_override("normal_font_size", 12)
-	vbox.add_child(stats_label)
-	
-	add_child(stats_panel)
-	
-	# Connect to stats changes for live updates
-	if RunManager:
-		if RunManager.has_signal("stats_changed"):
-			RunManager.stats_changed.connect(_update_stats_panel)
-		if RunManager.has_signal("hp_changed"):
-			RunManager.hp_changed.connect(_on_stats_hp_changed)
-		if RunManager.has_signal("armor_changed"):
-			RunManager.armor_changed.connect(_on_stats_armor_changed)
-	
-	# Initial update
-	_update_stats_panel()
-
-
 func _on_stats_hp_changed(_current: int, _max_hp: int) -> void:
 	_update_stats_panel()
 
@@ -897,7 +744,7 @@ func _on_stats_armor_changed(_amount: int) -> void:
 
 
 func _update_stats_panel() -> void:
-	"""Update the stats panel with current player stats."""
+	"""Update the stats panel with current player stats using ShopStatsFormatter."""
 	if not stats_panel:
 		return
 	
@@ -905,151 +752,20 @@ func _update_stats_panel() -> void:
 	if not stats_label:
 		return
 	
-	var stats = RunManager.player_stats
-	if not stats:
-		stats_label.text = "[color=#ff6666]No stats available[/color]"
-		return
-	
-	var text: String = ""
-	
-	# Runtime state
-	text += "[color=#ffcc66]━━ RUNTIME ━━[/color]\n"
-	text += "HP: [color=#ff6666]%d/%d[/color]\n" % [RunManager.current_hp, stats.max_hp]
-	text += "Armor: [color=#66ccff]%d[/color]\n" % RunManager.armor
-	text += "Scrap: [color=#ffcc33]%d[/color]\n" % RunManager.scrap
-	text += "Wave: [color=#ffaa33]%d[/color]\n" % RunManager.current_wave
-	
-	# Warden info
-	if RunManager.current_warden:
-		var warden_name: String = "Unknown"
-		if RunManager.current_warden is WardenDefinition:
-			warden_name = RunManager.current_warden.warden_name
-		text += "Warden: [color=#66ff66]%s[/color]\n" % warden_name
-	text += "\n"
-	
-	# Offense stats
-	text += "[color=#ff6666]━━ OFFENSE ━━[/color]\n"
-	text += "Gun Damage: [color=#%s]%.0f%%[/color]\n" % [_get_stat_color(stats.gun_damage_percent), stats.gun_damage_percent]
-	text += "Hex Damage: [color=#%s]%.0f%%[/color]\n" % [_get_stat_color(stats.hex_damage_percent), stats.hex_damage_percent]
-	text += "Barrier Damage: [color=#%s]%.0f%%[/color]\n" % [_get_stat_color(stats.barrier_damage_percent), stats.barrier_damage_percent]
-	text += "Generic Damage: [color=#%s]%.0f%%[/color]\n" % [_get_stat_color(stats.generic_damage_percent), stats.generic_damage_percent]
-	text += "\n"
-	
-	# Defense stats
-	text += "[color=#66ccff]━━ DEFENSE ━━[/color]\n"
-	text += "Armor Gain: [color=#%s]%.0f%%[/color]\n" % [_get_stat_color(stats.armor_gain_percent), stats.armor_gain_percent]
-	text += "Barrier Strength: [color=#%s]%.0f%%[/color]\n" % [_get_stat_color(stats.barrier_strength_percent), stats.barrier_strength_percent]
-	text += "\n"
-	
-	# Economy stats
-	text += "[color=#ffcc33]━━ ECONOMY ━━[/color]\n"
-	text += "Energy/Turn: [color=#ffff66]%d[/color]\n" % stats.energy_per_turn
-	text += "Draw/Turn: [color=#66aaff]%d[/color]\n" % stats.draw_per_turn
-	text += "Hand Size: [color=#aaaaaa]%d[/color]\n" % stats.hand_size_max
-	text += "Scrap Gain: [color=#%s]%.0f%%[/color]\n" % [_get_stat_color(stats.scrap_gain_percent), stats.scrap_gain_percent]
-	text += "Shop Prices: [color=#%s]%.0f%%[/color]\n" % [_get_inverse_stat_color(stats.shop_price_percent), stats.shop_price_percent]
-	text += "\n"
-	
-	# Ring damage
-	text += "[color=#aa66ff]━━ RING DMG ━━[/color]\n"
-	text += "vs Melee: [color=#%s]%.0f%%[/color]\n" % [_get_stat_color(stats.damage_vs_melee_percent), stats.damage_vs_melee_percent]
-	text += "vs Close: [color=#%s]%.0f%%[/color]\n" % [_get_stat_color(stats.damage_vs_close_percent), stats.damage_vs_close_percent]
-	text += "vs Mid: [color=#%s]%.0f%%[/color]\n" % [_get_stat_color(stats.damage_vs_mid_percent), stats.damage_vs_mid_percent]
-	text += "vs Far: [color=#%s]%.0f%%[/color]\n" % [_get_stat_color(stats.damage_vs_far_percent), stats.damage_vs_far_percent]
-	
-	stats_label.text = text
-
-
-func _get_stat_color(value: float) -> String:
-	"""Get color hex based on whether value is above, below, or at 100%."""
-	if value > 100.0:
-		return "66ff66"  # Green for bonus
-	elif value < 100.0:
-		return "ff6666"  # Red for penalty
-	else:
-		return "aaaaaa"  # Gray for neutral
-
-
-func _get_inverse_stat_color(value: float) -> String:
-	"""Get color hex for inverse stats (lower is better, like shop prices)."""
-	if value < 100.0:
-		return "66ff66"  # Green for bonus (cheaper)
-	elif value > 100.0:
-		return "ff6666"  # Red for penalty (more expensive)
-	else:
-		return "aaaaaa"  # Gray for neutral
+	stats_label.text = ShopStatsFormatter.format_player_stats(
+		RunManager.player_stats,
+		RunManager.current_hp,
+		RunManager.armor,
+		RunManager.scrap,
+		RunManager.current_wave,
+		RunManager.current_warden
+	)
 
 
 # === Tag Tracker Panel Functions ===
 
-func _create_tag_tracker_panel() -> void:
-	"""Create a panel showing tag counts from player's deck."""
-	tag_tracker_panel = PanelContainer.new()
-	tag_tracker_panel.name = "TagTrackerPanel"
-	
-	# Position on right side of stats panel
-	tag_tracker_panel.anchor_left = 0.0
-	tag_tracker_panel.anchor_right = 0.0
-	tag_tracker_panel.anchor_top = 0.0
-	tag_tracker_panel.anchor_bottom = 0.0
-	tag_tracker_panel.offset_left = 270  # Right of stats panel (260 + 10 gap)
-	tag_tracker_panel.offset_top = 10
-	tag_tracker_panel.offset_right = 470
-	tag_tracker_panel.offset_bottom = 400
-	
-	# Style the panel
-	var style: StyleBoxFlat = StyleBoxFlat.new()
-	style.bg_color = Color(0.08, 0.05, 0.12, 0.95)
-	style.border_width_left = 2
-	style.border_width_top = 2
-	style.border_width_right = 2
-	style.border_width_bottom = 2
-	style.border_color = Color(0.6, 0.4, 0.8, 0.9)
-	style.corner_radius_top_left = 8
-	style.corner_radius_top_right = 8
-	style.corner_radius_bottom_right = 8
-	style.corner_radius_bottom_left = 8
-	style.content_margin_left = 10.0
-	style.content_margin_right = 10.0
-	style.content_margin_top = 10.0
-	style.content_margin_bottom = 10.0
-	tag_tracker_panel.add_theme_stylebox_override("panel", style)
-	
-	# Content container
-	var vbox: VBoxContainer = VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 4)
-	tag_tracker_panel.add_child(vbox)
-	
-	# Title
-	var title: Label = Label.new()
-	title.text = "🏷️ TAG COUNTS"
-	title.add_theme_color_override("font_color", Color(0.8, 0.6, 1.0))
-	title.add_theme_font_size_override("font_size", 16)
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(title)
-	
-	# Separator
-	var sep: HSeparator = HSeparator.new()
-	vbox.add_child(sep)
-	
-	# Tag display (RichTextLabel for BBCode)
-	var tag_label: RichTextLabel = RichTextLabel.new()
-	tag_label.name = "TagLabel"
-	tag_label.bbcode_enabled = true
-	tag_label.fit_content = true
-	tag_label.scroll_active = false
-	tag_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	tag_label.add_theme_font_size_override("normal_font_size", 12)
-	vbox.add_child(tag_label)
-	
-	add_child(tag_tracker_panel)
-	
-	# Initial update
-	_update_tag_tracker()
-
-
 func _update_tag_tracker() -> void:
-	"""Update the tag tracker panel with current deck tag counts."""
+	"""Update the tag tracker panel with current deck tag counts using ShopStatsFormatter."""
 	if not tag_tracker_panel:
 		return
 	
@@ -1057,167 +773,10 @@ func _update_tag_tracker() -> void:
 	if not tag_label:
 		return
 	
-	# Count tags from deck
-	var tag_counts: Dictionary = {}
-	
-	for entry: Dictionary in RunManager.deck:
-		var card_def = CardDatabase.get_card(entry.card_id)
-		if card_def:
-			for tag: Variant in card_def.tags:
-				if tag is String:
-					if not tag_counts.has(tag):
-						tag_counts[tag] = 0
-					tag_counts[tag] += 1
-	
-	# Build display text
-	var text: String = ""
-	
-	# Core type tags
-	text += "[color=#ff9966]━━ CORE TYPES ━━[/color]\n"
-	for core_tag: String in TagConstants.CORE_TYPES:
-		var count: int = tag_counts.get(core_tag, 0)
-		var display_name: String = TagConstants.get_core_type_display_name(core_tag)
-		var color: String = _get_tag_count_color(count)
-		var icon: String = _get_tag_icon(core_tag)
-		text += "%s %s: [color=#%s]%d[/color]\n" % [icon, display_name, color, count]
-	
-	text += "\n"
-	
-	# Family tags
-	text += "[color=#aa66ff]━━ FAMILIES ━━[/color]\n"
-	for family_tag: String in TagConstants.FAMILY_TAGS:
-		var count: int = tag_counts.get(family_tag, 0)
-		var display_name: String = TagConstants.get_family_display_name(family_tag)
-		var color: String = _get_tag_count_color(count)
-		var icon: String = _get_family_tag_icon(family_tag)
-		text += "%s %s: [color=#%s]%d[/color]\n" % [icon, display_name, color, count]
-	
-	tag_label.text = text
-
-
-func _get_tag_count_color(count: int) -> String:
-	"""Get color hex based on tag count."""
-	if count == 0:
-		return "666666"  # Gray for none
-	elif count <= 2:
-		return "aaaaaa"  # Light gray for few
-	elif count <= 5:
-		return "66ccff"  # Blue for moderate
-	elif count <= 8:
-		return "66ff66"  # Green for good
-	else:
-		return "ffcc33"  # Gold for many
-
-
-func _get_tag_icon(tag: String) -> String:
-	"""Get an icon for a core type tag."""
-	match tag:
-		TagConstants.TAG_GUN:
-			return "🔫"
-		TagConstants.TAG_HEX:
-			return "🔮"
-		TagConstants.TAG_BARRIER:
-			return "🛡️"
-		TagConstants.TAG_DEFENSE:
-			return "🛡️"
-		TagConstants.TAG_SKILL:
-			return "⚡"
-		TagConstants.TAG_ENGINE:
-			return "⚙️"
-		_:
-			return "•"
-
-
-func _get_family_tag_icon(tag: String) -> String:
-	"""Get an icon for a family tag."""
-	match tag:
-		TagConstants.TAG_LIFEDRAIN:
-			return "🩸"
-		TagConstants.TAG_HEX_RITUAL:
-			return "🌑"
-		TagConstants.TAG_FORTRESS:
-			return "🏰"
-		TagConstants.TAG_BARRIER_TRAP:
-			return "💥"
-		TagConstants.TAG_VOLATILE:
-			return "💀"
-		TagConstants.TAG_ENGINE_CORE:
-			return "🔋"
-		_:
-			return "•"
+	tag_label.text = ShopStatsFormatter.format_tag_counts(RunManager.deck)
 
 
 # === Owned Artifacts Panel Functions ===
-
-func _create_owned_artifacts_panel() -> void:
-	"""Create a panel showing all artifacts the player owns."""
-	owned_artifacts_panel = PanelContainer.new()
-	owned_artifacts_panel.name = "OwnedArtifactsPanel"
-	
-	# Position below the tag tracker panel
-	owned_artifacts_panel.anchor_left = 0.0
-	owned_artifacts_panel.anchor_right = 0.0
-	owned_artifacts_panel.anchor_top = 0.0
-	owned_artifacts_panel.anchor_bottom = 0.0
-	owned_artifacts_panel.offset_left = 270
-	owned_artifacts_panel.offset_top = 420
-	owned_artifacts_panel.offset_right = 470
-	owned_artifacts_panel.offset_bottom = 620
-	
-	# Style the panel
-	var style: StyleBoxFlat = StyleBoxFlat.new()
-	style.bg_color = Color(0.1, 0.08, 0.15, 0.95)
-	style.border_width_left = 2
-	style.border_width_top = 2
-	style.border_width_right = 2
-	style.border_width_bottom = 2
-	style.border_color = Color(1.0, 0.8, 0.3, 0.9)
-	style.corner_radius_top_left = 8
-	style.corner_radius_top_right = 8
-	style.corner_radius_bottom_right = 8
-	style.corner_radius_bottom_left = 8
-	style.content_margin_left = 10.0
-	style.content_margin_right = 10.0
-	style.content_margin_top = 10.0
-	style.content_margin_bottom = 10.0
-	owned_artifacts_panel.add_theme_stylebox_override("panel", style)
-	
-	# Content container
-	var vbox: VBoxContainer = VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 8)
-	owned_artifacts_panel.add_child(vbox)
-	
-	# Title
-	var title: Label = Label.new()
-	title.text = "💎 OWNED ARTIFACTS"
-	title.add_theme_color_override("font_color", Color(1.0, 0.85, 0.4))
-	title.add_theme_font_size_override("font_size", 14)
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(title)
-	
-	# Separator
-	var sep: HSeparator = HSeparator.new()
-	vbox.add_child(sep)
-	
-	# Scroll container for artifacts grid
-	var scroll: ScrollContainer = ScrollContainer.new()
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	vbox.add_child(scroll)
-	
-	# Grid for artifact icons
-	var grid: GridContainer = GridContainer.new()
-	grid.name = "ArtifactGrid"
-	grid.columns = 4
-	grid.add_theme_constant_override("h_separation", 8)
-	grid.add_theme_constant_override("v_separation", 8)
-	scroll.add_child(grid)
-	
-	add_child(owned_artifacts_panel)
-	
-	# Initial update
-	_update_owned_artifacts()
-
 
 func _update_owned_artifacts() -> void:
 	"""Update the owned artifacts display."""
@@ -1243,99 +802,16 @@ func _update_owned_artifacts() -> void:
 		grid.add_child(empty_label)
 		return
 	
-	# Create artifact icons
+	# Create artifact icons using ShopPanelBuilder
 	for data: Dictionary in unique_artifacts:
 		var artifact = data.artifact
 		var count: int = data.count
-		var icon_container: Control = _create_artifact_icon(artifact, count)
-		grid.add_child(icon_container)
+		var icon_btn: Button = ShopPanelBuilder.create_artifact_icon(
+			artifact, count, _on_artifact_icon_hover, _on_artifact_icon_exit
+		)
+		grid.add_child(icon_btn)
 
 
-func _create_artifact_icon(artifact, count: int) -> Button:
-	"""Create an artifact icon with hover functionality using Button for reliable mouse events."""
-	var btn: Button = Button.new()
-	btn.custom_minimum_size = Vector2(44, 44)
-	btn.flat = true
-	btn.focus_mode = Control.FOCUS_NONE
-	
-	# Create a stylebox for the button
-	var style_normal: StyleBoxFlat = StyleBoxFlat.new()
-	style_normal.bg_color = Color(0.15, 0.12, 0.2)
-	style_normal.set_corner_radius_all(4)
-	style_normal.set_border_width_all(2)
-	
-	# Border color by rarity
-	match artifact.rarity:
-		1: style_normal.border_color = Color(0.5, 0.5, 0.5)
-		2: style_normal.border_color = Color(0.3, 0.6, 1.0)
-		3: style_normal.border_color = Color(0.8, 0.5, 1.0)
-		4: style_normal.border_color = Color(1.0, 0.8, 0.3)
-		_: style_normal.border_color = Color(0.5, 0.5, 0.5)
-	
-	btn.add_theme_stylebox_override("normal", style_normal)
-	btn.add_theme_stylebox_override("hover", style_normal)
-	btn.add_theme_stylebox_override("pressed", style_normal)
-	btn.add_theme_stylebox_override("focus", style_normal)
-	
-	# Set the icon as text
-	var icon_text: String = artifact.icon
-	if count > 1:
-		icon_text += "\nx%d" % count
-	btn.text = icon_text
-	btn.add_theme_font_size_override("font_size", 18)
-	
-	# Store artifact data for tooltip
-	btn.set_meta("artifact", artifact)
-	btn.set_meta("count", count)
-	
-	# Connect hover signals
-	btn.mouse_entered.connect(_on_artifact_icon_hover.bind(btn))
-	btn.mouse_exited.connect(_on_artifact_icon_exit)
-	
-	return btn
-
-
-func _create_artifact_tooltip() -> void:
-	"""Create the floating tooltip for artifact hover."""
-	artifact_tooltip = PanelContainer.new()
-	artifact_tooltip.name = "ArtifactTooltip"
-	artifact_tooltip.visible = false
-	artifact_tooltip.z_index = 100
-	
-	# Style
-	var style: StyleBoxFlat = StyleBoxFlat.new()
-	style.bg_color = Color(0.08, 0.06, 0.12, 0.98)
-	style.set_corner_radius_all(6)
-	style.set_border_width_all(2)
-	style.border_color = Color(0.8, 0.7, 0.5)
-	style.content_margin_left = 10.0
-	style.content_margin_right = 10.0
-	style.content_margin_top = 8.0
-	style.content_margin_bottom = 8.0
-	artifact_tooltip.add_theme_stylebox_override("panel", style)
-	
-	# Content
-	var vbox: VBoxContainer = VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 4)
-	artifact_tooltip.add_child(vbox)
-	
-	# Name label
-	var name_label: Label = Label.new()
-	name_label.name = "NameLabel"
-	name_label.add_theme_font_size_override("font_size", 14)
-	name_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.6))
-	vbox.add_child(name_label)
-	
-	# Description label
-	var desc_label: Label = Label.new()
-	desc_label.name = "DescLabel"
-	desc_label.add_theme_font_size_override("font_size", 11)
-	desc_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8))
-	desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	desc_label.custom_minimum_size.x = 180
-	vbox.add_child(desc_label)
-	
-	add_child(artifact_tooltip)
 
 
 func _on_artifact_icon_hover(container: Control) -> void:
@@ -1377,28 +853,6 @@ func _on_artifact_icon_exit() -> void:
 # Store references to card UIs for hover effects
 var collection_card_uis: Array[Control] = []
 var hovered_card_index: int = -1
-
-func _create_card_collection_panel() -> void:
-	"""Style the card collection panel (panel itself is defined in scene for easy editing)."""
-	if not card_collection_panel:
-		return
-	
-	# Style the panel
-	var style: StyleBoxFlat = StyleBoxFlat.new()
-	style.bg_color = Color(0.03, 0.02, 0.06, 0.95)
-	style.border_width_top = 2
-	style.border_color = Color(0.4, 0.5, 0.7, 0.9)
-	style.corner_radius_top_left = 10
-	style.corner_radius_top_right = 10
-	style.content_margin_left = 15.0
-	style.content_margin_right = 15.0
-	style.content_margin_top = 8.0
-	style.content_margin_bottom = 8.0
-	card_collection_panel.add_theme_stylebox_override("panel", style)
-	
-	# Initial update
-	_update_card_collection()
-
 
 func _update_card_collection() -> void:
 	"""Update the card collection display - all cards in a horizontal row."""
