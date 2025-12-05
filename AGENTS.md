@@ -242,14 +242,6 @@ Key tools:
   - Adding or changing any game content (cards, enemies, etc.)
 - **Never use vague descriptions** like "deals damage" - always specify "deals 6 damage to all enemies in Close ring"
 
-### PROGRESS.md  
-- **Purpose**: Track **unfinished work only** - not a historical archive
-- Contains current status tracker with checkboxes for in-progress items
-- Update when:
-  - Starting new multi-step features (add tracking)
-  - Completing any task (check it off)
-  - Finding new bugs or issues (add tracking)
-  - Changing what's working vs broken
 
 **Cleanup Rules:**
 - **Delete completed items** once ALL parts are fully finished - DESIGN.md is the source of truth for what's implemented

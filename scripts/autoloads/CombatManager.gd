@@ -465,7 +465,7 @@ func execute_staged_cards() -> void:
 	
 	_reset_execution_context()
 	
-	# Execute each card left to right
+	# Execute each card left to right - SNAPPY timing
 	for i: int in range(staged_cards.size()):
 		var staged_entry: Dictionary = staged_cards[i]
 		var card_def = staged_entry.card_def
@@ -477,11 +477,12 @@ func execute_staged_cards() -> void:
 		card_executing.emit(card_def, tier, i)
 		print("[CombatManager] Executing card ", i, ": ", card_def.card_name)
 		
-		# Small delay for visual feedback
-		await get_tree().create_timer(0.2).timeout
+		# Brief pause to show card highlight (snappy!)
+		await get_tree().create_timer(0.12).timeout
 		
 		# Execute the card with the current execution context
-		_execute_staged_card(staged_entry, i)
+		# Must await because multi-hit cards use await internally
+		await _execute_staged_card(staged_entry, i)
 		
 		# Update execution context
 		execution_context.cards_played += 1
@@ -493,8 +494,8 @@ func execute_staged_cards() -> void:
 		# Reset lane index after execution
 		current_executing_lane_index = -1
 		
-		# Delay between card executions for visual clarity
-		await get_tree().create_timer(0.4).timeout
+		# Short delay between card executions - snappy but readable
+		await get_tree().create_timer(0.18).timeout
 		
 		# Check if all enemies died - can stop early
 		if battlefield.get_total_enemy_count() == 0:
@@ -511,7 +512,7 @@ func execute_staged_cards() -> void:
 	execution_completed.emit()
 	
 	# Wait a moment then finish turn
-	await get_tree().create_timer(0.3).timeout
+	await get_tree().create_timer(0.2).timeout
 	_finish_player_turn()
 
 
@@ -550,11 +551,68 @@ func _execute_staged_card(staged_entry: Dictionary, lane_index: int) -> void:
 	var original_params: Dictionary = card_def.effect_params
 	card_def.effect_params = modified_params
 	
-	# Use CardResolver to execute the effect
-	CardResolver.resolve(card_def, tier, -1, self)
+	# Special handling for multi-hit cards - execute with visible delays between shots
+	if card_def.effect_type == "v5_multi_hit" and card_def.hit_count > 1:
+		await _execute_multi_hit_card(card_def, tier, lane_index)
+	else:
+		# Use CardResolver to execute the effect
+		CardResolver.resolve(card_def, tier, -1, self)
 	
 	# Restore original params
 	card_def.effect_params = original_params
+
+
+func _execute_multi_hit_card(card_def, _tier: int, _lane_index: int) -> void:
+	"""Execute a multi-hit card with visible delays between each shot.
+	This allows players to see each bullet/projectile distinctly."""
+	var hit_count: int = card_def.hit_count
+	if hit_count <= 0:
+		hit_count = 1
+	
+	var ring_mask: int = CardResolver._build_ring_mask(card_def.target_rings)
+	var total_damage: int = 0
+	var crit_count: int = 0
+	
+	# Handle self-damage first (only once, not per-hit)
+	if card_def.self_damage > 0:
+		var self_dmg: int = card_def.self_damage
+		self_dmg = maxi(0, self_dmg - RunManager.player_stats.self_damage_reduction)
+		if self_dmg > 0:
+			RunManager.take_damage(self_dmg)
+	
+	# Execute each hit with a delay between them
+	for i: int in range(hit_count):
+		var damage_result: Dictionary = CardResolver.calculate_v5_damage(card_def, true)
+		var damage: int = damage_result.damage
+		var is_crit: bool = damage_result.is_crit
+		
+		if is_crit:
+			crit_count += 1
+		
+		# Deal damage to closest enemy
+		var enemy = battlefield.get_closest_enemy_in_rings(ring_mask)
+		if enemy:
+			enemy_targeted.emit(enemy)
+			
+			var result: Dictionary = enemy.take_damage(damage)
+			var dealt_damage: int = result.total_damage
+			
+			enemy_damaged.emit(enemy, dealt_damage, result.hex_triggered)
+			
+			if enemy.current_hp <= 0:
+				_handle_enemy_death(enemy, result.hex_triggered)
+				RunManager.player_stats.kills_this_turn += 1
+			
+			damage_dealt_to_enemies.emit(dealt_damage, enemy.ring)
+			total_damage += dealt_damage
+		
+		# Delay between shots (except after the last one)
+		# 0.25s delay lets you see each bullet distinctly without being too slow
+		if i < hit_count - 1:
+			await get_tree().create_timer(0.25).timeout
+	
+	print("[CombatManager] Multi-hit: ", hit_count, " hits, ", total_damage, " total damage, ", crit_count, " crits")
+	RunManager.player_stats.cards_played += 1
 
 
 func _finish_player_turn() -> void:

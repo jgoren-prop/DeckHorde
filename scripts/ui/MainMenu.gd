@@ -4,6 +4,7 @@ extends Control
 @onready var new_run_button: Button = $VBoxContainer/NewRunButton
 @onready var meta_button: Button = $VBoxContainer/MetaButton
 @onready var settings_button: Button = $VBoxContainer/SettingsButton
+@onready var codex_button: Button = $VBoxContainer/CodexButton
 @onready var card_collection_button: Button = $VBoxContainer/CardCollectionButton
 @onready var dev_tools_button: Button = $VBoxContainer/DevToolsButton
 @onready var quit_button: Button = $VBoxContainer/QuitButton
@@ -13,6 +14,10 @@ var card_collection_overlay: CanvasLayer = null
 var card_collection_grid: GridContainer = null
 var card_collection_title: Label = null
 var card_ui_scene: PackedScene = preload("res://scenes/ui/CardUI.tscn")
+
+# Codex overlay
+var codex_scene: PackedScene = preload("res://scenes/Codex.tscn")
+var codex_instance: Control = null
 
 
 func _ready() -> void:
@@ -51,6 +56,12 @@ func _on_meta_pressed() -> void:
 func _on_settings_pressed() -> void:
 	print("[MainMenu] Settings pressed")
 	GameManager.go_to_scene("settings")
+
+
+func _on_codex_pressed() -> void:
+	print("[MainMenu] Codex pressed")
+	AudioManager.play_button_click()
+	_show_codex()
 
 
 func _on_card_collection_pressed() -> void:
@@ -255,3 +266,20 @@ func _on_card_collection_close() -> void:
 	"""Close the card collection overlay."""
 	AudioManager.play_button_click()
 	card_collection_overlay.visible = false
+
+
+# === Codex Functions ===
+
+func _show_codex() -> void:
+	"""Show the codex overlay with all game knowledge."""
+	if codex_instance and is_instance_valid(codex_instance):
+		codex_instance.queue_free()
+	
+	codex_instance = codex_scene.instantiate()
+	codex_instance.closed.connect(_on_codex_closed)
+	add_child(codex_instance)
+
+
+func _on_codex_closed() -> void:
+	"""Handle codex being closed."""
+	codex_instance = null

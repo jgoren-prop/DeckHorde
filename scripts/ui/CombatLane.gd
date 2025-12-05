@@ -526,7 +526,7 @@ func _animate_card_discard(card_ui: Control) -> void:
 		tween.tween_callback(card_ui.queue_free)
 
 
-func _on_card_executing(card_def, _tier: int, lane_index: int) -> void:
+func _on_card_executing(_card_def, _tier: int, lane_index: int) -> void:
 	if lane_index < 0 or lane_index >= staged_cards.size():
 		return
 	
@@ -536,10 +536,44 @@ func _on_card_executing(card_def, _tier: int, lane_index: int) -> void:
 	if not is_instance_valid(card_ui):
 		return
 	
-	# Pulse effect on the card (artwork is already in 3D mode from staging)
+	# STEP 1: Highlight the active card with a bright glow border
+	_highlight_active_card(card_ui)
+	
+	# STEP 2: Small scale pulse to indicate "this card is now firing"
 	var tween: Tween = card_ui.create_tween()
-	tween.tween_property(card_ui, "scale", Vector2(card_scale * 1.2, card_scale * 1.2), EXECUTE_PULSE_DURATION * 0.4)
-	tween.parallel().tween_property(card_ui, "modulate", Color(1.5, 1.3, 0.8, 1.0), EXECUTE_PULSE_DURATION * 0.4)
+	tween.tween_property(card_ui, "scale", Vector2(card_scale * 1.15, card_scale * 1.15), 0.1)
+	tween.parallel().tween_property(card_ui, "modulate", Color(1.3, 1.2, 1.0, 1.0), 0.1)
+
+
+func _highlight_active_card(card_ui: Control) -> void:
+	"""Add a bright highlight border to indicate this card is actively executing."""
+	if not is_instance_valid(card_ui):
+		return
+	
+	# Create a highlight overlay
+	var highlight: Panel = Panel.new()
+	highlight.name = "ExecuteHighlight"
+	highlight.set_anchors_preset(Control.PRESET_FULL_RECT)
+	highlight.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	highlight.z_index = 10
+	
+	var style: StyleBoxFlat = StyleBoxFlat.new()
+	style.bg_color = Color(0, 0, 0, 0)  # Transparent background
+	style.border_color = Color(1.0, 0.9, 0.3, 1.0)  # Golden glow
+	style.set_border_width_all(4)
+	style.set_corner_radius_all(12)
+	# Add glow effect with shadow
+	style.shadow_color = Color(1.0, 0.8, 0.2, 0.6)
+	style.shadow_size = 8
+	highlight.add_theme_stylebox_override("panel", style)
+	
+	card_ui.add_child(highlight)
+	
+	# Pulse animation on the highlight
+	var tween: Tween = highlight.create_tween()
+	tween.set_loops(3)
+	tween.tween_property(highlight, "modulate:a", 0.5, 0.1)
+	tween.tween_property(highlight, "modulate:a", 1.0, 0.1)
 
 
 func _on_card_executed(card_def, _tier: int) -> void:
@@ -548,9 +582,15 @@ func _on_card_executed(card_def, _tier: int) -> void:
 		if staged.card_def == card_def:
 			var card_ui: Control = staged.card_ui
 			if is_instance_valid(card_ui):
+				# Remove the execution highlight
+				var highlight: Node = card_ui.get_node_or_null("ExecuteHighlight")
+				if highlight:
+					highlight.queue_free()
+				
+				# Dim the card to show it's been used
 				var tween: Tween = card_ui.create_tween()
-				tween.tween_property(card_ui, "modulate", Color(0.5, 0.5, 0.5, 0.7), 0.2)
-				tween.tween_property(card_ui, "scale", Vector2(card_scale * 0.9, card_scale * 0.9), 0.2)
+				tween.tween_property(card_ui, "modulate", Color(0.5, 0.5, 0.5, 0.7), 0.15)
+				tween.tween_property(card_ui, "scale", Vector2(card_scale * 0.9, card_scale * 0.9), 0.15)
 			break
 
 

@@ -1080,30 +1080,34 @@ func _sync_barrier_visual(ring: int) -> void:
 
 
 func _on_enemy_targeted(enemy) -> void:
-	"""Handle visual feedback when an enemy is targeted by a projectile."""
+	"""Handle visual feedback when an enemy is targeted by a projectile.
+	NEW FLOW: Expand stack -> Highlight target -> Fire from muzzle -> Impact effects"""
 	if enemy == null:
 		return
 	
+	# STEP 1: Expand the enemy stack FIRST (if applicable)
+	var stack_key: String = ""
+	if stack_system:
+		stack_key = stack_system.get_stack_key_for_enemy(enemy)
+		if not stack_key.is_empty():
+			# Expand stack immediately to show all units
+			stack_system.hold_stack_open(stack_key)
+	
+	# STEP 2: Highlight the target enemy with a targeting reticle
+	_highlight_target_enemy(enemy, stack_key)
+	
+	# Get target position AFTER expansion (position may change)
 	var target_pos: Vector2 = get_enemy_center_position(enemy)
 	
-	# Keep stacks expanded while they're being aimed at
-	if stack_system:
-		var stack_key: String = stack_system.get_stack_key_for_enemy(enemy)
-		if not stack_key.is_empty():
-			stack_system.hold_stack_open(stack_key)
-			var timer: SceneTreeTimer = get_tree().create_timer(1.5)
-			timer.timeout.connect(func():
-				if stack_system:
-					stack_system.release_stack_hold(stack_key)
-			)
+	# Track this enemy as having a projectile in flight
+	_enemies_with_pending_projectile[enemy.instance_id] = true
 	
 	if not effects_node:
 		return
 	
-	# Get the current executing lane from CombatManager
+	# STEP 3: Fire weapon from muzzle with VFX
 	var lane_index: int = CombatManager.current_executing_lane_index
 	
-	# If we have a valid lane and combat_lane, aim and fire from the weapon
 	if lane_index >= 0 and combat_lane and combat_lane.has_method("set_weapon_target"):
 		# Aim the weapon at the target
 		combat_lane.set_weapon_target(lane_index, target_pos)
@@ -1112,12 +1116,167 @@ func _on_enemy_targeted(enemy) -> void:
 		if combat_lane.has_method("fire_weapon_at_target"):
 			var muzzle_pos: Vector2 = combat_lane.fire_weapon_at_target(lane_index, target_pos)
 			if muzzle_pos != Vector2.ZERO:
-				# Use muzzle position for projectile origin
-				_fire_projectile_from_to(muzzle_pos, target_pos, Color(1.0, 0.9, 0.3))
+				# Create muzzle flash VFX
+				_create_muzzle_flash(muzzle_pos)
+				# Fire fast projectile from muzzle
+				_fire_fast_projectile(muzzle_pos, target_pos, enemy, Color(1.0, 0.9, 0.3), stack_key)
 				return
 	
 	# Fallback: fire generic projectile from arena center
-	effects_node.fire_projectile_to_position(target_pos, Color(1.0, 0.9, 0.3))
+	_fire_fast_projectile(arena_center(), target_pos, enemy, Color(1.0, 0.9, 0.3), stack_key)
+
+
+func _highlight_target_enemy(enemy, stack_key: String) -> void:
+	"""Highlight the enemy being targeted with a red flash/pulse."""
+	# Flash the enemy red to indicate targeting
+	var target_color: Color = Color(1.0, 0.4, 0.4, 1.0)
+	
+	if stack_key.is_empty():
+		# Individual enemy - flash directly
+		if enemy_manager and enemy_manager.has_enemy_visual(enemy.instance_id):
+			var visual: Panel = enemy_manager.get_enemy_visual(enemy.instance_id)
+			_pulse_target(visual, target_color)
+	else:
+		# Stacked enemy - flash the mini-panel if expanded
+		if stack_system and stack_system.stack_visuals.has(stack_key):
+			var stack_data: Dictionary = stack_system.stack_visuals[stack_key]
+			var mini_panels: Array = stack_data.get("mini_panels", [])
+			
+			# Find the specific mini-panel for this enemy
+			for mini_panel in mini_panels:
+				if is_instance_valid(mini_panel):
+					var panel_enemy = mini_panel.get_meta("enemy_instance", null)
+					if panel_enemy and panel_enemy.instance_id == enemy.instance_id:
+						_pulse_target(mini_panel, target_color)
+						break
+			
+			# Also pulse the main stack panel
+			var main_panel: Panel = stack_data.panel
+			if is_instance_valid(main_panel):
+				_pulse_target(main_panel, target_color, 0.8)  # Subtle pulse
+
+
+func _pulse_target(visual: Control, color: Color, intensity: float = 1.0) -> void:
+	"""Apply a quick targeting pulse to a visual element."""
+	if not is_instance_valid(visual):
+		return
+	
+	var target_modulate: Color = color.lerp(Color.WHITE, 1.0 - intensity)
+	
+	var tween: Tween = visual.create_tween()
+	tween.tween_property(visual, "modulate", target_modulate, 0.08)
+	tween.tween_property(visual, "modulate", Color.WHITE, 0.12)
+
+
+func _create_muzzle_flash(pos: Vector2) -> void:
+	"""Create a muzzle flash VFX at the weapon's muzzle position."""
+	if not effects_node:
+		return
+	
+	# Convert to local position
+	var local_pos: Vector2 = pos - effects_node.global_position
+	
+	# Create bright flash
+	var flash: Panel = Panel.new()
+	flash.custom_minimum_size = Vector2(24, 24)
+	flash.size = Vector2(24, 24)
+	flash.position = local_pos - Vector2(12, 12)
+	flash.z_index = 60
+	flash.pivot_offset = flash.size / 2
+	
+	var style: StyleBoxFlat = StyleBoxFlat.new()
+	style.bg_color = Color(1.0, 0.9, 0.4, 1.0)
+	style.set_corner_radius_all(12)
+	flash.add_theme_stylebox_override("panel", style)
+	
+	effects_node.add_child(flash)
+	
+	# Quick flash animation
+	var tween: Tween = flash.create_tween()
+	tween.tween_property(flash, "scale", Vector2(1.8, 1.8), 0.04)
+	tween.parallel().tween_property(flash, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.04)
+	tween.tween_property(flash, "scale", Vector2(0.5, 0.5), 0.06)
+	tween.parallel().tween_property(flash, "modulate:a", 0.0, 0.06)
+	tween.tween_callback(flash.queue_free)
+	
+	# Spawn a few sparks
+	for i: int in range(3):
+		var spark: ColorRect = ColorRect.new()
+		spark.size = Vector2(4, 4)
+		spark.color = Color(1.0, 0.8, 0.3, 1.0)
+		spark.position = local_pos - Vector2(2, 2)
+		spark.z_index = 59
+		effects_node.add_child(spark)
+		
+		var angle: float = randf_range(-PI/4, PI/4)  # Forward cone
+		var spark_dist: float = randf_range(15, 35)
+		var spark_target: Vector2 = local_pos + Vector2(cos(angle), sin(angle)) * spark_dist
+		
+		var spark_tween: Tween = spark.create_tween()
+		spark_tween.set_parallel(true)
+		spark_tween.tween_property(spark, "position", spark_target - Vector2(2, 2), 0.1)
+		spark_tween.tween_property(spark, "modulate:a", 0.0, 0.1)
+		spark_tween.tween_callback(spark.queue_free)
+
+
+func _fire_fast_projectile(from_pos: Vector2, to_pos: Vector2, enemy, color: Color, enemy_stack_key: String = "") -> void:
+	"""Fire a FAST projectile from source to target. Much snappier than the slow version."""
+	if not effects_node:
+		return
+	
+	# Convert to local coordinates
+	var local_from: Vector2 = from_pos - effects_node.global_position
+	var local_to: Vector2 = to_pos - effects_node.global_position
+	
+	var projectile: ColorRect = ColorRect.new()
+	projectile.size = Vector2(14, 5)
+	projectile.color = color
+	projectile.position = local_from - projectile.size / 2
+	projectile.z_index = 48
+	
+	# Rotate to face target
+	var angle: float = local_from.angle_to_point(local_to)
+	projectile.pivot_offset = projectile.size / 2
+	projectile.rotation = angle
+	
+	effects_node.add_child(projectile)
+	
+	# FAST travel - much snappier
+	var distance: float = local_from.distance_to(local_to)
+	var travel_time: float = distance / 1800.0  # Very fast: 1800 px/s
+	travel_time = maxf(travel_time, 0.05)  # Minimum 50ms
+	travel_time = minf(travel_time, 0.15)  # Maximum 150ms
+	
+	var tween: Tween = projectile.create_tween()
+	tween.tween_property(projectile, "position", local_to - projectile.size / 2, travel_time).set_ease(Tween.EASE_OUT)
+	tween.tween_callback(projectile.queue_free)
+	
+	# Schedule impact when projectile arrives
+	var captured_enemy = enemy
+	var captured_stack_key: String = enemy_stack_key
+	var captured_stack_system = stack_system
+	var captured_effects_node = effects_node
+	var impact_timer: SceneTreeTimer = get_tree().create_timer(travel_time)
+	impact_timer.timeout.connect(func():
+		if captured_effects_node and is_instance_valid(captured_effects_node):
+			captured_effects_node.create_impact_flash(local_to, color)
+		# Emit signal to show damage numbers
+		if captured_enemy and captured_effects_node:
+			captured_effects_node.projectile_hit_enemy.emit(captured_enemy, to_pos)
+		# Release stack hold after impact
+		if captured_stack_system and not captured_stack_key.is_empty():
+			# Small delay before collapsing to let player see the damage
+			var release_timer: SceneTreeTimer = get_tree().create_timer(0.35)
+			release_timer.timeout.connect(func():
+				if captured_stack_system:
+					captured_stack_system.release_stack_hold(captured_stack_key)
+			)
+	, CONNECT_ONE_SHOT)
+
+
+func arena_center() -> Vector2:
+	"""Get the center position of the arena in global coordinates."""
+	return center + global_position
 
 
 func _fire_projectile_from_to(from_pos: Vector2, to_pos: Vector2, color: Color) -> void:

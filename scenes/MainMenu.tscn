@@ -75,6 +75,14 @@ size_flags_horizontal = 4
 theme_override_font_sizes/font_size = 18
 text = "Settings"
 
+[node name="CodexButton" type="Button" parent="VBoxContainer"]
+custom_minimum_size = Vector2(250, 50)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_colors/font_color = Color(0.9, 0.75, 0.4, 1)
+theme_override_font_sizes/font_size = 18
+text = "📖 Codex"
+
 [node name="CardCollectionButton" type="Button" parent="VBoxContainer"]
 custom_minimum_size = Vector2(250, 50)
 layout_mode = 2
@@ -113,6 +121,7 @@ text = "v0.1.0 - Early Development"
 [connection signal="pressed" from="VBoxContainer/NewRunButton" to="." method="_on_new_run_pressed"]
 [connection signal="pressed" from="VBoxContainer/MetaButton" to="." method="_on_meta_pressed"]
 [connection signal="pressed" from="VBoxContainer/SettingsButton" to="." method="_on_settings_pressed"]
+[connection signal="pressed" from="VBoxContainer/CodexButton" to="." method="_on_codex_pressed"]
 [connection signal="pressed" from="VBoxContainer/CardCollectionButton" to="." method="_on_card_collection_pressed"]
 [connection signal="pressed" from="VBoxContainer/DevToolsButton" to="." method="_on_dev_tools_pressed"]
 [connection signal="pressed" from="VBoxContainer/QuitButton" to="." method="_on_quit_pressed"]

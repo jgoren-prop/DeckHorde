@@ -100,14 +100,13 @@ func get_total_enemy_count() -> int:
 # =============================================================================
 
 static func _generate_wave_1(wave: WaveDefinition) -> void:
-	"""Wave 1 - Tutorial: Test incoming wave preview (V6: 3x more enemies)"""
+	"""Wave 1 - Tutorial: Simple first battle"""
 	wave.wave_name = "Wave 1 - Tutorial"
 	wave.description = "Your first battle. Learn the basics!"
+	# V7: Simplified to always spawn in FAR so enemies stay as one group
 	wave.turn_spawns = [
-		{"turn": 1, "enemy_id": "weakling", "count": 3, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 1, "enemy_id": "weakling", "count": 3, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 2, "enemy_id": "weakling", "count": 2, "ring": BattlefieldStateScript.Ring.MID},
-		{"turn": 2, "enemy_id": "weakling", "count": 2, "ring": BattlefieldStateScript.Ring.FAR}
+		{"turn": 1, "enemy_id": "weakling", "count": 6, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 2, "enemy_id": "weakling", "count": 4, "ring": BattlefieldStateScript.Ring.FAR}
 	]
 
 
