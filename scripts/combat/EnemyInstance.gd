@@ -1,11 +1,15 @@
 extends RefCounted
 class_name EnemyInstance
 ## EnemyInstance - Runtime instance of an enemy on the battlefield
+## V5: New armor mechanic - each hit removes 1 armor, no damage spillover
 
 var enemy_id: String = ""
 var ring: int = 3  # Current ring (FAR by default)
 var current_hp: int = 10
 var max_hp: int = 10
+
+# V5: Armor system - each HIT removes 1 armor
+var armor: int = 0
 
 # Persistent group tracking - enemies stay in groups even when count drops
 var group_id: String = ""  # Empty string means not in a group
@@ -27,16 +31,26 @@ func _init() -> void:
 	instance_id = _next_instance_id
 
 
+# =============================================================================
+# V5 STATUS EFFECTS
+# =============================================================================
+
 func apply_status(effect_name: String, value: int, duration: int = -1) -> void:
-	"""Apply a status effect to this enemy."""
+	"""Apply a status effect to this enemy.
+	V5: Hex and Burn both stack.
+	"""
 	if status_effects.has(effect_name):
-		# Stack or refresh based on effect type
-		if effect_name == "hex":
-			# Hex stacks damage
-			status_effects[effect_name].value += value
-		else:
-			# Other effects refresh duration
-			status_effects[effect_name].duration = duration
+		# Stack effects
+		match effect_name:
+			"hex":
+				# Hex stacks damage
+				status_effects[effect_name].value += value
+			"burn":
+				# Burn stacks
+				status_effects[effect_name].value += value
+			_:
+				# Other effects refresh duration
+				status_effects[effect_name].duration = duration
 	else:
 		status_effects[effect_name] = {
 			"value": value,
@@ -61,37 +75,101 @@ func remove_status(effect_name: String) -> void:
 	status_effects.erase(effect_name)
 
 
-func tick_status_effects() -> void:
-	"""Process status effect durations at end of turn."""
+func clear_status(effect_name: String) -> void:
+	"""Alias for remove_status."""
+	remove_status(effect_name)
+
+
+func tick_status_effects() -> Dictionary:
+	"""Process status effect durations at end of turn.
+	V5: Burn deals damage (scaled by burn_potency) and reduces by 1.
+	Returns: {burn_damage: int, effects_expired: Array[String]}
+	"""
+	var result: Dictionary = {
+		"burn_damage": 0,
+		"effects_expired": []
+	}
+	
 	var expired: Array[String] = []
 	
 	for effect_name: String in status_effects.keys():
 		var effect: Dictionary = status_effects[effect_name]
-		if effect.duration > 0:
+		
+		# V5: Burn deals damage at end of turn (scaled by burn_potency)
+		if effect_name == "burn":
+			var base_burn: int = effect.value
+			if base_burn > 0:
+				# V5: Apply burn_potency to tick damage
+				var burn_potency_mult: float = 1.0
+				if RunManager and RunManager.player_stats:
+					burn_potency_mult = RunManager.player_stats.get_burn_potency_multiplier()
+				
+				var burn_dmg: int = int(float(base_burn) * burn_potency_mult)
+				current_hp -= burn_dmg
+				result.burn_damage = burn_dmg
+				
+				# Reduce burn stacks by 1
+				effect.value -= 1
+				if effect.value <= 0:
+					expired.append(effect_name)
+				print("[EnemyInstance V5] Burn tick: ", burn_dmg, " damage (", base_burn, " stacks × ", burn_potency_mult, " potency) to ", enemy_id, " (", effect.value, " remaining)")
+		elif effect.duration > 0:
 			effect.duration -= 1
 			if effect.duration <= 0:
 				expired.append(effect_name)
 	
 	for effect_name: String in expired:
 		status_effects.erase(effect_name)
+		result.effects_expired.append(effect_name)
+	
+	return result
 
 
-func take_damage(base_damage: int) -> Dictionary:
+# =============================================================================
+# V5 DAMAGE SYSTEM
+# =============================================================================
+
+func take_damage(base_damage: int, ignore_armor: bool = false) -> Dictionary:
 	"""
-	Apply damage to this enemy, triggering hex if present.
-	Returns: {total_damage: int, hex_triggered: bool, hex_bonus: int}
+	Apply damage to this enemy.
+	V5 Armor mechanic: Each HIT removes 1 armor. No damage spillover.
+	V5 Hex: When hexed enemy takes damage, +damage equal to Hex stacks (scaled by hex_potency), then consumed.
+	
+	Returns: {total_damage: int, hex_triggered: bool, hex_bonus: int, armor_absorbed: bool}
 	"""
 	var hex_bonus: int = 0
 	var hex_triggered: bool = false
 	
-	# Check for hex stacks
+	# Check for hex stacks (V5: triggers before armor, scaled by hex_potency)
 	if has_status("hex"):
-		hex_bonus = get_status_value("hex")
+		var base_hex: int = get_status_value("hex")
 		hex_triggered = true
 		remove_status("hex")  # Consume hex on damage
-		print("[EnemyInstance] Hex triggered on ", enemy_id, ": ", hex_bonus, " bonus damage")
+		
+		# V5: Apply hex_potency to bonus damage
+		var hex_potency_mult: float = 1.0
+		if RunManager and RunManager.player_stats:
+			hex_potency_mult = RunManager.player_stats.get_hex_potency_multiplier()
+		
+		hex_bonus = int(float(base_hex) * hex_potency_mult)
+		print("[EnemyInstance V5] Hex triggered on ", enemy_id, ": +", hex_bonus, " bonus damage (", base_hex, " stacks × ", hex_potency_mult, " potency)")
 	
 	var total_damage: int = base_damage + hex_bonus
+	
+	# V5: Armor absorbs the hit completely
+	if armor > 0 and not ignore_armor:
+		armor -= 1  # Each hit removes 1 armor
+		print("[EnemyInstance V5] Armor absorbed hit (", armor, " armor remaining)")
+		# No damage dealt to HP when armor absorbs
+		return {
+			"total_damage": 0,
+			"hex_triggered": hex_triggered,
+			"hex_bonus": hex_bonus,
+			"armor_absorbed": true,
+			"armor_remaining": armor
+		}
+	
+	# Apply damage to HP
 	current_hp -= total_damage
 	
 	# Clamp HP to 0 (never show negative HP)
@@ -101,9 +179,50 @@ func take_damage(base_damage: int) -> Dictionary:
 	return {
 		"total_damage": total_damage,
 		"hex_triggered": hex_triggered,
-		"hex_bonus": hex_bonus
+		"hex_bonus": hex_bonus,
+		"armor_absorbed": false,
+		"armor_remaining": armor
 	}
 
+
+func take_multi_hit_damage(damage_per_hit: int, hit_count: int, ignore_armor: bool = false) -> Dictionary:
+	"""
+	Apply multiple hits of damage (for multi-hit weapons).
+	V5: Multi-hit weapons are effective against armor since each hit removes 1 armor.
+	
+	Returns: {total_damage: int, hits_dealt: int, armor_stripped: int, hex_triggered: bool}
+	"""
+	var total_damage: int = 0
+	var hits_dealt: int = 0
+	var armor_stripped: int = 0
+	var hex_triggered: bool = false
+	
+	for i: int in range(hit_count):
+		if current_hp <= 0:
+			break  # Stop if dead
+		
+		var result: Dictionary = take_damage(damage_per_hit, ignore_armor)
+		
+		if result.armor_absorbed:
+			armor_stripped += 1
+		else:
+			total_damage += result.total_damage
+			hits_dealt += 1
+		
+		if result.hex_triggered:
+			hex_triggered = true
+	
+	return {
+		"total_damage": total_damage,
+		"hits_dealt": hits_dealt,
+		"armor_stripped": armor_stripped,
+		"hex_triggered": hex_triggered
+	}
+
+
+# =============================================================================
+# QUERY METHODS
+# =============================================================================
 
 func get_hp_percentage() -> float:
 	"""Get current HP as a percentage of max HP."""
@@ -175,3 +294,18 @@ func get_predicted_attack_damage(wave: int, enemy_def: EnemyDefinition = null) -
 		return 0
 	return resolved_def.get_scaled_damage(wave)
 
+
+func get_display_info() -> Dictionary:
+	"""Get info for UI display."""
+	var enemy_def = get_definition()
+	return {
+		"name": enemy_def.enemy_name if enemy_def else enemy_id,
+		"hp": current_hp,
+		"max_hp": max_hp,
+		"armor": armor,
+		"ring": ring,
+		"hex": get_status_value("hex"),
+		"burn": get_status_value("burn"),
+		"is_elite": enemy_def.is_elite if enemy_def else false,
+		"is_boss": enemy_def.is_boss if enemy_def else false,
+	}

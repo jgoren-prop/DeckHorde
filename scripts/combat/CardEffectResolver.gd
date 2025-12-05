@@ -1,9 +1,67 @@
 extends RefCounted
 class_name CardEffectResolver
 ## CardEffectResolver - Resolves card effects during combat
-## V3: Supports lane staging system with buffs and scaling
+## V5: New damage formula with 3 damage types, stat scaling, and crits
 
 const BattlefieldStateScript = preload("res://scripts/combat/BattlefieldState.gd")
+
+
+# =============================================================================
+# V5 DAMAGE CALCULATION
+# =============================================================================
+
+static func calculate_v5_damage(card_def, include_crit: bool = true) -> Dictionary:
+	"""Calculate damage using the V5 formula.
+	Formula: Final = (Base + Stat Scaling) × Type Multiplier × Global Multiplier × Crit
+	
+	Returns: {damage: int, is_crit: bool, breakdown: Dictionary}
+	"""
+	var stats = RunManager.player_stats
+	
+	# Use the card's built-in calculation
+	var calc: Dictionary = card_def.calculate_damage(stats)
+	
+	# Add lane bonus damage if present
+	var lane_bonus: int = _get_lane_bonus_damage(card_def)
+	if lane_bonus > 0:
+		calc.final += lane_bonus
+		calc.breakdown["lane_bonus"] = lane_bonus
+	
+	# Add artifact bonus damage
+	var artifact_effects: Dictionary = ArtifactManager.trigger_artifacts("on_card_play", {
+		"card_tags": card_def.tags,
+		"categories": card_def.categories,
+		"damage_type": card_def.damage_type
+	})
+	var artifact_bonus: int = artifact_effects.get("bonus_damage", 0)
+	if artifact_bonus > 0:
+		calc.final += artifact_bonus
+		calc.breakdown["artifact_bonus"] = artifact_bonus
+	
+	# Roll for crit if requested
+	var is_crit: bool = false
+	var final_damage: int = calc.final
+	
+	if include_crit and calc.crit_chance > 0:
+		is_crit = randf() < calc.crit_chance
+		if is_crit:
+			final_damage = int(float(calc.final) * calc.crit_mult)
+	
+	return {
+		"damage": maxi(0, final_damage),
+		"is_crit": is_crit,
+		"crit_mult": calc.crit_mult if is_crit else 1.0,
+		"base_damage": calc.final,
+		"breakdown": calc.breakdown,
+		"type_mult": calc.type_mult,
+		"global_mult": calc.global_mult,
+	}
+
+
+static func calculate_v5_damage_preview(card_def) -> int:
+	"""Calculate expected damage for UI preview (no crit roll)."""
+	var result: Dictionary = calculate_v5_damage(card_def, false)
+	return result.damage
 
 
 static func _apply_damage_multipliers(base_damage: int, card_def, target_ring: int = -1) -> int:
@@ -29,73 +87,54 @@ static func _get_execution_context(card_def) -> Dictionary:
 	"""Get the execution context from effect_params."""
 	return card_def.effect_params.get("execution_context", {})
 
+
 static func resolve(card_def, tier: int, target_ring: int, combat: Node) -> void:
 	"""Resolve a card's effect."""
 	match card_def.effect_type:
-		"instant_damage":
-			_resolve_instant_damage(card_def, tier, target_ring, combat)
-		"heal":
-			_resolve_heal(card_def, tier)
-		"buff":
-			_resolve_buff(card_def, tier)
+		# V5 Effect Types
+		"v5_damage":
+			_resolve_v5_damage(card_def, tier, target_ring, combat)
+		"v5_multi_hit":
+			_resolve_v5_multi_hit(card_def, tier, combat)
+		"v5_aoe":
+			_resolve_v5_aoe(card_def, tier, target_ring, combat)
+		"v5_ring_damage":
+			_resolve_v5_ring_damage(card_def, tier, target_ring, combat)
+		
+		# Status Effect Types
 		"apply_hex":
 			_resolve_apply_hex(card_def, tier, target_ring, combat)
 		"apply_hex_multi":
 			_resolve_apply_hex_multi(card_def, tier, combat)
+		"apply_burn":
+			_resolve_apply_burn(card_def, tier, target_ring, combat)
+		"apply_burn_multi":
+			_resolve_apply_burn_multi(card_def, tier, combat)
+		
+		# Utility Effect Types
+		"heal":
+			_resolve_heal(card_def, tier)
+		"buff":
+			_resolve_buff(card_def, tier)
 		"gain_armor":
 			_resolve_gain_armor(card_def, tier)
 		"ring_barrier":
 			_resolve_ring_barrier(card_def, tier, target_ring, combat)
-		"damage_and_heal":
-			_resolve_damage_and_heal(card_def, tier, combat)
-		"damage_and_armor":
-			_resolve_damage_and_armor(card_def, tier, target_ring, combat)
-		"armor_and_lifesteal":
-			_resolve_armor_and_lifesteal(card_def, tier, combat)
-		"armor_and_heal":
-			_resolve_armor_and_heal(card_def, tier)
 		"draw_cards":
 			_resolve_draw_cards(card_def, tier, combat)
 		"push_enemies":
 			_resolve_push_enemies(card_def, tier, target_ring, combat)
-		"damage_and_draw":
-			_resolve_damage_and_draw(card_def, tier, combat)
-		"scatter_damage":
-			_resolve_scatter_damage(card_def, tier, combat)
-		"energy_and_draw":
-			_resolve_energy_and_draw(card_def, tier, combat)
-		"gambit":
-			_resolve_gambit(card_def, tier, combat)
-		"damage_and_hex":
-			_resolve_damage_and_hex(card_def, tier, combat)
-		"shield_bash":
-			_resolve_shield_bash(card_def, tier, combat)
-		"targeted_group_damage":
-			_resolve_targeted_group_damage(card_def, tier, combat)
-		# V3 Lane Staging Effect Types
+		
+		# Lane Staging Effect Types
 		"lane_buff":
 			_resolve_lane_buff(card_def, tier)
-		"scaling_damage":
-			_resolve_scaling_damage(card_def, tier, target_ring, combat)
 		"splash_damage":
 			_resolve_splash_damage(card_def, tier, combat)
+		"scaling_damage":
+			_resolve_scaling_damage(card_def, tier, target_ring, combat)
 		"last_damaged":
 			_resolve_last_damaged(card_def, tier, combat)
-		# V2 Effect Types (kept for compatibility)
-		"explosive_damage":
-			_resolve_explosive_damage(card_def, tier, target_ring, combat)
-		"beam_damage":
-			_resolve_beam_damage(card_def, tier, target_ring, combat)
-		"piercing_damage":
-			_resolve_piercing_damage(card_def, tier, target_ring, combat)
-		"shock_damage":
-			_resolve_shock_damage(card_def, tier, target_ring, combat)
-		"corrosive_damage":
-			_resolve_corrosive_damage(card_def, tier, target_ring, combat)
-		"energy_refund":
-			_resolve_energy_refund(card_def, tier, combat)
-		"hex_transfer":
-			_resolve_hex_transfer(card_def, tier, combat)
+		
 		_:
 			push_warning("[CardEffectResolver] Unknown effect type: " + card_def.effect_type)
 
@@ -108,47 +147,9 @@ static func get_target_count(card_def, tier: int) -> int:
 	return target_count
 
 
-static func _resolve_instant_damage(card_def, tier: int, target_ring: int, combat: Node) -> void:
-	"""Deal instant damage to targets."""
-	var damage: int = card_def.get_scaled_value("damage", tier)
-	
-	# V3: Add lane bonus damage from buffs
-	damage += _get_lane_bonus_damage(card_def)
-	
-	# Check for artifact bonus
-	var artifact_effects: Dictionary = ArtifactManager.trigger_artifacts("on_card_play", {"card_tags": card_def.tags})
-	damage += artifact_effects.bonus_damage
-	
-	# Apply damage multipliers based on card tags and target ring
-	damage = _apply_damage_multipliers(damage, card_def, target_ring)
-	
-	match card_def.target_type:
-		"ring":
-			var rings_to_hit: Array[int] = []
-			if card_def.requires_target:
-				rings_to_hit = [target_ring]
-			else:
-				rings_to_hit.assign(card_def.target_rings)
-			
-			for ring: int in rings_to_hit:
-				combat.deal_damage_to_ring(ring, damage)
-		
-		"all_rings":
-			for ring: int in range(4):
-				combat.deal_damage_to_ring(ring, damage)
-		
-		"random_enemy":
-			var ring_mask: int = 0
-			for ring: int in card_def.target_rings:
-				ring_mask |= (1 << ring)
-			if ring_mask == 0:
-				ring_mask = 0b1111  # All rings
-			combat.deal_damage_to_random_enemy(ring_mask, damage)
-		
-		"all_enemies":
-			for ring: int in range(4):
-				combat.deal_damage_to_ring(ring, damage)
-
+# =============================================================================
+# UTILITY EFFECT HANDLERS
+# =============================================================================
 
 static func _resolve_heal(card_def, tier: int) -> void:
 	"""Heal the player."""
@@ -156,36 +157,53 @@ static func _resolve_heal(card_def, tier: int) -> void:
 	RunManager.heal(heal_amount)
 
 
-static func _resolve_buff(card_def, tier: int) -> void:  # card_def: CardDefinition
+static func _resolve_buff(card_def, tier: int) -> void:
 	"""Apply a buff to the player."""
 	var buff_value: int = card_def.get_scaled_value("buff_value", tier)
 	
 	match card_def.buff_type:
-		"gun_damage":
-			# V2: Apply gun damage buff via PlayerStats
-			RunManager.player_stats.gun_damage_percent += float(buff_value)
-			RunManager.stats_changed.emit()
-			print("[CardEffectResolver] Applied gun_damage buff: +", buff_value, "%")
-		"damage":
-			# V2: Apply generic damage buff via PlayerStats
-			RunManager.player_stats.generic_damage_percent += float(buff_value)
-			RunManager.stats_changed.emit()
-			print("[CardEffectResolver] Applied generic damage buff: +", buff_value, "%")
+		"energy":
+			# Add energy this turn
+			CombatManager.current_energy += buff_value
+			CombatManager.energy_changed.emit(CombatManager.current_energy, CombatManager.max_energy)
+			print("[CardEffectResolver] Applied energy buff: +", buff_value)
+		"guaranteed_crit":
+			# Next weapon guaranteed crit (stored in effect_params for CombatManager to check)
+			CombatManager.set_next_weapon_crit(true)
+			print("[CardEffectResolver] Applied guaranteed crit buff")
+		"crit_damage_bonus":
+			# Next weapon +crit damage (stored for CombatManager)
+			CombatManager.set_next_weapon_crit_bonus(50)
+			print("[CardEffectResolver] Applied crit damage bonus: +50%")
+		"prevent_advance":
+			# Enemies can't advance this turn
+			CombatManager.set_prevent_advance(true)
+			print("[CardEffectResolver] Applied prevent advance buff")
+		"weapon_apply_burn":
+			# Next weapon applies burn
+			CombatManager.set_next_weapon_burn(2)
+			print("[CardEffectResolver] Applied weapon burn buff: 2 stacks")
+		"weapon_apply_hex":
+			# Next weapon applies hex
+			CombatManager.set_next_weapon_hex(2)
+			print("[CardEffectResolver] Applied weapon hex buff: 2 stacks")
+		"missing_hp_damage":
+			# Next weapon +damage per missing HP
+			var missing_hp: int = RunManager.max_hp - RunManager.current_hp
+			var bonus: int = int(float(missing_hp) / 5.0)
+			CombatManager.set_next_weapon_bonus_damage(bonus)
+			print("[CardEffectResolver] Applied missing HP damage: +", bonus)
 		_:
 			push_warning("[CardEffectResolver] Unknown buff type: " + card_def.buff_type)
 
 
-static func _resolve_apply_hex(card_def, tier: int, target_ring: int, combat: Node) -> void:  # card_def: CardDefinition
+static func _resolve_apply_hex(card_def, tier: int, target_ring: int, combat: Node) -> void:
 	"""Apply hex to enemies in a ring."""
 	var hex_damage: int = card_def.get_scaled_value("hex_damage", tier)
 	
-	# V2: Apply hex multiplier from PlayerStats
-	var stats_mult: float = RunManager.get_hex_damage_multiplier()
-	hex_damage = int(float(hex_damage) * stats_mult)
-	
-	# Also apply artifact hex multiplier (Void Heart) - stacks multiplicatively
-	var artifact_mult: float = ArtifactManager.get_hex_multiplier()
-	hex_damage = int(float(hex_damage) * artifact_mult)
+	# V5: Apply hex potency from PlayerStats
+	var potency_mult: float = RunManager.player_stats.get_hex_potency_multiplier()
+	hex_damage = int(float(hex_damage) * potency_mult)
 	
 	var rings_to_hex: Array[int] = []
 	if card_def.requires_target:
@@ -195,128 +213,69 @@ static func _resolve_apply_hex(card_def, tier: int, target_ring: int, combat: No
 	
 	for ring: int in rings_to_hex:
 		var enemies: Array = combat.battlefield.get_enemies_in_ring(ring)
-		for enemy in enemies:  # enemy: EnemyInstance
-			# Emit hex signal for visual feedback BEFORE applying
+		for enemy in enemies:
 			combat.enemy_hexed.emit(enemy, hex_damage)
-			enemy.apply_status("hex", hex_damage, -1)  # -1 = permanent
+			enemy.apply_status("hex", hex_damage, -1)
 
 
-static func _resolve_apply_hex_multi(card_def, tier: int, combat: Node) -> void:  # card_def: CardDefinition
+static func _resolve_apply_hex_multi(card_def, tier: int, combat: Node) -> void:
 	"""Apply hex to multiple random enemies."""
 	var hex_damage: int = card_def.get_scaled_value("hex_damage", tier)
 	var target_count: int = card_def.get_scaled_value("target_count", tier)
 	
-	# V2: Apply hex multiplier from PlayerStats
-	var stats_mult: float = RunManager.get_hex_damage_multiplier()
-	hex_damage = int(float(hex_damage) * stats_mult)
-	
-	# Also apply artifact hex multiplier (Void Heart) - stacks multiplicatively
-	var artifact_mult: float = ArtifactManager.get_hex_multiplier()
-	hex_damage = int(float(hex_damage) * artifact_mult)
+	# V5: Apply hex potency from PlayerStats
+	var potency_mult: float = RunManager.player_stats.get_hex_potency_multiplier()
+	hex_damage = int(float(hex_damage) * potency_mult)
 	
 	var all_enemies: Array = combat.battlefield.get_all_enemies()
 	all_enemies.shuffle()
 	
 	var count: int = min(target_count, all_enemies.size())
 	for i: int in range(count):
-		# Emit hex signal for visual feedback
 		combat.enemy_hexed.emit(all_enemies[i], hex_damage)
 		all_enemies[i].apply_status("hex", hex_damage, -1)
 
 
-static func _resolve_gain_armor(card_def, tier: int) -> void:  # card_def: CardDefinition
+static func _resolve_gain_armor(card_def, tier: int) -> void:
 	"""Grant armor to the player."""
 	var armor_amount: int = card_def.get_scaled_value("armor_amount", tier)
 	
-	# Check for Refracting Core artifact bonus
+	# Check for special armor calculation
+	if card_def.effect_params.get("armor_equals_stat", "") == "armor_start":
+		armor_amount = RunManager.player_stats.armor_start
+	
+	# Check for artifact bonus
 	var artifact_effects: Dictionary = ArtifactManager.trigger_artifacts("on_card_play", {"card_tags": card_def.tags})
-	armor_amount += artifact_effects.bonus_armor
+	armor_amount += artifact_effects.get("bonus_armor", 0)
 	
 	RunManager.add_armor(armor_amount)
 
 
-static func _resolve_ring_barrier(card_def, tier: int, target_ring: int, combat: Node) -> void:  # card_def: CardDefinition
-	"""Create a barrier on a ring that damages crossing enemies."""
-	var damage: int = card_def.get_scaled_value("damage", tier)
-	# Duration is stored in effect_params, not as a direct property
-	var duration: int = card_def.effect_params.get("duration", 2)
+static func _resolve_ring_barrier(card_def, tier: int, target_ring: int, combat: Node) -> void:
+	"""Create a barrier on a ring that damages crossing enemies.
+	V5: Uses barrier_damage_bonus and barrier_uses_bonus from PlayerStats.
+	"""
+	var base_damage: int = card_def.get_scaled_value("damage", tier)
+	var base_duration: int = card_def.effect_params.get("duration", 2)
 	
-	# V2: Apply barrier damage multiplier
-	var damage_mult: float = RunManager.get_barrier_damage_multiplier()
-	damage = int(float(damage) * damage_mult)
+	# V5: Apply barrier_damage_bonus (flat bonus)
+	var damage: int = base_damage + RunManager.player_stats.barrier_damage_bonus
 	
-	# V2: Apply barrier strength multiplier to duration (HP/crossings)
-	var strength_mult: float = RunManager.get_barrier_strength_multiplier()
-	duration = max(1, int(float(duration) * strength_mult))  # Ensure at least 1 use
+	# V5: Apply barrier_uses_bonus (extra uses)
+	var duration: int = base_duration + RunManager.player_stats.barrier_uses_bonus
+	duration = maxi(1, duration)
 	
 	combat.battlefield.add_ring_barrier(target_ring, damage, duration)
 	
+	# V5: Track active barriers for weapons that scale with barrier count
+	RunManager.player_stats.barriers += 1
+	
 	# Emit signal for visual feedback
 	combat.barrier_placed.emit(target_ring, damage, duration)
+	print("[CardEffectResolver V5] Barrier placed: ring=", target_ring, " damage=", damage, " uses=", duration)
 
 
-static func _resolve_damage_and_heal(card_def, tier: int, combat: Node) -> void:  # card_def: CardDefinition
-	"""Deal damage and heal based on it."""
-	var damage: int = card_def.get_scaled_value("damage", tier)
-	var heal_amount: int = card_def.get_scaled_value("heal_amount", tier)
-	
-	# Check for Ember Charm artifact bonus (gun cards deal +2 damage)
-	var artifact_effects: Dictionary = ArtifactManager.trigger_artifacts("on_card_play", {"card_tags": card_def.tags})
-	damage += artifact_effects.bonus_damage
-	
-	# V2: Apply damage multipliers
-	damage = _apply_damage_multipliers(damage, card_def, -1)
-	
-	# Deal damage to random enemy
-	var ring_mask: int = 0b1111  # All rings
-	combat.deal_damage_to_random_enemy(ring_mask, damage)
-	
-	# Heal player (heal multiplier applied in RunManager.heal)
-	RunManager.heal(heal_amount)
-
-
-static func _resolve_damage_and_armor(card_def, tier: int, target_ring: int, combat: Node) -> void:  # card_def: CardDefinition
-	"""Deal damage and gain armor."""
-	var damage: int = card_def.get_scaled_value("damage", tier)
-	var armor_amount: int = card_def.get_scaled_value("armor_amount", tier)
-	
-	# Deal damage
-	var rings_to_hit: Array[int] = []
-	if card_def.requires_target:
-		rings_to_hit = [target_ring]
-	else:
-		rings_to_hit.assign(card_def.target_rings)
-	
-	for ring: int in rings_to_hit:
-		combat.deal_damage_to_ring(ring, damage)
-	
-	# Gain armor
-	RunManager.add_armor(armor_amount)
-
-
-static func _resolve_armor_and_lifesteal(card_def, tier: int, _combat: Node) -> void:  # card_def: CardDefinition
-	"""Gain armor and set up lifesteal on kill."""
-	var armor_amount: int = card_def.get_scaled_value("armor_amount", tier)
-	var lifesteal: int = card_def.lifesteal_on_kill
-	
-	RunManager.add_armor(armor_amount)
-	
-	# Lifesteal on kill would be handled by a buff system
-	# For now, we'll skip this advanced feature
-	print("[CardEffectResolver] Lifesteal on kill: ", lifesteal, " (not fully implemented)")
-
-
-static func _resolve_armor_and_heal(card_def, tier: int) -> void:  # card_def: CardDefinition
-	"""Gain armor and heal the player."""
-	var armor_amount: int = card_def.get_scaled_value("armor_amount", tier)
-	var heal_amount: int = card_def.get_scaled_value("heal_amount", tier)
-	
-	RunManager.add_armor(armor_amount)
-	RunManager.heal(heal_amount)
-	print("[CardEffectResolver] Armor and heal: +", armor_amount, " armor, +", heal_amount, " HP")
-
-
-static func _resolve_draw_cards(card_def, _tier: int, combat: Node) -> void:  # card_def: CardDefinition
+static func _resolve_draw_cards(card_def, _tier: int, combat: Node) -> void:
 	"""Draw additional cards."""
 	var count: int = card_def.cards_to_draw
 	if count <= 0:
@@ -326,7 +285,7 @@ static func _resolve_draw_cards(card_def, _tier: int, combat: Node) -> void:  # 
 		combat.deck_manager.draw_card()
 
 
-static func _resolve_push_enemies(card_def, _tier: int, target_ring: int, combat: Node) -> void:  # card_def: CardDefinition
+static func _resolve_push_enemies(card_def, _tier: int, target_ring: int, combat: Node) -> void:
 	"""Push enemies outward."""
 	var push_amount: int = card_def.push_amount
 	
@@ -336,734 +295,303 @@ static func _resolve_push_enemies(card_def, _tier: int, target_ring: int, combat
 	else:
 		rings_to_push.assign(card_def.target_rings)
 	
-	# IMPORTANT: Collect all enemies to push FIRST, then push them.
-	# This prevents enemies from being pushed multiple times when iterating through rings
-	# (e.g., enemy in MELEE gets pushed to CLOSE, then pushed again to MID)
+	# Collect all enemies to push FIRST, then push them
 	var enemies_to_push: Array = []
 	for ring: int in rings_to_push:
 		var enemies: Array = combat.battlefield.get_enemies_in_ring(ring)
 		for enemy in enemies:
 			enemies_to_push.append(enemy)
 	
-	# Now push all collected enemies
-	for enemy in enemies_to_push:  # enemy: EnemyInstance
+	for enemy in enemies_to_push:
 		var old_ring: int = enemy.ring
 		var new_ring: int = mini(BattlefieldStateScript.Ring.FAR, old_ring + push_amount)
 		if new_ring != old_ring:
 			combat.battlefield.move_enemy(enemy, new_ring)
-			# Emit CombatManager signal so BattlefieldArena updates visuals
 			CombatManager.enemy_moved.emit(enemy, old_ring, new_ring)
 
 
-static func _resolve_damage_and_draw(card_def, tier: int, combat: Node) -> void:  # card_def: CardDefinition
-	"""Deal damage to random enemy and draw cards."""
-	var damage: int = card_def.get_scaled_value("damage", tier)
-	var cards_count: int = card_def.cards_to_draw
-	if cards_count <= 0:
-		cards_count = 1
-	
-	# Check for Ember Charm artifact bonus (gun cards deal +2 damage)
-	var artifact_effects: Dictionary = ArtifactManager.trigger_artifacts("on_card_play", {"card_tags": card_def.tags})
-	damage += artifact_effects.bonus_damage
-	
-	# V2: Apply damage multipliers
-	damage = _apply_damage_multipliers(damage, card_def, -1)
-	
-	# Build ring mask from target_rings
-	var ring_mask: int = 0
-	for ring: int in card_def.target_rings:
-		ring_mask |= (1 << ring)
-	if ring_mask == 0:
-		ring_mask = 0b1111
-	
-	# Deal damage to random enemy
-	combat.deal_damage_to_random_enemy(ring_mask, damage)
-	
-	# Draw cards
-	for i: int in range(cards_count):
-		combat.deck_manager.draw_card()
-
-
-static func _resolve_scatter_damage(card_def, tier: int, combat: Node) -> void:  # card_def: CardDefinition
-	"""Deal damage to multiple random enemies."""
-	var damage: int = card_def.get_scaled_value("damage", tier)
-	var target_count: int = card_def.get_scaled_value("target_count", tier)
-	
-	# Check for Ember Charm artifact bonus (gun cards deal +2 damage)
-	var artifact_effects: Dictionary = ArtifactManager.trigger_artifacts("on_card_play", {"card_tags": card_def.tags})
-	damage += artifact_effects.bonus_damage
-	
-	# V2: Apply damage multipliers
-	damage = _apply_damage_multipliers(damage, card_def, -1)
-	
-	# Build ring mask from target_rings
-	var ring_mask: int = 0
-	for ring: int in card_def.target_rings:
-		ring_mask |= (1 << ring)
-	if ring_mask == 0:
-		ring_mask = 0b1111
-	
-	# Hit multiple random enemies (can hit same enemy multiple times)
-	for i: int in range(target_count):
-		combat.deal_damage_to_random_enemy(ring_mask, damage)
-
-
-static func _resolve_energy_and_draw(card_def, _tier: int, combat: Node) -> void:  # card_def: CardDefinition
-	"""Gain energy and draw cards."""
-	var energy_gain: int = card_def.buff_value
-	if energy_gain <= 0:
-		energy_gain = 1
-	
-	var cards_count: int = card_def.cards_to_draw
-	if cards_count <= 0:
-		cards_count = 1
-	
-	# Gain energy
-	combat.current_energy += energy_gain
-	combat.energy_changed.emit(combat.current_energy, combat.max_energy)
-	
-	# Draw cards
-	for i: int in range(cards_count):
-		combat.deck_manager.draw_card()
-
-
-static func _resolve_gambit(card_def, _tier: int, combat: Node) -> void:  # card_def: CardDefinition
-	"""Discard hand and draw new cards."""
-	var cards_count: int = card_def.cards_to_draw
-	if cards_count <= 0:
-		cards_count = 5
-	
-	# Discard current hand
-	combat.deck_manager.discard_hand()
-	
-	# Draw new hand
-	for i: int in range(cards_count):
-		combat.deck_manager.draw_card()
-
-
-static func _resolve_damage_and_hex(card_def, tier: int, combat: Node) -> void:  # card_def: CardDefinition
-	"""Deal damage and apply hex to a single target."""
-	var damage: int = card_def.get_scaled_value("damage", tier)
-	var hex_damage: int = card_def.get_scaled_value("hex_damage", tier)
-	
-	# V2: Apply damage multipliers
-	damage = _apply_damage_multipliers(damage, card_def, -1)
-	
-	# V2: Apply hex multiplier from PlayerStats
-	var stats_mult: float = RunManager.get_hex_damage_multiplier()
-	hex_damage = int(float(hex_damage) * stats_mult)
-	
-	# Also apply artifact hex multiplier (Void Heart)
-	var artifact_mult: float = ArtifactManager.get_hex_multiplier()
-	hex_damage = int(float(hex_damage) * artifact_mult)
-	
-	# Find a valid target in target_rings
-	var candidates: Array = []
-	for ring: int in card_def.target_rings:
-		candidates.append_array(combat.battlefield.get_enemies_in_ring(ring))
-	
-	if candidates.size() == 0:
-		return
-	
-	# Pick random target
-	var target = candidates[randi() % candidates.size()]
-	
-	# Emit targeting signal for visual (expand stack if needed)
-	combat.enemy_targeted.emit(target)
-	await combat.get_tree().create_timer(0.3).timeout
-	
-	# Deal damage using take_damage (triggers any existing hex)
-	var result: Dictionary = target.take_damage(damage)
-	var total_damage: int = result.total_damage
-	
-	# Emit damage signal for visual feedback (with hex_triggered info)
-	combat.enemy_damaged.emit(target, total_damage, result.hex_triggered)
-	
-	if target.current_hp <= 0:
-		# Use CombatManager's death handler for proper artifact triggers
-		combat._handle_enemy_death(target, result.hex_triggered)
-	else:
-		# Apply NEW hex only if enemy survived - emit hex signal for visual
-		combat.enemy_hexed.emit(target, hex_damage)
-		target.apply_status("hex", hex_damage, -1)
-	
-	combat.damage_dealt_to_enemies.emit(total_damage, target.ring)
-
-
-static func _resolve_shield_bash(card_def, _tier: int, combat: Node) -> void:  # card_def: CardDefinition
-	"""Deal damage equal to player's armor to enemy in melee."""
-	var damage: int = RunManager.armor
-	
-	if damage <= 0:
-		print("[CardEffectResolver] Shield Bash: No armor, no damage dealt")
-		return
-	
-	# Find targets in valid rings
-	var candidates: Array = []
-	for ring: int in card_def.target_rings:
-		candidates.append_array(combat.battlefield.get_enemies_in_ring(ring))
-	
-	if candidates.size() == 0:
-		return
-	
-	# Pick random target
-	var target = candidates[randi() % candidates.size()]
-	
-	# Deal damage using take_damage (triggers hex)
-	var result: Dictionary = target.take_damage(damage)
-	var total_damage: int = result.total_damage
-	
-	# Emit damage signal for visual feedback (with hex_triggered info)
-	combat.enemy_damaged.emit(target, total_damage, result.hex_triggered)
-	
-	if target.current_hp <= 0:
-		# Use CombatManager's death handler for proper artifact triggers
-		combat._handle_enemy_death(target, result.hex_triggered)
-	
-	combat.damage_dealt_to_enemies.emit(total_damage, target.ring)
-
-
-static func _resolve_targeted_group_damage(card_def, tier: int, combat: Node) -> void:  # card_def: CardDefinition
-	"""Deal damage to a targeted enemy and all enemies in its group/stack.
-	If the enemy is not in a group, only hits that single enemy."""
-	var damage: int = card_def.get_scaled_value("damage", tier)
-	
-	# Check for Ember Charm artifact bonus (gun cards deal +2 damage)
-	var artifact_effects: Dictionary = ArtifactManager.trigger_artifacts("on_card_play", {"card_tags": card_def.tags})
-	damage += artifact_effects.bonus_damage
-	
-	# V2: Apply damage multipliers
-	damage = _apply_damage_multipliers(damage, card_def, -1)
-	
-	# Find candidates in target_rings
-	var candidates: Array = []
-	for ring: int in card_def.target_rings:
-		candidates.append_array(combat.battlefield.get_enemies_in_ring(ring))
-	
-	if candidates.size() == 0:
-		print("[CardEffectResolver] No valid targets for Precision Strike")
-		return
-	
-	# Debug: Print all candidates and their group_ids
-	print("[CardEffectResolver] Precision Strike - Found ", candidates.size(), " candidates:")
-	for c in candidates:
-		print("  - ", c.enemy_id, " (instance_id=", c.instance_id, ", group_id='", c.group_id, "', ring=", c.ring, ")")
-	
-	# Pick random target
-	var target = candidates[randi() % candidates.size()]
-	print("[CardEffectResolver] Selected target: ", target.enemy_id, " (group_id='", target.group_id, "')")
-	
-	# Emit targeting signal for visual (expand stack if needed)
-	combat.enemy_targeted.emit(target)
-	await combat.get_tree().create_timer(0.3).timeout
-	
-	# Find all enemies in the same group (if target has a group)
-	var targets_to_hit: Array = []
-	if not target.group_id.is_empty():
-		# Hit all enemies in the same group
-		var all_enemies: Array = combat.battlefield.get_all_enemies()
-		for enemy in all_enemies:
-			if enemy.group_id == target.group_id:
-				targets_to_hit.append(enemy)
-		print("[CardEffectResolver] Precision Strike hitting group '", target.group_id, "' with ", targets_to_hit.size(), " enemies")
-	else:
-		# Single enemy, not in a group
-		targets_to_hit.append(target)
-		print("[CardEffectResolver] Precision Strike hitting single enemy (no group_id)")
-	
-	# Deal damage to all targets in the group
-	var total_damage_dealt: int = 0
-	var enemies_to_kill: Array = []
-	
-	for enemy in targets_to_hit:
-		# Use take_damage to handle hex triggering
-		var result: Dictionary = enemy.take_damage(damage)
-		var total_dmg: int = result.total_damage
-		total_damage_dealt += total_dmg
-		
-		# Emit damage signal for visual feedback (with hex_triggered info)
-		combat.enemy_damaged.emit(enemy, total_dmg, result.hex_triggered)
-		
-		if result.hex_triggered:
-			print("[CardEffectResolver] Hex triggered on ", enemy.enemy_id, "! ", damage, " + ", result.hex_bonus, " = ", total_dmg)
-		
-		if enemy.current_hp <= 0:
-			enemies_to_kill.append({"enemy": enemy, "hex_triggered": result.hex_triggered})
-	
-	# Handle deaths after all damage is dealt
-	for kill_data: Dictionary in enemies_to_kill:
-		combat._handle_enemy_death(kill_data.enemy, kill_data.hex_triggered)
-	
-	combat.damage_dealt_to_enemies.emit(total_damage_dealt, target.ring)
-
-
 # =============================================================================
-# V2 EFFECT HANDLERS
+# V5 EFFECT HANDLERS
 # =============================================================================
 
-static func _resolve_fire_all_guns(card_def, _tier: int, combat: Node) -> void:
-	"""Overclock-style: All deployed guns fire immediately at reduced damage."""
-	var damage_percent: float = card_def.effect_params.get("damage_percent", 75.0)
-	var draw_cards: int = card_def.cards_to_draw
+static func _resolve_v5_damage(card_def, _tier: int, target_ring: int, combat: Node) -> void:
+	"""V5 damage: Single target using V5 damage formula with crit."""
+	var damage_result: Dictionary = calculate_v5_damage(card_def, true)
+	var damage: int = damage_result.damage
+	var is_crit: bool = damage_result.is_crit
 	
-	print("[CardEffectResolver] Fire All Guns at ", damage_percent, "% damage")
+	# Handle self-damage for volatile cards
+	if card_def.self_damage > 0:
+		var self_dmg: int = card_def.self_damage
+		self_dmg = maxi(0, self_dmg - RunManager.player_stats.self_damage_reduction)
+		if self_dmg > 0:
+			RunManager.take_damage(self_dmg)
+			print("[CardEffectResolver V5] Self-damage: ", self_dmg)
 	
-	# Fire all registered weapons
-	var weapons: Array = combat.get_registered_weapons()
-	for weapon_data: Dictionary in weapons:
-		var weapon_def = weapon_data.card_def
-		var weapon_tier: int = weapon_data.tier
+	# Deal damage based on target type
+	match card_def.target_type:
+		"ring":
+			var rings_to_hit: Array[int] = []
+			if card_def.requires_target:
+				rings_to_hit = [target_ring]
+			else:
+				rings_to_hit.assign(card_def.target_rings)
+			for ring: int in rings_to_hit:
+				_deal_v5_damage_to_ring(ring, damage, is_crit, combat)
 		
-		# Calculate reduced damage
-		var base_damage: int = weapon_def.get_scaled_value("damage", weapon_tier)
-		var reduced_damage: int = int(float(base_damage) * damage_percent / 100.0)
+		"random_enemy":
+			var ring_mask: int = _build_ring_mask(card_def.target_rings)
+			_deal_v5_damage_to_random(ring_mask, damage, is_crit, card_def.target_count, combat)
 		
-		# Apply V2 multipliers
-		reduced_damage = _apply_damage_multipliers(reduced_damage, weapon_def, -1)
-		
-		# Build ring mask from target_rings
-		var ring_mask: int = 0
-		for ring: int in weapon_def.target_rings:
-			ring_mask |= (1 << ring)
-		if ring_mask == 0:
-			ring_mask = 0b1111
-		
-		# Fire!
-		combat.deal_damage_to_random_enemy(ring_mask, reduced_damage)
-		
-		# Emit weapon fire signal for visual
-		if combat.has_signal("weapon_fired"):
-			combat.weapon_fired.emit(weapon_def)
+		"all_enemies":
+			_deal_v5_damage_to_all(damage, is_crit, combat)
 	
-	# Draw cards if specified
-	for i: int in range(draw_cards):
-		combat.deck_manager.draw_card()
+	if is_crit:
+		print("[CardEffectResolver V5] CRIT! ", damage_result.base_damage, " x ", damage_result.crit_mult, " = ", damage)
+	
+	RunManager.player_stats.cards_played += 1
 
 
-static func _resolve_target_sync(card_def, tier: int, combat: Node) -> void:
-	"""Choose a ring; deployed weapons prioritize that ring and gain bonus damage."""
-	var bonus_damage: int = card_def.get_scaled_value("damage", tier)
-	var target_ring: int = card_def.effect_params.get("ring", -1)
+static func _resolve_v5_multi_hit(card_def, _tier: int, combat: Node) -> void:
+	"""V5 multi-hit: Hit multiple times, each can crit separately."""
+	var hit_count: int = card_def.hit_count
+	if hit_count <= 0:
+		hit_count = 1
 	
-	# If no ring specified in params, use a random valid ring from target_rings
-	if target_ring < 0 and card_def.target_rings.size() > 0:
-		target_ring = card_def.target_rings[0]
-	
-	if target_ring >= 0:
-		combat.set_priority_ring(target_ring, bonus_damage)
-		print("[CardEffectResolver] Target Sync: Ring ", target_ring, " prioritized with +", bonus_damage, " damage")
-
-
-static func _resolve_barrier_trigger(card_def, _tier: int, combat: Node) -> void:
-	"""Trigger all barriers once without consuming uses."""
-	var armor_per_trigger: int = card_def.effect_params.get("armor_per_trigger", 0)
-	
-	var barriers: Array = combat.battlefield.get_all_barriers()
-	var trigger_count: int = 0
-	
-	for barrier: Dictionary in barriers:
-		# Trigger the barrier's effect without consuming uses
-		var enemies: Array = combat.battlefield.get_enemies_in_ring(barrier.ring)
-		if enemies.size() > 0:
-			# Deal damage to first enemy (barrier trigger)
-			var target = enemies[0]
-			var damage: int = barrier.damage
-			var result: Dictionary = target.take_damage(damage)
-			combat.enemy_damaged.emit(target, result.total_damage, result.hex_triggered)
-			
-			if target.current_hp <= 0:
-				combat._handle_enemy_death(target, result.hex_triggered)
-			
-			trigger_count += 1
-			
-			# Emit barrier trigger signal
-			combat.barrier_triggered.emit(barrier.ring, damage)
-	
-	# Gain armor per trigger
-	if armor_per_trigger > 0 and trigger_count > 0:
-		RunManager.add_armor(armor_per_trigger * trigger_count)
-		print("[CardEffectResolver] Barrier Channel: Triggered ", trigger_count, " barriers, gained ", armor_per_trigger * trigger_count, " armor")
-
-
-static func _resolve_tag_infusion(card_def, _tier: int, combat: Node) -> void:
-	"""Add a tag permanently to a deployed gun."""
-	var tag_to_add: String = card_def.effect_params.get("tag", "piercing")
-	var bonus_damage: int = card_def.effect_params.get("bonus_damage", 0)
-	
-	# Get all deployed weapons
-	var weapons: Array = combat.get_registered_weapons()
-	if weapons.size() == 0:
-		print("[CardEffectResolver] Tag Infusion: No deployed guns to infuse")
-		return
-	
-	# For now, infuse the first weapon (could be made targetable later)
-	var weapon_data: Dictionary = weapons[0]
-	var weapon_def = weapon_data.card_def
-	
-	# Add tag to the weapon's tags (if not already present)
-	if not weapon_def.tags.has(tag_to_add):
-		weapon_def.tags.append(tag_to_add)
-		print("[CardEffectResolver] Tag Infusion: Added '", tag_to_add, "' to ", weapon_def.card_name)
-	
-	# Apply bonus damage if any (stored in weapon_data for future reference)
-	if bonus_damage > 0:
-		weapon_data["bonus_damage"] = weapon_data.get("bonus_damage", 0) + bonus_damage
-		print("[CardEffectResolver] Tag Infusion: +", bonus_damage, " permanent damage to ", weapon_def.card_name)
-
-
-static func _resolve_explosive_damage(card_def, tier: int, target_ring: int, combat: Node) -> void:
-	"""Deal damage with splash to adjacent rings."""
-	var damage: int = card_def.get_scaled_value("damage", tier)
-	var splash_damage: int = card_def.get_scaled_value("splash_damage", tier)
-	if splash_damage <= 0:
-		splash_damage = int(float(damage) * 0.5)  # Default: 50% splash
-	
-	# Apply artifact bonuses
-	var artifact_effects: Dictionary = ArtifactManager.trigger_artifacts("on_card_play", {"card_tags": card_def.tags})
-	damage += artifact_effects.bonus_damage
-	
-	# V2: Apply explosive damage multiplier
-	var explosive_mult: float = RunManager.player_stats.get_explosive_damage_multiplier()
-	damage = int(float(damage) * explosive_mult)
-	splash_damage = int(float(splash_damage) * explosive_mult)
-	
-	# Apply base damage multipliers
-	damage = _apply_damage_multipliers(damage, card_def, target_ring)
-	
-	# Deal main damage to target ring
-	combat.deal_damage_to_ring(target_ring, damage)
-	
-	# Deal splash to adjacent rings
-	if target_ring > 0:  # Has inner ring
-		combat.deal_damage_to_ring(target_ring - 1, splash_damage)
-	if target_ring < 3:  # Has outer ring
-		combat.deal_damage_to_ring(target_ring + 1, splash_damage)
-	
-	# Trigger explosive hit artifact
-	ArtifactManager.trigger_artifacts("on_explosive_hit", {"damage": damage, "splash_damage": splash_damage, "ring": target_ring})
-	
-	print("[CardEffectResolver] Explosive: ", damage, " to ring ", target_ring, ", ", splash_damage, " splash to adjacent")
-
-
-static func _resolve_beam_damage(card_def, tier: int, target_ring: int, combat: Node) -> void:
-	"""Chain damage through targets (prefers hexed enemies)."""
-	var damage: int = card_def.get_scaled_value("damage", tier)
-	var chain_count: int = card_def.get_scaled_value("chain_count", tier)
-	if chain_count <= 0:
-		chain_count = 3  # Default: chain to 3 targets
-	
-	# Apply artifact bonuses
-	var artifact_effects: Dictionary = ArtifactManager.trigger_artifacts("on_card_play", {"card_tags": card_def.tags})
-	damage += artifact_effects.bonus_damage
-	
-	# V2: Apply beam damage multiplier
-	var beam_mult: float = RunManager.player_stats.get_beam_damage_multiplier()
-	damage = int(float(damage) * beam_mult)
-	
-	# Get all enemies in target ring (or all rings if ring not specified)
-	var candidates: Array = []
-	if target_ring >= 0:
-		candidates = combat.battlefield.get_enemies_in_ring(target_ring)
-	else:
-		candidates = combat.battlefield.get_all_enemies()
-	
-	if candidates.size() == 0:
-		return
-	
-	# Sort by hex status (prefer hexed enemies first)
-	candidates.sort_custom(func(a, b): 
-		var a_hex: int = a.get_status_value("hex")
-		var b_hex: int = b.get_status_value("hex")
-		return a_hex > b_hex
-	)
-	
-	# Chain through targets
-	var hit_count: int = min(chain_count, candidates.size())
+	var ring_mask: int = _build_ring_mask(card_def.target_rings)
 	var total_damage: int = 0
+	var crit_count: int = 0
+	
+	# Handle self-damage first
+	if card_def.self_damage > 0:
+		var self_dmg: int = card_def.self_damage
+		self_dmg = maxi(0, self_dmg - RunManager.player_stats.self_damage_reduction)
+		if self_dmg > 0:
+			RunManager.take_damage(self_dmg)
 	
 	for i: int in range(hit_count):
-		var target = candidates[i]
+		var damage_result: Dictionary = calculate_v5_damage(card_def, true)
+		var damage: int = damage_result.damage
+		var is_crit: bool = damage_result.is_crit
 		
-		# Emit targeting signal
-		combat.enemy_targeted.emit(target)
+		if is_crit:
+			crit_count += 1
 		
-		# Deal damage
-		var result: Dictionary = target.take_damage(damage)
-		total_damage += result.total_damage
-		
-		combat.enemy_damaged.emit(target, result.total_damage, result.hex_triggered)
-		
-		if target.current_hp <= 0:
-			combat._handle_enemy_death(target, result.hex_triggered)
-		
-		# Trigger beam chain artifact for each hit after the first
-		if i > 0:
-			ArtifactManager.trigger_artifacts("on_beam_chain", {"damage": damage, "chain_index": i})
+		_deal_v5_damage_to_random(ring_mask, damage, is_crit, 1, combat)
+		total_damage += damage
 	
-	combat.damage_dealt_to_enemies.emit(total_damage, target_ring if target_ring >= 0 else 0)
-	print("[CardEffectResolver] Beam: Chained through ", hit_count, " targets for total ", total_damage, " damage")
+	print("[CardEffectResolver V5] Multi-hit: ", hit_count, " hits, ", total_damage, " total damage, ", crit_count, " crits")
+	RunManager.player_stats.cards_played += 1
 
 
-static func _resolve_piercing_damage(card_def, tier: int, target_ring: int, combat: Node) -> void:
-	"""Deal damage with overkill flowing to next target (50% overflow)."""
-	var damage: int = card_def.get_scaled_value("damage", tier)
-	var overflow_percent: float = card_def.effect_params.get("overflow_percent", 50.0)
+static func _resolve_v5_aoe(card_def, _tier: int, target_ring: int, combat: Node) -> void:
+	"""V5 AOE: Hit all enemies in target ring(s)."""
+	var damage_result: Dictionary = calculate_v5_damage(card_def, true)
+	var damage: int = damage_result.damage
+	var is_crit: bool = damage_result.is_crit
 	
-	# Apply artifact bonuses
-	var artifact_effects: Dictionary = ArtifactManager.trigger_artifacts("on_card_play", {"card_tags": card_def.tags})
-	damage += artifact_effects.bonus_damage
+	# Handle self-damage
+	if card_def.self_damage > 0:
+		var self_dmg: int = card_def.self_damage
+		self_dmg = maxi(0, self_dmg - RunManager.player_stats.self_damage_reduction)
+		if self_dmg > 0:
+			RunManager.take_damage(self_dmg)
 	
-	# V2: Apply piercing damage multiplier
-	var piercing_mult: float = RunManager.player_stats.get_piercing_damage_multiplier()
-	damage = int(float(damage) * piercing_mult)
-	
-	# Get targets in ring
-	var candidates: Array = []
-	if target_ring >= 0:
-		candidates = combat.battlefield.get_enemies_in_ring(target_ring)
+	var rings_to_hit: Array[int] = []
+	if card_def.requires_target:
+		rings_to_hit = [target_ring]
+	elif card_def.target_type == "all_rings" or card_def.target_type == "all_enemies":
+		rings_to_hit = [0, 1, 2, 3]
 	else:
-		candidates = combat.battlefield.get_all_enemies()
+		rings_to_hit.assign(card_def.target_rings)
 	
-	if candidates.size() == 0:
-		return
+	var total_enemies_hit: int = 0
+	for ring: int in rings_to_hit:
+		var enemies: Array = combat.battlefield.get_enemies_in_ring(ring)
+		for enemy in enemies:
+			_deal_damage_to_enemy(enemy, damage, is_crit, combat)
+			total_enemies_hit += 1
 	
-	var total_damage_dealt: int = 0
-	var current_damage: int = damage
-	var target_index: int = 0
-	
-	while current_damage > 0 and target_index < candidates.size():
-		var target = candidates[target_index]
-		
-		# Emit targeting signal
-		combat.enemy_targeted.emit(target)
-		
-		# Calculate overkill
-		var target_hp: int = target.current_hp
-		var result: Dictionary = target.take_damage(current_damage)
-		total_damage_dealt += result.total_damage
-		
-		combat.enemy_damaged.emit(target, result.total_damage, result.hex_triggered)
-		
-		if target.current_hp <= 0:
-			# Calculate overflow
-			var overkill: int = current_damage - target_hp
-			if overkill > 0:
-				var overflow: int = int(float(overkill) * overflow_percent / 100.0)
-				current_damage = overflow
-				
-				# Trigger piercing overflow artifact
-				ArtifactManager.trigger_artifacts("on_piercing_overflow", {"overflow": overflow, "overkill": overkill})
-				print("[CardEffectResolver] Piercing: ", overkill, " overkill -> ", overflow, " overflow")
-			else:
-				current_damage = 0
-			
-			combat._handle_enemy_death(target, result.hex_triggered)
-		else:
-			current_damage = 0  # No overkill, stop chain
-		
-		target_index += 1
-	
-	combat.damage_dealt_to_enemies.emit(total_damage_dealt, target_ring if target_ring >= 0 else 0)
-
-
-static func _resolve_shock_damage(card_def, tier: int, target_ring: int, combat: Node) -> void:
-	"""Deal damage with chance to apply slow/stun."""
-	var damage: int = card_def.get_scaled_value("damage", tier)
-	var slow_chance: float = card_def.effect_params.get("slow_chance", 20.0)
-	
-	# Apply artifact bonuses
-	var artifact_effects: Dictionary = ArtifactManager.trigger_artifacts("on_card_play", {"card_tags": card_def.tags})
-	damage += artifact_effects.bonus_damage
-	
-	# V2: Apply shock damage multiplier
-	var shock_mult: float = RunManager.player_stats.get_shock_damage_multiplier()
-	damage = int(float(damage) * shock_mult)
-	
-	# Get targets
-	var candidates: Array = []
-	if target_ring >= 0:
-		candidates = combat.battlefield.get_enemies_in_ring(target_ring)
+	if is_crit:
+		print("[CardEffectResolver V5] AOE CRIT! ", total_enemies_hit, " enemies hit for ", damage, " each")
 	else:
-		candidates = combat.battlefield.get_all_enemies()
+		print("[CardEffectResolver V5] AOE: ", total_enemies_hit, " enemies hit for ", damage, " each")
 	
-	for target in candidates:
-		# Emit targeting signal
-		combat.enemy_targeted.emit(target)
-		
-		# Deal damage
-		var result: Dictionary = target.take_damage(damage)
-		combat.enemy_damaged.emit(target, result.total_damage, result.hex_triggered)
-		
-		if target.current_hp <= 0:
-			combat._handle_enemy_death(target, result.hex_triggered)
-		else:
-			# Roll for slow
-			if randf() * 100.0 < slow_chance:
-				target.apply_status("slow", 1, 1)  # Slow for 1 turn
-				print("[CardEffectResolver] Shock: Applied slow to ", target.enemy_id)
-		
-		# Trigger shock hit artifact
-		ArtifactManager.trigger_artifacts("on_shock_hit", {"damage": damage, "target": target})
-	
-	combat.damage_dealt_to_enemies.emit(damage * candidates.size(), target_ring if target_ring >= 0 else 0)
+	RunManager.player_stats.cards_played += 1
 
 
-static func _resolve_corrosive_damage(card_def, tier: int, target_ring: int, combat: Node) -> void:
-	"""Deal damage with armor shred, doubled on hexed enemies."""
-	var damage: int = card_def.get_scaled_value("damage", tier)
-	var armor_shred: int = card_def.get_scaled_value("armor_shred", tier)
-	if armor_shred <= 0:
-		armor_shred = 2  # Default: -2 armor
+static func _resolve_v5_ring_damage(card_def, _tier: int, target_ring: int, combat: Node) -> void:
+	"""V5 ring damage: Hit entire ring, used for thermal AOE."""
+	var damage_result: Dictionary = calculate_v5_damage(card_def, true)
+	var damage: int = damage_result.damage
+	var is_crit: bool = damage_result.is_crit
 	
-	# Apply artifact bonuses
-	var artifact_effects: Dictionary = ArtifactManager.trigger_artifacts("on_card_play", {"card_tags": card_def.tags})
-	damage += artifact_effects.bonus_damage
+	# Handle self-damage
+	if card_def.self_damage > 0:
+		var self_dmg: int = card_def.self_damage
+		self_dmg = maxi(0, self_dmg - RunManager.player_stats.self_damage_reduction)
+		if self_dmg > 0:
+			RunManager.take_damage(self_dmg)
 	
-	# V2: Apply corrosive damage multiplier
-	var corrosive_mult: float = RunManager.player_stats.get_corrosive_damage_multiplier()
-	damage = int(float(damage) * corrosive_mult)
+	_deal_v5_damage_to_ring(target_ring, damage, is_crit, combat)
 	
-	# Get targets
-	var candidates: Array = []
-	if target_ring >= 0:
-		candidates = combat.battlefield.get_enemies_in_ring(target_ring)
+	# Apply splash damage to adjacent groups if present
+	if card_def.splash_damage > 0:
+		var splash: int = int(float(card_def.splash_damage) * damage_result.type_mult * damage_result.global_mult)
+		var enemies: Array = combat.battlefield.get_enemies_in_ring(target_ring)
+		for enemy in enemies:
+			if enemy.current_hp > 0:
+				_deal_damage_to_enemy(enemy, splash, false, combat)
+	
+	RunManager.player_stats.cards_played += 1
+
+
+static func _resolve_apply_burn(card_def, tier: int, target_ring: int, combat: Node) -> void:
+	"""Apply burn stacks to enemies in a ring."""
+	var burn_amount: int = card_def.get_scaled_value("burn_damage", tier)
+	if burn_amount <= 0:
+		burn_amount = card_def.burn_damage
+	
+	# V5: Apply burn potency from stats
+	var potency_mult: float = RunManager.player_stats.get_burn_potency_multiplier()
+	burn_amount = int(float(burn_amount) * potency_mult)
+	
+	var rings_to_burn: Array[int] = []
+	if card_def.requires_target:
+		rings_to_burn = [target_ring]
 	else:
-		candidates = combat.battlefield.get_all_enemies()
+		rings_to_burn.assign(card_def.target_rings)
 	
-	for target in candidates:
-		# Check if target is hexed (double armor shred)
-		var hex_status: int = target.get_status_value("hex")
-		var actual_shred: int = armor_shred
-		if hex_status > 0:
-			actual_shred *= 2
-		
-		# Apply armor shred
-		target.apply_status("armor_shred", actual_shred, -1)
-		
-		# Deal damage
-		var result: Dictionary = target.take_damage(damage)
-		combat.enemy_damaged.emit(target, result.total_damage, result.hex_triggered)
-		
-		if target.current_hp <= 0:
-			combat._handle_enemy_death(target, result.hex_triggered)
-		
-		# Trigger corrosive hit artifact
-		ArtifactManager.trigger_artifacts("on_corrosive_hit", {"damage": damage, "armor_shred": actual_shred, "target": target})
-		
-		print("[CardEffectResolver] Corrosive: ", damage, " damage, -", actual_shred, " armor to ", target.enemy_id)
+	for ring: int in rings_to_burn:
+		var enemies: Array = combat.battlefield.get_enemies_in_ring(ring)
+		for enemy in enemies:
+			enemy.apply_status("burn", burn_amount, -1)
+			if combat.has_signal("enemy_burned"):
+				combat.enemy_burned.emit(enemy, burn_amount)
+			print("[CardEffectResolver V5] Applied ", burn_amount, " Burn to ", enemy.enemy_id)
+	
+	RunManager.player_stats.cards_played += 1
 
 
-static func _resolve_energy_refund(card_def, _tier: int, combat: Node) -> void:
-	"""Refund energy (for cost reduction effects)."""
-	var energy_refund: int = card_def.effect_params.get("energy_refund", 1)
+static func _resolve_apply_burn_multi(card_def, tier: int, combat: Node) -> void:
+	"""Apply burn stacks to multiple random enemies."""
+	var burn_amount: int = card_def.get_scaled_value("burn_damage", tier)
+	if burn_amount <= 0:
+		burn_amount = card_def.burn_damage
+	var target_count: int = card_def.target_count
 	
-	combat.current_energy += energy_refund
-	combat.energy_changed.emit(combat.current_energy, combat.max_energy)
-	print("[CardEffectResolver] Energy refund: +", energy_refund)
-
-
-static func _resolve_hex_transfer(_card_def, _tier: int, combat: Node) -> void:
-	"""Move all hex from one enemy to another."""
-	var candidates: Array = combat.battlefield.get_all_enemies()
-	if candidates.size() < 2:
-		print("[CardEffectResolver] Hex Transfer: Need at least 2 enemies")
-		return
+	# V5: Apply burn potency
+	var potency_mult: float = RunManager.player_stats.get_burn_potency_multiplier()
+	burn_amount = int(float(burn_amount) * potency_mult)
 	
-	# Find enemy with most hex
-	var source = null
-	var max_hex: int = 0
-	for enemy in candidates:
-		var hex_val: int = enemy.get_status_value("hex")
-		if hex_val > max_hex:
-			max_hex = hex_val
-			source = enemy
+	var all_enemies: Array = combat.battlefield.get_all_enemies()
+	all_enemies.shuffle()
 	
-	if source == null or max_hex == 0:
-		print("[CardEffectResolver] Hex Transfer: No hexed enemies found")
-		return
+	var count: int = mini(target_count, all_enemies.size())
+	for i: int in range(count):
+		all_enemies[i].apply_status("burn", burn_amount, -1)
+		print("[CardEffectResolver V5] Applied ", burn_amount, " Burn to ", all_enemies[i].enemy_id)
 	
-	# Find different target (prefer unhexed)
-	var target = null
-	for enemy in candidates:
-		if enemy != source:
-			target = enemy
-			break
-	
-	if target == null:
-		return
-	
-	# Transfer hex
-	source.clear_status("hex")
-	target.apply_status("hex", max_hex, -1)
-	
-	# Emit signals for visual feedback
-	combat.enemy_hexed.emit(target, max_hex)
-	
-	print("[CardEffectResolver] Hex Transfer: Moved ", max_hex, " hex from ", source.enemy_id, " to ", target.enemy_id)
+	RunManager.player_stats.cards_played += 1
 
 
 # =============================================================================
-# V3 LANE STAGING EFFECT HANDLERS
+# V5 HELPER FUNCTIONS
 # =============================================================================
 
-static func _resolve_lane_buff(card_def, tier: int) -> void:
-	"""Lane buff cards apply their buff instantly when staged.
-	The actual buff is handled by CombatManager._apply_lane_buff when card is staged.
-	This function is called during execution - it does nothing extra (buff already applied)."""
-	print("[CardEffectResolver] Lane buff executed: ", card_def.card_name, " (buff was applied on staging)")
-	# No additional effect - buffs were already applied when card was staged
+static func _build_ring_mask(target_rings: Array) -> int:
+	"""Build a ring bitmask from target_rings array."""
+	var mask: int = 0
+	for ring: Variant in target_rings:
+		if ring is int:
+			mask |= (1 << ring)
+	if mask == 0:
+		mask = 0b1111
+	return mask
+
+
+static func _deal_v5_damage_to_ring(ring: int, damage: int, is_crit: bool, combat: Node) -> void:
+	"""Deal V5 damage to all enemies in a ring."""
+	var enemies: Array = combat.battlefield.get_enemies_in_ring(ring)
+	for enemy in enemies:
+		_deal_damage_to_enemy(enemy, damage, is_crit, combat)
+
+
+static func _deal_v5_damage_to_random(ring_mask: int, damage: int, is_crit: bool, count: int, combat: Node) -> void:
+	"""Deal V5 damage to random enemies."""
+	for i: int in range(count):
+		var enemy = combat.battlefield.get_random_enemy_in_rings(ring_mask)
+		if enemy:
+			_deal_damage_to_enemy(enemy, damage, is_crit, combat)
+
+
+static func _deal_v5_damage_to_all(damage: int, is_crit: bool, combat: Node) -> void:
+	"""Deal V5 damage to all enemies."""
+	var all_enemies: Array = combat.battlefield.get_all_enemies()
+	for enemy in all_enemies:
+		_deal_damage_to_enemy(enemy, damage, is_crit, combat)
+
+
+static func _deal_damage_to_enemy(enemy, damage: int, _is_crit: bool, combat: Node) -> void:
+	"""Deal damage to a single enemy with V5 handling."""
+	combat.enemy_targeted.emit(enemy)
+	
+	var result: Dictionary = enemy.take_damage(damage)
+	var total_damage: int = result.total_damage
+	
+	combat.enemy_damaged.emit(enemy, total_damage, result.hex_triggered)
+	
+	if enemy.current_hp <= 0:
+		combat._handle_enemy_death(enemy, result.hex_triggered)
+		RunManager.player_stats.kills_this_turn += 1
+	
+	combat.damage_dealt_to_enemies.emit(total_damage, enemy.ring)
+
+
+# =============================================================================
+# LANE STAGING EFFECT HANDLERS
+# =============================================================================
+
+static func _resolve_lane_buff(card_def, _tier: int) -> void:
+	"""Lane buff cards apply their buff instantly when staged."""
+	print("[CardEffectResolver] Lane buff executed: ", card_def.card_name)
 
 
 static func _resolve_scaling_damage(card_def, tier: int, target_ring: int, combat: Node) -> void:
-	"""Deal damage that scales based on lane execution state (guns_fired, cards_played, etc)."""
+	"""Deal damage that scales based on lane execution state."""
 	var base_damage: int = card_def.get_scaled_value("damage", tier)
 	var scaling_value: int = card_def.get_scaled_value("scaling_value", tier)
 	
-	# Get execution context
 	var context: Dictionary = _get_execution_context(card_def)
 	var bonus_damage: int = 0
 	
-	# Calculate scaling bonus
 	match card_def.scaling_type:
 		"guns_fired":
 			var guns_fired: int = context.get("guns_fired", 0)
 			bonus_damage = guns_fired * scaling_value
-			print("[CardEffectResolver] Scaling: +", bonus_damage, " from ", guns_fired, " guns fired")
 		"cards_played":
 			var cards_played: int = context.get("cards_played", 0)
 			bonus_damage = cards_played * scaling_value
-			print("[CardEffectResolver] Scaling: +", bonus_damage, " from ", cards_played, " cards played")
 		"damage_dealt":
 			var damage_dealt: int = context.get("damage_dealt", 0)
-			bonus_damage = (damage_dealt / 10) * scaling_value
-			print("[CardEffectResolver] Scaling: +", bonus_damage, " from ", damage_dealt, " damage dealt")
+			bonus_damage = int(float(damage_dealt) / 10.0) * scaling_value
 	
-	# Add lane buff bonus
 	bonus_damage += _get_lane_bonus_damage(card_def)
-	
 	var total_damage: int = base_damage + bonus_damage
 	
-	# Apply artifact bonuses
 	var artifact_effects: Dictionary = ArtifactManager.trigger_artifacts("on_card_play", {"card_tags": card_def.tags})
-	total_damage += artifact_effects.bonus_damage
+	total_damage += artifact_effects.get("bonus_damage", 0)
 	
-	# Apply stat multipliers
 	total_damage = _apply_damage_multipliers(total_damage, card_def, target_ring)
 	
-	# Deal damage based on target type
 	match card_def.target_type:
 		"random_enemy":
-			var ring_mask: int = 0
-			for ring: int in card_def.target_rings:
-				ring_mask |= (1 << ring)
-			if ring_mask == 0:
-				ring_mask = 0b1111
+			var ring_mask: int = _build_ring_mask(card_def.target_rings)
 			combat.deal_damage_to_random_enemy(ring_mask, total_damage)
 		"last_damaged":
 			combat.deal_damage_to_last_damaged(total_damage)
 		_:
-			var ring_mask: int = 0b1111
-			combat.deal_damage_to_random_enemy(ring_mask, total_damage)
+			combat.deal_damage_to_random_enemy(0b1111, total_damage)
 	
 	print("[CardEffectResolver] Scaling damage: base ", base_damage, " + bonus ", bonus_damage, " = ", total_damage)
 
@@ -1073,92 +601,63 @@ static func _resolve_splash_damage(card_def, tier: int, combat: Node) -> void:
 	var damage: int = card_def.get_scaled_value("damage", tier)
 	var splash: int = card_def.get_scaled_value("splash_damage", tier)
 	
-	# Add lane buff bonus
 	damage += _get_lane_bonus_damage(card_def)
 	
-	# Apply artifact bonuses
 	var artifact_effects: Dictionary = ArtifactManager.trigger_artifacts("on_card_play", {"card_tags": card_def.tags})
-	damage += artifact_effects.bonus_damage
+	damage += artifact_effects.get("bonus_damage", 0)
 	
-	# Apply stat multipliers
 	damage = _apply_damage_multipliers(damage, card_def, -1)
 	splash = int(float(splash) * RunManager.get_damage_multiplier_for_card(card_def, -1))
 	
-	# Build ring mask
-	var ring_mask: int = 0
-	for ring: int in card_def.target_rings:
-		ring_mask |= (1 << ring)
-	if ring_mask == 0:
-		ring_mask = 0b1111
+	var ring_mask: int = _build_ring_mask(card_def.target_rings)
 	
-	# Find candidates
 	var candidates: Array = []
 	for ring: int in range(4):
 		if ring_mask & (1 << ring):
 			candidates.append_array(combat.battlefield.get_enemies_in_ring(ring))
 	
 	if candidates.is_empty():
-		print("[CardEffectResolver] Splash damage: no targets")
 		return
 	
-	# Pick random target
 	var target = candidates[randi() % candidates.size()]
 	
-	# Emit targeting signal
 	combat.enemy_targeted.emit(target)
 	await combat.get_tree().create_timer(0.3).timeout
 	
-	# Deal main damage to target
 	var result: Dictionary = target.take_damage(damage)
 	combat.enemy_damaged.emit(target, result.total_damage, result.hex_triggered)
 	
 	if target.current_hp <= 0:
 		combat._handle_enemy_death(target, result.hex_triggered)
 	
-	# Deal splash to other enemies in same group
 	if splash > 0 and not target.group_id.is_empty():
 		var all_enemies: Array = combat.battlefield.get_all_enemies()
-		var splash_count: int = 0
 		for enemy in all_enemies:
 			if enemy.group_id == target.group_id and enemy.instance_id != target.instance_id:
 				var splash_result: Dictionary = enemy.take_damage(splash)
 				combat.enemy_damaged.emit(enemy, splash_result.total_damage, splash_result.hex_triggered)
-				splash_count += 1
-				
 				if enemy.current_hp <= 0:
 					combat._handle_enemy_death(enemy, splash_result.hex_triggered)
-		
-		if splash_count > 0:
-			print("[CardEffectResolver] Splash damage: ", damage, " to target, ", splash, " splash to ", splash_count, " enemies in group")
-	else:
-		print("[CardEffectResolver] Splash damage: ", damage, " to target (no group for splash)")
 
 
 static func _resolve_last_damaged(card_def, tier: int, combat: Node) -> void:
 	"""Deal damage to the last enemy that was damaged this execution."""
 	var damage: int = card_def.get_scaled_value("damage", tier)
 	
-	# Add lane buff bonus
 	damage += _get_lane_bonus_damage(card_def)
 	
-	# Apply artifact bonuses
 	var artifact_effects: Dictionary = ArtifactManager.trigger_artifacts("on_card_play", {"card_tags": card_def.tags})
-	damage += artifact_effects.bonus_damage
+	damage += artifact_effects.get("bonus_damage", 0)
 	
-	# Apply stat multipliers
 	damage = _apply_damage_multipliers(damage, card_def, -1)
 	
-	# Deal damage to last damaged enemy
 	combat.deal_damage_to_last_damaged(damage)
 	
-	# Check for armor gain (Armored Tank style)
 	var armor_amount: int = card_def.get_scaled_value("armor_amount", tier)
 	if armor_amount > 0:
-		# Armor based on damage dealt
 		var context: Dictionary = _get_execution_context(card_def)
 		var scaling_armor: int = armor_amount
 		if card_def.scales_with_lane and card_def.scaling_type == "guns_fired":
 			var guns_fired: int = context.get("guns_fired", 0)
 			scaling_armor += guns_fired * card_def.scaling_value
 		RunManager.add_armor(scaling_armor)
-		print("[CardEffectResolver] Gained ", scaling_armor, " armor from damage dealt")

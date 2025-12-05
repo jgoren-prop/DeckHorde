@@ -222,14 +222,15 @@ Enemies spawn in the **FAR** ring and advance toward the player each turn:
 
 ---
 
-## V3 Card Pool (Starter Deck + Core Cards)
+## V4 Card Pool (Starter Deck + Core Cards)
 
 ### Card Design Principles
 
 1. **All weapons are one-and-done** - No persistence tracking needed
 2. **Lane buffs encourage ordering** - Playing buff first maximizes value
 3. **Scaling cards reward setup** - Building a strong turn feels satisfying
-4. **Clear synergy tags** - "gun" cards benefit from gun buffs, etc.
+4. **V4 Tag Compliance** - Every card has exactly 1 core type tag, 0-2 family tags, 0-1 damage type
+5. **Clear synergy tags** - "gun" cards benefit from gun buffs, etc.
 
 ### Veteran Starter Deck (10 cards)
 
@@ -300,28 +301,24 @@ Enemies spawn in the **FAR** ring and advance toward the player each turn:
 
 ---
 
-## Tag System
+## V4 Tag System (3-Layer Design)
 
-Every card has tags that define its behavior and synergies:
+Every card has tags that define its behavior and synergies. V4 uses a strict 3-layer tag system:
 
-### Core Type Tags (exactly 1)
+### Core Type Tags (exactly 1 per card)
+
+Every card must have exactly one core type tag:
 
 - `gun` – direct damage weapons
 - `hex` – curse / debuff / DoT
 - `barrier` – ring traps and movement-triggered effects
 - `defense` – armor, shields, direct HP manipulation
-- `skill` – instant effects: draw, energy, utility
+- `skill` – instant effects: draw, energy, utility, buff cards
+- `engine` – persistent non-weapon effects (turrets, auras)
 
-### Behavior Tags (0-3)
+### Build-Family Tags (0-2 per card)
 
-- `shotgun` – many weak hits in Melee/Close
-- `sniper` – prefers Far/Mid
-- `aoe` – hits many enemies or full rings
-- `scaling` – gets stronger based on lane state
-- `buff` – applies lane buff to subsequent cards
-- `execute` – bonus damage to low HP targets
-
-### Build-Family Tags (0-3)
+These define Brotato-style build families for synergies and shop biasing:
 
 - `lifedrain` – heals/sustain / HP manipulation
 - `hex_ritual` – spends/uses hex and HP for big power spikes
@@ -329,6 +326,26 @@ Every card has tags that define its behavior and synergies:
 - `barrier_trap` – barriers that act like damage-dealing traps
 - `volatile` – self-damage, risky payoffs
 - `engine_core` – draw/energy/economy engines
+
+### Damage-Type Tags (0-1 per card)
+
+These define how damage behaves for synergies and artifact scaling:
+
+- `explosive` – splash damage to adjacent rings
+- `piercing` – overkill flows to next target
+- `beam` – chain damage through targets
+- `shock` – slow/stun chance on hit
+- `corrosive` – armor shred, doubled on hexed
+
+### Mechanical Tags (0-2 per card)
+
+These define card mechanics for targeting and artifact interactions:
+
+- `shotgun` – many weak hits in Melee/Close
+- `sniper` – prefers Far/Mid
+- `aoe` – hits many enemies or full rings
+- `ring_control` – pushes/moves enemies between rings
+- `swarm_clear` – effective against multiple enemies
 
 ---
 
@@ -362,37 +379,64 @@ Stats that artifacts and wardens can modify:
 
 ---
 
-## Build Families
+## V4 Build Families (8 Primary Families)
 
-The game supports 4 distinct build archetypes:
+The game supports 8 distinct build archetypes with clear tag identities:
 
-### Gun Board
-
+### Gunline (Primary)
 Build up massive turn combos with gun synergies. Play buff cards first, then unleash a volley of amplified shots.
+- **Tags**: `gun` (core type)
+- **Stat Focus**: `gun_damage_percent`
+- **Play Pattern**: Buff stacking → gun chain execution
+- **Key Artifacts**: Sharpened Rounds, Glass Core, Gun Volley
 
-- **Core**: Gun Amplifier + multiple gun cards
-- **Support**: Scaling weapons like Armored Tank, rapid-fire cards
-
-### Hex Ritualist
-
+### Hex Ritual
 Stack hex across the horde, trade HP/tempo for enormous delayed damage. Strong vs large waves.
+- **Tags**: `hex` (core type), `hex_ritual` (family)
+- **Stat Focus**: `hex_damage_percent`
+- **Play Pattern**: Spread hex → consume for burst damage
+- **Key Artifacts**: Hex Lens, Occult Focus, Creeping Doom
 
-- **Core**: `hex` + `hex_ritual` cards
-- **Support**: Hex Catalyst, Creeping Doom, HP-sacrificing artifacts
+### Fortress
+Tank builds with heavy armor/barrier stacking and turtling.
+- **Tags**: `defense` (core type), `fortress` (family)
+- **Stat Focus**: `armor_gain_percent`, `barrier_strength_percent`
+- **Play Pattern**: Armor layering, survive attrition
+- **Key Artifacts**: Reinforced Plating, Runic Bastion
 
-### Barrier Fortress
+### Barrier Traps
+Offensive barriers that deal damage when crossed.
+- **Tags**: `barrier` (core type), `barrier_trap` (family)
+- **Stat Focus**: `barrier_damage_percent`
+- **Play Pattern**: Place traps → funnel enemies through them
+- **Key Artifacts**: Barrier Alloy, Trap Engineer, Punishing Walls
 
-Turn the rings into a minefield. Barriers deal damage and generate armor/hex.
+### Lifedrain
+Trade damage for sustain. Constantly healing and converting sustain into armor/damage.
+- **Tags**: `lifedrain` (family), any core type
+- **Stat Focus**: `heal_power_percent`, `max_hp`
+- **Play Pattern**: Sustain through damage, overheal synergies
+- **Key Artifacts**: Leech Core, Hemorrhage Engine, Red Aegis
 
-- **Core**: `barrier`, `barrier_trap`, `fortress` cards
-- **Support**: Trap Engineer, Runic Bastion, Punishing Walls
+### Volatile
+Glass cannon builds with self-damage and risky payoffs.
+- **Tags**: `volatile` (family), typically `gun` core
+- **Stat Focus**: `explosive_damage_percent`
+- **Play Pattern**: High risk/reward, explosive burst
+- **Key Artifacts**: Overloader, Volatile Reactor
 
-### Lifedrain Bruiser
+### Engine/Economy
+Draw/energy/economy engines that cycle through the deck rapidly.
+- **Tags**: `skill` (core type), `engine_core` (family)
+- **Stat Focus**: `draw_per_turn`, `energy_per_turn`, `scrap_gain_percent`
+- **Play Pattern**: Cycle cards, build resources
+- **Key Artifacts**: Tactical Pack, Surge Capacitor, Engine Core Regulator
 
-Trade damage for sustain. Constantly healing and converting sustain into armor/damage via artifacts.
-
-- **Core**: `lifedrain`-tagged defense/weapon cards
-- **Support**: Leech Core, Hemorrhage Engine
+### Control (Soft Package)
+Ring manipulation and movement denial - pairs with other families.
+- **Tags**: `ring_control` (mechanic)
+- **Play Pattern**: Push enemies, delay threats
+- **Artifacts**: Kinetic Harness, Shock Collars
 
 ---
 
@@ -484,7 +528,7 @@ Artifacts are **Brotato-style items**: small, often stackable stat and tag boost
 
 ---
 
-## Shop System
+## Shop System (V4)
 
 The shop is the **primary build driver**:
 
@@ -495,15 +539,33 @@ Per wave, when you open the shop:
 - **3 artifacts** (stat and family items)
 - **2 services** (heal, remove card)
 
-### Reroll Cost
+### V4 Reroll Cost
 
-- Base cost: 3 scrap
-- Scaling: `reroll_cost = 3 + floor((wave - 1) / 3) + (reroll_count * 2)`
+Per-reroll scaling encourages thoughtful reroll usage:
+- Base wave cost: `base_wave_cost = 3 + floor((wave - 1) / 3)`
+- Full formula: `reroll_cost = base_wave_cost + 2 * reroll_count`
+- `reroll_count` resets each shop visit (entering a new shop)
+
+| Wave | First Reroll | Second Reroll | Third Reroll |
+|------|--------------|---------------|--------------|
+| 1-3  | 3 scrap      | 5 scrap       | 7 scrap      |
+| 4-6  | 4 scrap      | 6 scrap       | 8 scrap      |
+| 7-9  | 5 scrap      | 7 scrap       | 9 scrap      |
+| 10+  | 6 scrap      | 8 scrap       | 10 scrap     |
+
+### V4 Shop-Clearing Reward
+
+When you buy ALL card slots AND ALL artifact slots (clearing the shop), you earn **one free reroll**:
+- Free reroll does NOT consume scrap
+- Free reroll does NOT increment `reroll_count`
+- Only card + artifact slots count; services don't need to be purchased
+- Visual feedback: "🛒 Shop Cleared! Free Reroll Available!"
 
 ### Family Biasing
 
 **Early Waves (1-3)**: Shops aggressively push you into a build family
 - 70% of shops: 2+ cards from same focus family
+- **V4**: If warden has `preferred_tags`, those tags are used for early biasing
 - Creates clear build commitment opportunities
 
 **Mid/Late Waves (4+)**: Bias toward your committed build
@@ -613,12 +675,15 @@ Killing enemies grants XP. Accumulate enough XP to level up and gain permanent b
 
 Wardens now provide stat MODIFIERS (bonuses) rather than setting absolute stats. Base stats come from PlayerStats defaults (50 HP, 1 energy, 1 draw).
 
+**V4**: Wardens can have `preferred_tags` to bias early shop offerings toward specific build families.
+
 ### Veteran Warden (Neutral Baseline)
 
 - **Fantasy**: Battle-hardened generalist
 - **Stat Bonuses**: +20 HP, +2 energy
 - **Passive**: None (balanced stats, no special bonuses)
-- **Starter Deck**: 10 predefined cards (see V3 Card Pool section)
+- **Preferred Tags**: `[]` (empty - no shop bias, random family each run)
+- **Starter Deck**: 10 predefined cards (see V4 Card Pool section)
 
 ### Ash Warden
 

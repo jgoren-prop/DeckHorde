@@ -85,6 +85,9 @@ func move_enemy(enemy, new_ring: int) -> Dictionary:  # enemy: EnemyInstance
 				if barrier.turns_remaining <= 0:
 					ring_barriers.erase(check_ring)
 					barrier_consumed.emit(check_ring)
+					# V5: Decrement active barrier count
+					if RunManager and RunManager.player_stats:
+						RunManager.player_stats.barriers = maxi(0, RunManager.player_stats.barriers - 1)
 				
 				if enemy.current_hp <= 0:
 					result.killed_by_barrier = true
@@ -143,6 +146,30 @@ func get_enemies_by_type(enemy_id: String) -> Array:  # Array[EnemyInstance]
 	return result
 
 
+func get_random_enemy_in_rings(ring_mask: int):  # -> EnemyInstance or null
+	"""Get a random enemy from rings specified by bitmask.
+	ring_mask: Bitmask where bit 0 = Melee, bit 1 = Close, bit 2 = Mid, bit 3 = Far"""
+	var candidates: Array = []
+	for ring_idx: int in range(4):
+		if ring_mask & (1 << ring_idx):
+			candidates.append_array(rings[ring_idx])
+	
+	if candidates.is_empty():
+		return null
+	
+	return candidates[randi() % candidates.size()]
+
+
+func get_enemies_in_rings(ring_mask: int) -> Array:  # Array[EnemyInstance]
+	"""Get all enemies from rings specified by bitmask.
+	ring_mask: Bitmask where bit 0 = Melee, bit 1 = Close, bit 2 = Mid, bit 3 = Far"""
+	var result: Array = []
+	for ring_idx: int in range(4):
+		if ring_mask & (1 << ring_idx):
+			result.append_array(rings[ring_idx])
+	return result
+
+
 func add_ring_barrier(ring: int, damage: int, duration: int) -> void:
 	"""Add a barrier to a ring that damages enemies passing through."""
 	ring_barriers[ring] = {
@@ -162,6 +189,10 @@ func tick_status_effects() -> void:
 	
 	for ring: int in expired_barriers:
 		ring_barriers.erase(ring)
+		barrier_consumed.emit(ring)
+		# V5: Decrement active barrier count
+		if RunManager and RunManager.player_stats:
+			RunManager.player_stats.barriers = maxi(0, RunManager.player_stats.barriers - 1)
 	
 	# Tick down enemy status effects
 	for enemy in get_all_enemies():

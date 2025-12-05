@@ -1,7 +1,8 @@
 extends Resource
 class_name WardenDefinition
 ## WardenDefinition - Data resource for Warden (character) definitions
-## V2: Uses stat_modifiers for Brotato-style stat scaling
+## V4: Uses stat_modifiers for Brotato-style stat scaling
+## V4: Adds preferred_tags for shop biasing
 
 @export var warden_id: String = ""
 @export var warden_name: String = ""
@@ -14,11 +15,17 @@ class_name WardenDefinition
 @export var base_energy: int = 3
 @export var hand_size: int = 5
 
-# V2: Stat modifiers applied to PlayerStats (ADDITIVE)
+# V4: Stat modifiers applied to PlayerStats (ADDITIVE)
 # Format: {"stat_name": modifier_value}
 # Example: {"gun_damage_percent": 20.0} adds +20% gun damage
 # See PlayerStats.gd for available stat names
 @export var stat_modifiers: Dictionary = {}
+
+# V4: Preferred tags for shop biasing
+# Empty array = no preference (Neutral Warden behavior)
+# Example: ["gun", "explosive"] biases early shops toward gun/explosive cards
+# Shop uses these for waves 1-3, then transitions to deck-driven biasing
+@export var preferred_tags: Array[String] = []
 
 # Passive ability identifier (temporary - will be replaced by V2 passive system)
 # Currently only used for: "cheat_death" (Glass Warden)

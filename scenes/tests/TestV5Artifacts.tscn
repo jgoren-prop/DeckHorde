@@ -1,0 +1,7 @@
+[gd_scene load_steps=2 format=3 uid="uid://bjd0mya41y0y3"]
+
+[ext_resource type="Script" path="res://scripts/tests/TestV5Artifacts.gd" id="1_artifacts"]
+
+[node name="TestV5Artifacts" type="Node"]
+script = ExtResource("1_artifacts")
+

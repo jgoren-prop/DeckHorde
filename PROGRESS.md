@@ -1,250 +1,141 @@
 # Riftwardens - Development Progress
 
 ## Legend
-- ✅ Working/Complete
-- 🔶 Partial/Minimal
-- ❓ Untested
-- ⏳ Future/Planned
+- ✅ Complete
 - 🔄 In Progress
+- ⏳ Pending
 
-## Current Status: V3 Queue & Execute System ✅
+## Current Status: V5 System Implementation ✅
 
-### V3 Combat System Implementation
+### V5 Implementation (Dec 5, 2025)
 | Phase | Name | Status |
 |-------|------|--------|
-| Phase 1 | CardDefinition cleanup (remove duration fields, add lane_buff) | ✅ COMPLETE |
-| Phase 2 | CombatManager staging logic (staged_cards array, execute method) | ✅ COMPLETE |
-| Phase 3 | CombatLane staging UI (drag-reorder, execute button) | ✅ COMPLETE |
-| Phase 4 | CardEffectResolver lane context (buffs, guns_fired tracking) | ✅ COMPLETE |
-| Phase 5 | CardDatabase V3 cards (starter deck, lane buffs, scaling) | ✅ COMPLETE |
-| Phase 6 | CombatScreen wire-up (staging signals, execute flow) | ✅ COMPLETE |
-| Phase 7 | DeckManager cleanup (remove deployed zone) | ✅ COMPLETE |
-| Phase 8 | Remove old files (StarterWeaponSelect, PistolVisual3D) | ✅ COMPLETE |
-| Phase 9 | DESIGN.md documentation update | ✅ COMPLETE |
+| Phase 1 | PlayerStats.gd + TagConstants.gd rewrite for V5 stat system | ✅ COMPLETE |
+| Phase 2 | CardDefinition.gd + V5 damage formula in CardEffectResolver | ✅ COMPLETE |
+| Phase 3 | FamilyBuffManager for category-based tier bonuses | ✅ COMPLETE |
+| Phase 4 | All 54 V5 weapons in CardDatabase | ✅ COMPLETE |
+| Phase 5 | All 24 V5 instant cards in CardDatabase | ✅ COMPLETE |
+| Phase 6 | 4-tier system with 2-to-1 merging | ✅ COMPLETE |
+| Phase 7 | 12 V5 enemies + armor mechanic (1 hit = 1 armor) | ✅ COMPLETE |
+| Phase 8 | Hex, Burn, Barrier status effects with V5 potency | ✅ COMPLETE |
+| Phase 9 | All 20 wave compositions with turn-based spawning | ✅ COMPLETE |
+| Phase 10 | V5 economy (interest 5%, shop pricing, stat upgrades) | ✅ COMPLETE |
+| Phase 11 | V5 artifacts (50 total) | ✅ COMPLETE |
+| Phase 12 | Card UI layout per DESIGN_V5 specs | ✅ COMPLETE |
+| Phase 13 | Damage breakdown tooltip system | ✅ COMPLETE |
+| Phase 14 | V5 starter deck (already matches V5 spec) | ✅ COMPLETE |
+| Phase 15 | Final polish, integration testing, documentation | ✅ COMPLETE |
 
-### V3 Key Changes
-- **Two card types**: Combat cards go to staging lane, Instant cards resolve immediately
-- **All weapons one-and-done** - No more persistence, weapons return to discard
-- **Queue & Execute** - Play multiple cards, then execute all at once from left to right
-- **Lane Buffs** - Instant buff cards modify cards already in staging lane
-- **Scaling Cards** - Some cards get stronger based on what's already been played
-- **Fixed Starter Deck** - No more starter weapon selection, predefined 10-card deck
-- **Tag Tracker** - UI panel showing which tags have been played and how many times
-- **Removed**: duration_type, duration_turns, duration_kills, on_expire, deployed zone
+### V5 Key Changes
 
----
+#### Damage System
+- **3 Damage Types**: Kinetic, Thermal, Arcane with type-specific multipliers
+- **8 Weapon Categories**: Kinetic, Thermal, Arcane, Fortress, Shadow, Utility, Control, Volatile
+- **V5 Damage Formula**: `(Base + Stat Scaling) × Type Mult × Global Mult × Crit`
+- **Family Buffs**: 3 tiers (3-5, 6-8, 9+ cards) give category-specific bonuses
 
-## V3 Content Summary
+#### Card System
+- **54 Weapons**: All damage-dealing cards with categories, scaling stats, crit bonuses
+- **24 Instants**: Support cards for buffs, healing, status application
+- **4-Tier System**: Tier 1-4 with base +50/100/150% damage scaling
+- **2-to-1 Merging**: Combine 2 same-tier cards → 1 higher tier
 
-### Veteran Starter Deck (10 cards)
-| Card | Type | Cost | Effect |
-|------|------|------|--------|
-| Pistol ×3 | Weapon | 1 | Deal 3 damage to random enemy |
-| Shotgun ×2 | Weapon | 2 | Deal 4 damage + 2 splash |
-| Guard Stance ×2 | Skill | 1 | Gain 4 armor |
-| Minor Hex ×1 | Skill | 1 | Apply 3 hex |
-| Gun Amplifier ×1 | Skill | 1 | +2 damage to guns this turn |
-| Tactical Reload ×1 | Skill | 0 | Draw 2 cards |
+#### Status Effects
+- **Hex**: Stacks on enemies, triggers on damage (+stacks × hex_potency), consumed
+- **Burn**: Stacks on enemies, deals damage each turn (× burn_potency), reduces by 1
+- **Barriers**: Placed on rings, deal damage on enemy crossing, lose 1 use per trigger
 
-### New Effect Types
-- `lane_buff_damage` - Buff subsequent gun damage
-- `lane_buff_hex` - Buff subsequent hex application
-- `lane_buff_armor` - Buff subsequent armor gain
-- `scales_with_lane` - Card scales with guns fired this turn
+#### Enemy System
+- **12 Enemies**: 6 grunts, 5 elites, 1 boss (Ember Saint)
+- **V5 Armor**: Each HIT removes 1 armor (no damage spillover)
+- **Behavior Types**: Rusher, Fast, Ranged, Bomber, Buffer, Spawner, Tank, Ambush, Shredder, Boss
 
-### Removed Systems
-- Persistent weapon deployment
-- Weapon duration tracking (turns, kills, burn_out)
-- StarterWeaponSelect scene
-- PistolVisual3D weapon visuals
-- deployed/banished zones in DeckManager
+#### Economy (Brotato-Style)
+- **Interest**: 5% of scrap per wave, capped at 25
+- **Card Pricing**: Common 15, Uncommon 38, Rare 75 (× tier multiplier 1.0/1.8/3.0/4.5)
+- **Reroll**: Base 2, +2 per reroll in same shop
+- **Stat Upgrades**: 13 upgrade types with linear price scaling
 
----
+#### Artifact System (50 Total)
+- **16 Common**: Stackable stat boosts (Kinetic Rounds, Thermal Core, Lucky Coin, etc.)
+- **16 Uncommon**: Category synergies (Precision Scope, Pyromaniac, Soul Leech, etc.)
+- **12 Rare**: Cross-type enablers (Burning Hex, Crit Shockwave, Executioner, etc.)
+- **6 Legendary**: Build definers (Infinity Engine, Blood Pact, Glass Cannon, etc.)
 
-## Battlefield UI (Unchanged from V2)
+#### Card UI Updates
+- **V5 Type Icons**: 🔫 Kinetic, 🔥 Thermal, ✨ Arcane
+- **V5 Tier Colors**: Gray (T1), Green (T2), Blue (T3), Gold (T4)
+- **Category Display**: Icons and names for all 8 categories
+- **Damage Tooltip**: Full breakdown of damage calculation on hover
 
-### Lane-Based Placement System
-- ✅ 12 fixed lanes for enemy positioning
-- ✅ Lane preservation on ring movement
-- ✅ Non-overlap enforcement (12px buffer)
-- ✅ Z-order by ring (Melee on top)
+### V5 Test Coverage
+| Test File | Tests | Status |
+|-----------|-------|--------|
+| TestV5Stats.gd | 69 | ✅ All Pass |
+| TestV5DamageFormula.gd | 38 | ✅ All Pass |
+| TestFamilyBuffs.gd | 28 | ✅ All Pass |
+| TestV5Weapons.gd | 20 | ✅ All Pass |
+| TestV5Merge.gd | 22 | ✅ All Pass |
+| TestV5Enemies.gd | 93 | ✅ All Pass |
+| TestV5StatusEffects.gd | 43 | ✅ All Pass |
+| TestV5Waves.gd | 74 | ✅ All Pass |
+| TestV5Economy.gd | 38 | ✅ All Pass |
+| TestV5Artifacts.gd | 80 | ✅ All Pass |
+| TestV5CardUI.gd | 48 | ✅ All Pass |
+| TestV5Tooltip.gd | 21 | ✅ All Pass |
 
-### Stack System
-- ✅ Mini-panel expansion on hover
-- ✅ Real-time HP updates
-- ✅ Death animations
-- ✅ Encyclopedia cards
-
-### Combat Clarity
-- ✅ Behavior badges on enemies
-- ✅ Ring threat colors
-- ✅ Aggregated intent bar
-- ✅ Danger highlighting
-- ✅ Card targeting hints
-
----
-
-## Quick Reference
-
-### Scenes & Navigation
-| Scene | Status | Notes |
-|-------|--------|-------|
-| Main Menu | ✅ Working | Title, buttons functional |
-| Settings | ✅ Working | Audio/Gameplay/Display settings |
-| Warden Select | ✅ Working | 4 wardens → starts with fixed deck |
-| Combat | ✅ Working | V3 staging system |
-| Shop | ✅ Working | Cards, artifacts, stat upgrades |
-| Run End | ✅ Working | Victory/Defeat screens |
-
-### Removed Scenes
-- StarterWeaponSelect.tscn (replaced by fixed starter deck)
-- TestPistolVisual.tscn (weapon visuals removed)
-
-### Full Content Summary
-| Content | Count | Notes |
-|---------|-------|-------|
-| Cards | ~30 | V3 cards (starter + lane buffs + scaling) |
-| Artifacts | 26+ | Core stat + family artifacts |
-| Stat Upgrades | 8 | Energy, Draw, HP, Gun%, Hex%, Armor%, Scrap%, Shop% |
-| Enemies | 11 | Weakling, Husk, Spitter, Spinecrawler, Bomber, etc. |
-| Wardens | 4 | Ash, Gloom, Glass, Veteran |
-| Waves | 20 | Brotato Economy |
-| Build Families | 4 | Gun Board, Hex Ritualist, Barrier Fortress, Lifedrain |
+**Total: 574 tests passing**
 
 ---
 
-## Recently Fixed (Dec 4, 2025)
+## V5 Content Summary
 
-### Shield Barrier Visual Effects (Latest)
-- ✅ **Persistent Barrier Indicator** - Active barriers show on the ring the entire time:
-  - Pulsing green arc along the ring edge
-  - Label shows "🛡️ X dmg × Y" (damage amount and remaining uses)
-  - Updates when uses are consumed
-  - Clear visual feedback so player knows barrier is active
-- ✅ **Barrier Placement Visual** - When placing a Shield Barrier, the ring shows visual feedback:
-  - Green wave effect sweeps along the targeted ring arc
-  - Shield particles spawn and pulse along the barrier position
-- ✅ **Barrier Trigger Visual** - When enemies cross a barrier and take damage:
-  - Shield burst flash effect at the barrier impact point
-  - Green sparks fly from barrier toward the damaged enemy
-  - Floating "🛡️ -X" damage text appears at barrier position
-  - **Enemy stack expands** to show individual units so player can see which enemy was hit
-  - Stack shakes and flashes green to draw attention to the damaged unit
-- ✅ **Barrier Consumption** - Barriers now properly consume uses:
-  - Each enemy crossing consumes 1 use
-  - When uses reach 0, barrier disappears with "break" particle effect
-  - Visual updates immediately to show remaining uses
-- ✅ **Barrier State Sync** - Visual always matches actual barrier state
+### V5 Starter Deck (10 cards)
+| Card | Categories | Count |
+|------|------------|-------|
+| Pistol | Kinetic | 3 |
+| Shotgun | Kinetic, Thermal | 1 |
+| Hex Bolt | Arcane | 2 |
+| Shield Bash | Fortress, Control | 2 |
+| Quick Shot | Utility, Kinetic | 2 |
 
-### Files Changed (Barrier Visuals)
-- `scripts/combat/BattlefieldArena.gd` - Added signal handlers for `barrier_placed`, `barrier_triggered`, `barrier_consumed`; added `_sync_barrier_visual()`, `_create_barrier_break_effect()` methods
-- `scripts/combat/nodes/BattlefieldEffectsNode.gd` - Added `create_barrier_wave()`, `create_barrier_hit_effect()` methods
-- `scripts/combat/nodes/BattlefieldRings.gd` - Enhanced `_draw_barrier_ring()` to show damage/uses label with background
-- `scripts/combat/BattlefieldState.gd` - Added `barrier_consumed` signal, barriers now decrement uses when triggered
-- `scripts/autoloads/CombatManager.gd` - Added `barrier_consumed` signal relay
+### V5 Stats (PlayerStats.gd)
+- **Flat Damage**: kinetic, thermal, arcane
+- **Multipliers**: kinetic_percent, thermal_percent, arcane_percent, damage_percent, aoe_percent
+- **Crit**: crit_chance (5%), crit_damage (150%)
+- **Status**: hex_potency, burn_potency, lifesteal_percent
+- **Barrier**: barrier_damage_bonus, barrier_uses_bonus
+- **Defense**: max_hp (100), armor, armor_start, self_damage_reduction
+- **Economy**: draw_per_turn (5), energy_per_turn (3), hand_size (7)
 
-### Instant Ring-Targeting Cards - Drag to Battlefield (Earlier)
-- ✅ **New feature**: Instant cards that affect specific rings can now be dragged to the battlefield
-  - Added `requires_ring_target()` helper method to CardDefinition
-  - Cards with `play_mode = "instant"`, `target_type = "ring"`, and `requires_target = true` trigger this behavior
-  - When dragging such a card, the valid target ring highlights green when hovered
-  - Drop on a valid ring to play the card targeting that ring
-  - Example: **Shield Barrier** - drag to Close/Mid/Far ring to place the barrier there
-
-### Files Changed (Ring-Targeting)
-- `scripts/resources/CardDefinition.gd` - Added `requires_ring_target()` helper
-- `scripts/ui/CombatScreen.gd` - Added ring highlighting during drag for instant ring-targeting cards
-- `scripts/autoloads/CombatManager.gd` - Added optional `target_ring` parameter to `stage_card()`
-
-### Hex Visual Feedback System (Earlier)
-- ✅ **Fixed missing hex visuals** - Hex cards now show proper visual feedback when applied
-  - Connected `enemy_hexed` signal in BattlefieldArena (was emitted but never listened to)
-  - Added `_on_enemy_hexed()` handler with:
-    - **Purple flash** on affected enemies (0.2 second duration)
-    - **Floating hex indicator** (+☠X number that floats up and fades)
-    - **Purple particles** spawn around affected enemies
-    - **Panel update** - Enemy panels and mini-panels now show hex status immediately
-
-### Files Changed (Hex Visual Fix)
-- `scripts/combat/BattlefieldArena.gd` - Added `enemy_hexed` signal connection and handler
-- `scripts/combat/nodes/BattlefieldEffectsNode.gd` - Added `spawn_hex_particles()` method
-
-### Card Types & Tag System Overhaul (Earlier)
-- ✅ **Combat vs Instant cards** - Added `play_mode` field to CardDefinition ("combat" or "instant")
-  - **Combat cards**: Go to staging lane, execute in order when "End Turn" is clicked
-  - **Instant cards**: Resolve immediately when played, don't go to staging lane
-- ✅ **Fixed Gun Amplifier bug** - Was showing +0 damage due to wrong placeholder (`{scaling}` → `{lane_buff_value}`)
-- ✅ **Tag Tracker Panel** - New UI panel on right side of combat screen showing tag counts
-  - Updates instantly when tags are played (either instant or combat card execution)
-  - Shows all tags with icons and colors (gun, hex, aoe, piercing, etc.)
-- ✅ **Card UI shows all tags** - Cards now display damage type tags (piercing, explosive, beam) and mechanical tags (aoe, sniper, scaling)
-- ✅ **Instant/Combat badge** - Cards show "⚡ INSTANT" (cyan) or "⚔️ COMBAT" (orange) in footer
-
-### Instant Cards (12 total)
-| Card | Type | Effect |
-|------|------|--------|
-| Gun Amplifier | buff | +2 damage to guns in lane |
-| Power Surge | buff | +3 damage to all cards in lane |
-| Rapid Fire Protocol | buff | Next gun fires twice |
-| Hex Infusion | buff | Guns in lane apply 2 hex |
-| Armor Plating | buff | Guns grant 1 armor on execute |
-| Iron Shell | defense | Gain 4 armor |
-| Heavy Armor | defense | Gain 8 armor |
-| Reactive Armor | defense | Gain 4 armor + heal 3 |
-| Healing Surge | skill | Heal 5 HP |
-| Quick Draw | skill | Draw 2 cards |
-| Double Time | skill | Draw 3 cards |
-| Shove | skill | Push enemy back 1 ring |
-| Push Back | skill | Push all melee back 1 ring |
-| Shield Barrier | defense | Place barrier trap |
-
-### Combat Cards (All weapons and damage-dealing cards)
-Pistol, Shotgun, Heavy Pistol, Assault Rifle, Sniper Rifle, Armored Tank, Chain Gun, Rocket Launcher, Beam Cannon, Piercing Shot, Finisher, Hex Bolt, Hex Cloud, Concentrated Hex, etc.
-
-### V3 System Cleanup (Earlier)
-- ✅ **Added `can_play_card()` alias** - CombatManager now has `can_play_card()` that delegates to `can_stage_card()` for backward compatibility
-- ✅ **Updated all warden starter decks** - All 4 wardens now use V3 card IDs (pistol, shotgun, hex_bolt, iron_shell, etc.)
-- ✅ **Updated TestRunner.gd** - All tests now use V3 card IDs and correct function names
-- ✅ **Removed overclock_capacitor artifact** - Replaced with `staging_capacitor` (first card staged is free)
-- ✅ **Fixed test references** - Updated `_calculate_enemy_attack_damage()` to `calculate_incoming_damage()`
-
-### Files Changed (V3 Cleanup)
-- `scripts/autoloads/CombatManager.gd` - Added `can_play_card()` compatibility alias
-- `scripts/ui/WardenSelect.gd` - Updated all 4 warden starter decks with V3 card IDs
-- `scripts/tests/TestRunner.gd` - Updated all card references and test logic for V3
-- `scripts/autoloads/ArtifactManager.gd` - Replaced obsolete `overclock_capacitor` with `staging_capacitor`
-
-### Critical Bug Fixes (Earlier)
-- ✅ **Fixed `active_weapons` crash** - CombatManager no longer uses `active_weapons` property (removed in V3), updated `DebugStatPanel.gd` and `TestRunner.gd` to use `staged_cards` instead
-- ✅ **Fixed deck initialization type mismatch** - `RunManager.initialize_starter_deck()` was storing CardDefinition objects instead of `{card_id, tier}` dictionaries, causing DeckManager to crash
+### V5 Family Buffs
+| Category | Tier 1 (3-5) | Tier 2 (6-8) | Tier 3 (9+) |
+|----------|--------------|--------------|-------------|
+| Kinetic | +3 Kinetic | +6 Kinetic | +10 Kinetic |
+| Thermal | +3 Thermal | +6 Thermal | +10 Thermal |
+| Arcane | +3 Arcane | +6 Arcane | +10 Arcane |
+| Fortress | +3 Armor/wave | +6 Armor/wave | +10 Armor/wave |
+| Shadow | +5% Crit | +10% Crit | +15% Crit |
+| Utility | +1 Draw/wave | +2 Draw/wave | +3 Draw/wave |
+| Control | +1 Barrier | +1 Barrier | +2 Barriers |
+| Volatile | +5 Max HP | +12 Max HP | +20 Max HP |
 
 ---
 
-## In Progress / Future Work
-
-### V3 Testing Needed
-- [x] Test staging lane drag-and-drop reordering - PASSED
-- [x] Test execute button triggers all cards - PASSED
-- [x] Test lane buffs apply to subsequent cards - PASSED
-- [ ] Test scaling cards (Armored Tank, Chain Lightning)
-- [x] Verify cards return to discard after execution - PASSED
-- [x] Test enemy phase runs after execution completes - PASSED
-
-### Future Card Pool Expansion
-- [ ] Add more lane buff varieties
-- [ ] Add more scaling weapons
-- [ ] Balance starter deck difficulty
-
----
-
-## How to Test V3
+## How to Test V5
 
 1. Open project in Godot 4.5+
-2. Press F5 to run
-3. Click "New Run" → Select a Warden → Combat starts with fixed deck
-4. In Combat:
-   - Drag cards to the staging lane (bottom area)
-   - Reorder cards by dragging left/right
-   - Click "End Turn" or "Execute" to trigger all staged cards
-   - Watch cards execute left-to-right with lane buffs applied
-5. Verify cards go to discard pile after execution
+2. Run individual test scenes:
+   - `scenes/tests/TestV5Stats.tscn`
+   - `scenes/tests/TestV5DamageFormula.tscn`
+   - `scenes/tests/TestFamilyBuffs.tscn`
+   - `scenes/tests/TestV5Weapons.tscn`
+   - `scenes/tests/TestV5Merge.tscn`
+   - `scenes/tests/TestV5Enemies.tscn`
+   - `scenes/tests/TestV5StatusEffects.tscn`
+   - `scenes/tests/TestV5Waves.tscn`
+   - `scenes/tests/TestV5Economy.tscn`
+   - `scenes/tests/TestV5Artifacts.tscn`
+   - `scenes/tests/TestV5CardUI.tscn`
+   - `scenes/tests/TestV5Tooltip.tscn`
+3. All tests should output "PASSED ✓" with exit code 0

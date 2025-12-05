@@ -374,7 +374,10 @@ func _setup_card_debug_overlay() -> void:
 
 
 
+# These are kept for potential future use in ring highlighting system
+@warning_ignore("unused_private_class_variable")
 var _last_highlighted_ring: int = -2  # Use -2 so first check always triggers
+@warning_ignore("unused_private_class_variable")
 var _highlight_all_mode: bool = false  # Track if we're in "highlight all" mode
 var _combat_lane_highlighted: bool = false  # Track if combat lane is highlighted for weapon drop
 var _dragging_instant_ring_card: bool = false  # Track if dragging an instant ring-targeting card
@@ -835,7 +838,7 @@ func _on_card_played(_card, _tier: int) -> void:
 	_update_hand()
 
 
-func _on_card_staged(card_def, tier: int, lane_index: int) -> void:
+func _on_card_staged(card_def, tier: int, _lane_index: int) -> void:
 	"""V3: Card was staged to the combat lane."""
 	# Deploy visual to combat lane
 	if combat_lane:
@@ -844,7 +847,7 @@ func _on_card_staged(card_def, tier: int, lane_index: int) -> void:
 	_update_hand()
 
 
-func _on_instant_card_played(card_def, tier: int) -> void:
+func _on_instant_card_played(_card_def, _tier: int) -> void:
 	"""V3: Instant card was played and resolved immediately."""
 	# Instant cards don't go to staging lane, just update hand
 	_update_hand()
@@ -854,7 +857,7 @@ func _on_instant_card_played(card_def, tier: int) -> void:
 	_refresh_enemy_displays()
 
 
-func _on_tag_played(tag: String) -> void:
+func _on_tag_played(_tag: String) -> void:
 	"""Update the tag tracker when a tag is played."""
 	_update_tag_tracker()
 

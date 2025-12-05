@@ -28,6 +28,7 @@ MergeManager="*res://scripts/autoloads/MergeManager.gd"
 ArtifactManager="*res://scripts/autoloads/ArtifactManager.gd"
 ShopGenerator="*res://scripts/autoloads/ShopGenerator.gd"
 CombatAnimationManager="*res://scripts/autoloads/CombatAnimationManager.gd"
+FamilyBuffManager="*res://scripts/autoloads/FamilyBuffManager.gd"
 
 [display]
 

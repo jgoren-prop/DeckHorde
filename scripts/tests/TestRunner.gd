@@ -233,25 +233,21 @@ func _run_splash_damage_tests() -> void:
 func _run_armor_card_tests() -> void:
 	print("[Armor Card Tests]")
 	
-	# V3: Test armor card exists and has correct properties
-	var iron_shell = CardDatabase.get_card("iron_shell")
-	_assert(iron_shell != null, "iron_shell exists in database")
+	# V5: Test armor instant card exists and has correct properties
+	var reinforce_card = CardDatabase.get_card("reinforce")
+	_assert(reinforce_card != null, "reinforce exists in database")
 	
-	if iron_shell == null:
+	if reinforce_card == null:
 		print("  [SKIP] Skipping remaining armor tests - card not found")
 		return
 	
-	var armor_amount: int = iron_shell.get_scaled_value("armor_amount", 1)
-	_assert(armor_amount > 0, "iron_shell grants armor")
-	_assert(armor_amount == 4, "iron_shell grants 4 armor")
+	var armor_amount: int = reinforce_card.armor_amount
+	_assert(armor_amount > 0, "reinforce grants armor")
+	_assert(armor_amount == 5, "reinforce grants 5 armor")
 	
-	# Test heavy armor exists too
-	var heavy_armor = CardDatabase.get_card("heavy_armor")
-	_assert(heavy_armor != null, "heavy_armor exists in database")
-	
-	if heavy_armor:
-		var heavy_armor_amount: int = heavy_armor.get_scaled_value("armor_amount", 1)
-		_assert(heavy_armor_amount > armor_amount, "heavy_armor grants more than iron_shell")
+	# Test fortify exists too (armor = armor_start stat)
+	var fortify_card = CardDatabase.get_card("fortify")
+	_assert(fortify_card != null, "fortify exists in database")
 	
 	await get_tree().process_frame
 
@@ -796,8 +792,8 @@ func _run_card_database_tests() -> void:
 	var shotgun = CardDatabase.get_card("shotgun")
 	_assert(shotgun != null, "shotgun exists in database")
 	
-	var iron_shell = CardDatabase.get_card("iron_shell")
-	_assert(iron_shell != null, "iron_shell exists in database")
+	var reinforce_card = CardDatabase.get_card("reinforce")
+	_assert(reinforce_card != null, "reinforce exists in database")
 	
 	# V3: hex_bolt is the starter hex card
 	var hex_bolt = CardDatabase.get_card("hex_bolt")
@@ -924,7 +920,7 @@ func _run_card_ui_tests() -> void:
 		_assert("{damage}" not in substituted, "value substitution replaces placeholders")
 		
 		# Test: Different card types
-	var armor_card = CardDatabase.get_card("iron_shell")
+	var armor_card = CardDatabase.get_card("reinforce")
 	if armor_card:
 		var card_ui_armor = card_ui_scene.instantiate()
 		add_child(card_ui_armor)
@@ -1257,15 +1253,15 @@ func _run_v2_shop_generator_tests() -> void:
 		var family: String = ShopGenerator._get_card_family(gun_card)
 		_assert(family == "gun", "ShopGenerator: pistol is gun family")
 	
-	var hex_card = CardDatabase.get_card("hex_cloud")
+	var hex_card = CardDatabase.get_card("hex_bolt")
 	if hex_card:
 		var family: String = ShopGenerator._get_card_family(hex_card)
-		_assert(family == "hex_ritual" or family == "hex", "ShopGenerator: hex_cloud is hex family")
+		_assert(family == "hex_ritual" or family == "hex" or family == "Arcane", "ShopGenerator: hex_bolt is hex/arcane family")
 	
-	var barrier_card = CardDatabase.get_card("shield_barrier")
+	var barrier_card = CardDatabase.get_card("deploy_barrier")
 	if barrier_card:
 		var family: String = ShopGenerator._get_card_family(barrier_card)
-		_assert(family == "barrier" or family == "defense", "ShopGenerator: shield_barrier is barrier/defense family")
+		_assert(family == "barrier" or family == "defense" or family == "Control", "ShopGenerator: deploy_barrier is barrier/control family")
 	
 	# Test: Artifact family detection (using ArtifactDefinition resource)
 	var gun_artifact = ArtifactManager.get_artifact("sharpened_rounds")

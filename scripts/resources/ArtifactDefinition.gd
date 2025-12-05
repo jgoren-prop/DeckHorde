@@ -35,8 +35,11 @@ class_name ArtifactDefinition
 
 # Effect parameters
 @export var effect_type: String = ""  # What the artifact does
-@export var effect_value: int = 0  # Numeric value for the effect
+@export var effect_value: float = 0.0  # Numeric value for the effect (float for percentages)
 @export var effect_params: Dictionary = {}  # Additional parameters
+
+# V5: Special on-acquire effects (e.g., "set_max_hp_25")
+@export var on_acquire: String = ""
 
 # Visual
 @export var icon: String = "💎"

@@ -862,7 +862,7 @@ func _on_barrier_consumed(ring: int) -> void:
 		_create_barrier_break_effect(ring, barrier_radius)
 
 
-func _create_barrier_break_effect(ring: int, radius: float) -> void:
+func _create_barrier_break_effect(_ring: int, radius: float) -> void:
 	"""Create visual effect when a barrier is consumed/broken."""
 	if not effects_node:
 		return

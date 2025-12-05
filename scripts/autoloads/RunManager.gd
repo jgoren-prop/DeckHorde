@@ -126,8 +126,12 @@ func reset_run() -> void:
 func set_warden(warden) -> void:
 	"""Set the current warden and apply their stat modifiers.
 	V3: Also initializes the starter deck.
+	V5: Resets and recalculates family buffs.
 	"""
 	current_warden = warden
+	
+	# V5: Reset family buffs before resetting stats
+	FamilyBuffManager.reset()
 	
 	# Reset to defaults first
 	player_stats.reset_to_defaults()
@@ -385,6 +389,10 @@ func get_interest_preview() -> Dictionary:
 func add_card_to_deck(card_id: String, tier: int) -> void:
 	deck.append({"card_id": card_id, "tier": tier})
 	print("[RunManager] Added card to deck: ", card_id)
+	# V5: Update family buffs
+	var card: CardDefinition = CardDatabase.get_card(card_id)
+	if card:
+		FamilyBuffManager.add_card(card)
 
 
 func initialize_starter_deck() -> void:
@@ -415,6 +423,9 @@ func initialize_starter_deck() -> void:
 				push_warning("[RunManager] Card not found: %s" % card_id)
 	
 	print("[RunManager] Starter deck initialized with ", deck.size(), " cards")
+	
+	# V5: Calculate family buffs from initial deck
+	FamilyBuffManager.recalculate_from_deck()
 
 
 func remove_card_from_deck(index: int) -> void:
@@ -422,6 +433,10 @@ func remove_card_from_deck(index: int) -> void:
 		var removed: Dictionary = deck[index]
 		deck.remove_at(index)
 		print("[RunManager] Removed card from deck: ", removed.card_id)
+		# V5: Update family buffs
+		var card: CardDefinition = CardDatabase.get_card(removed.card_id)
+		if card:
+			FamilyBuffManager.remove_card(card)
 
 
 func _has_cheat_death_passive() -> bool:

@@ -134,8 +134,14 @@ func initialize_combat(wave_def) -> void:
 	# Trigger on_wave_start artifacts
 	ArtifactManager.trigger_artifacts("on_wave_start", {})
 	
-	# Spawn initial enemies from wave definition
-	if wave_def and wave_def.initial_spawns:
+	# V5: Spawn turn 1 enemies from turn_spawns
+	if wave_def and wave_def.turn_spawns:
+		for spawn: Dictionary in wave_def.turn_spawns:
+			if spawn.get("turn", 1) == 1:
+				_spawn_enemies(spawn.enemy_id, spawn.count, spawn.ring)
+		print("[CombatManager] Spawned turn 1 enemies from V5 turn_spawns")
+	# Legacy fallback: Spawn initial enemies from initial_spawns
+	elif wave_def and wave_def.initial_spawns:
 		for spawn: Dictionary in wave_def.initial_spawns:
 			_spawn_enemies(spawn.enemy_id, spawn.count, spawn.ring)
 	
@@ -158,12 +164,25 @@ func start_player_turn() -> void:
 	turn_started.emit(current_turn)
 	AudioManager.play_turn_start()
 	
+	# V5: Spawn enemies for this turn (turn 2+ spawns)
+	if current_turn > 1 and current_wave_def and current_wave_def.turn_spawns:
+		var spawns_this_turn: Array = []
+		for spawn: Dictionary in current_wave_def.turn_spawns:
+			if spawn.get("turn", 1) == current_turn:
+				spawns_this_turn.append(spawn)
+		
+		if spawns_this_turn.size() > 0:
+			print("[CombatManager] Spawning enemies for turn ", current_turn)
+			for spawn: Dictionary in spawns_this_turn:
+				_spawn_enemies(spawn.enemy_id, spawn.count, spawn.ring)
+	
 	# Trigger on_turn_start artifacts
 	var turn_start_effects: Dictionary = ArtifactManager.trigger_artifacts("on_turn_start", {})
 	
 	# Hex Amplifier: deal damage to hexed enemies
-	if turn_start_effects.has("hex_tick_damage") and turn_start_effects.hex_tick_damage > 0:
-		_deal_hex_tick_damage(turn_start_effects.hex_tick_damage)
+	var hex_tick: int = turn_start_effects.get("hex_tick_damage", 0)
+	if hex_tick > 0:
+		_deal_hex_tick_damage(hex_tick)
 	
 	# Refill energy
 	current_energy = max_energy
@@ -174,7 +193,7 @@ func start_player_turn() -> void:
 	phase_changed.emit(current_phase)
 	
 	var cards_to_draw: int = 5 if not RunManager.current_warden else RunManager.current_warden.hand_size
-	cards_to_draw += turn_start_effects.draw_cards
+	cards_to_draw += turn_start_effects.get("draw_cards", 0)
 	print("[CombatManager] Drawing ", cards_to_draw, " cards")
 	for i in range(cards_to_draw):
 		deck_manager.draw_card()
@@ -451,7 +470,7 @@ func execute_staged_cards() -> void:
 		await get_tree().create_timer(0.2).timeout
 		
 		# Execute the card with the current execution context
-		await _execute_staged_card(staged_entry, i)
+		_execute_staged_card(staged_entry, i)
 		
 		# Update execution context
 		execution_context.cards_played += 1

@@ -3,6 +3,7 @@ extends Control
 ## Players queue cards to this lane, then execute them all left-to-right
 ## Supports drag-to-reorder before execution
 
+@warning_ignore("unused_signal")
 signal card_clicked(card_def, tier: int, lane_index: int)
 signal execute_requested()
 
@@ -426,7 +427,7 @@ func _position_all_cards() -> void:
 # SIGNAL HANDLERS
 # =============================================================================
 
-func _on_card_staged(card_def, tier: int, _lane_index: int) -> void:
+func _on_card_staged(_card_def, _tier: int, _lane_index: int) -> void:
 	# CombatManager handles the staging, we just need to create the visual
 	# This is called AFTER CombatManager.stage_card succeeds
 	pass  # Visual is created when card is dropped on lane
@@ -517,7 +518,7 @@ func _animate_card_discard(card_ui: Control) -> void:
 	tween.tween_callback(card_ui.queue_free)
 
 
-func _on_card_executing(card_def, _tier: int, lane_index: int) -> void:
+func _on_card_executing(_card_def, _tier: int, lane_index: int) -> void:
 	if lane_index < 0 or lane_index >= staged_cards.size():
 		return
 	

@@ -1,0 +1,7 @@
+[gd_scene load_steps=2 format=3 uid="uid://cidenteyu3s4n"]
+
+[ext_resource type="Script" path="res://scripts/tests/TestV5Tooltip.gd" id="1_tooltip_test"]
+
+[node name="TestV5Tooltip" type="Node"]
+script = ExtResource("1_tooltip_test")
+

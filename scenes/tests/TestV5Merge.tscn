@@ -1,0 +1,7 @@
+[gd_scene load_steps=2 format=3 uid="uid://dp3xk7mcl8vhf"]
+
+[ext_resource type="Script" path="res://scripts/tests/TestV5Merge.gd" id="1_test"]
+
+[node name="TestV5Merge" type="Node"]
+script = ExtResource("1_test")
+

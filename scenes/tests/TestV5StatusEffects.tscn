@@ -1,0 +1,7 @@
+[gd_scene load_steps=2 format=3 uid="uid://c8v5status"]
+
+[ext_resource type="Script" path="res://scripts/tests/TestV5StatusEffects.gd" id="1_test"]
+
+[node name="TestV5StatusEffects" type="Node"]
+script = ExtResource("1_test")
+

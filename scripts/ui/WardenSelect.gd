@@ -56,9 +56,9 @@ func _create_default_wardens() -> Array[WardenDefinition]:
 		{"card_id": "shotgun", "tier": 1, "count": 1},             # Splash damage
 		{"card_id": "heavy_pistol", "tier": 1, "count": 1},        # Strong single target
 		{"card_id": "assault_rifle", "tier": 1, "count": 1},       # Multi-target
-		{"card_id": "gun_amplifier", "tier": 1, "count": 1},       # Lane buff for guns
-		{"card_id": "iron_shell", "tier": 1, "count": 1},          # Defense
-		{"card_id": "quick_draw", "tier": 1, "count": 2}           # Draw cards
+		{"card_id": "focus_fire", "tier": 1, "count": 1},          # Lane buff for guns
+		{"card_id": "reinforce", "tier": 1, "count": 1},           # Defense
+		{"card_id": "quick_hands", "tier": 1, "count": 2}          # Draw cards
 	]
 	result.append(ash)
 	
@@ -83,11 +83,11 @@ func _create_default_wardens() -> Array[WardenDefinition]:
 	gloom.starting_deck = [
 		{"card_id": "pistol", "tier": 1, "count": 2},              # Basic gun
 		{"card_id": "hex_bolt", "tier": 1, "count": 2},            # Basic hex
-		{"card_id": "hex_strike", "tier": 1, "count": 1},          # Damage + hex
-		{"card_id": "concentrated_hex", "tier": 1, "count": 1},    # Big hex
-		{"card_id": "beam_cannon", "tier": 1, "count": 1},         # Chains through hexed
-		{"card_id": "iron_shell", "tier": 1, "count": 1},          # Defense
-		{"card_id": "quick_draw", "tier": 1, "count": 2}           # Draw cards
+		{"card_id": "curse_wave", "tier": 1, "count": 1},          # Damage + hex AOE
+		{"card_id": "curse", "tier": 1, "count": 1},               # Apply hex instant
+		{"card_id": "soul_drain", "tier": 1, "count": 1},          # Lifesteal arcane
+		{"card_id": "reinforce", "tier": 1, "count": 1},           # Defense
+		{"card_id": "quick_hands", "tier": 1, "count": 2}          # Draw cards
 	]
 	result.append(gloom)
 	
@@ -110,17 +110,17 @@ func _create_default_wardens() -> Array[WardenDefinition]:
 	# V3: Defense-focused deck with armor and barrier synergies
 	glass.starting_deck = [
 		{"card_id": "pistol", "tier": 1, "count": 2},              # Basic gun
-		{"card_id": "iron_shell", "tier": 1, "count": 2},          # Basic armor
-		{"card_id": "heavy_armor", "tier": 1, "count": 1},         # Strong armor
-		{"card_id": "shield_barrier", "tier": 1, "count": 2},      # Barrier traps
-		{"card_id": "reactive_armor", "tier": 1, "count": 1},      # Armor + heal
-		{"card_id": "armored_tank", "tier": 1, "count": 1},        # Scaling gun + armor
-		{"card_id": "quick_draw", "tier": 1, "count": 1}           # Draw cards
+		{"card_id": "reinforce", "tier": 1, "count": 2},           # Basic armor
+		{"card_id": "fortify", "tier": 1, "count": 1},             # Strong armor
+		{"card_id": "deploy_barrier", "tier": 1, "count": 2},      # Barrier traps
+		{"card_id": "shield_bash", "tier": 1, "count": 1},         # Armor + damage
+		{"card_id": "bulwark", "tier": 1, "count": 1},             # Fortress gun
+		{"card_id": "quick_hands", "tier": 1, "count": 1}          # Draw cards
 	]
 	result.append(glass)
 	
 	# =============================================================================
-	# VETERAN WARDEN - Neutral baseline for Brotato-style buildcraft
+	# VETERAN WARDEN - Neutral baseline for Brotato-style buildcraft (V4)
 	# =============================================================================
 	var veteran: WardenDefinition = WardenDefinition.new()
 	veteran.warden_id = "veteran_warden"
@@ -133,6 +133,8 @@ func _create_default_wardens() -> Array[WardenDefinition]:
 		"max_hp": 20,  # +20 HP (50 -> 70)
 		"energy_per_turn": 2  # +2 energy (1 -> 3)
 	}
+	# V4: Empty preferred_tags = no family bias, random family each run
+	veteran.preferred_tags = []
 	veteran.passive_id = ""  # No special passive
 	veteran.portrait_color = Color(0.6, 0.6, 0.7)  # Neutral gray-blue
 	veteran.icon = "⚔️"
@@ -141,12 +143,12 @@ func _create_default_wardens() -> Array[WardenDefinition]:
 	veteran.starting_deck = [
 		{"card_id": "pistol", "tier": 1, "count": 2},              # 2x basic gun - baseline damage
 		{"card_id": "shotgun", "tier": 1, "count": 1},             # 1x splash gun - group clear
-		{"card_id": "gun_amplifier", "tier": 1, "count": 1},       # 1x lane buff - damage boost
+		{"card_id": "focus_fire", "tier": 1, "count": 1},          # 1x lane buff - damage boost
 		{"card_id": "hex_bolt", "tier": 1, "count": 1},            # 1x hex - synergy setup
-		{"card_id": "shield_barrier", "tier": 1, "count": 1},      # 1x barrier - ring control
-		{"card_id": "iron_shell", "tier": 1, "count": 1},          # 1x defense - armor
-		{"card_id": "shove", "tier": 1, "count": 1},               # 1x ring control - push
-		{"card_id": "quick_draw", "tier": 1, "count": 2}           # 2x draw - card advantage
+		{"card_id": "deploy_barrier", "tier": 1, "count": 1},      # 1x barrier - ring control
+		{"card_id": "reinforce", "tier": 1, "count": 1},           # 1x defense - armor
+		{"card_id": "repulsor", "tier": 1, "count": 1},            # 1x ring control - push
+		{"card_id": "quick_hands", "tier": 1, "count": 2}          # 2x draw - card advantage
 	]
 	result.append(veteran)
 	
@@ -255,10 +257,10 @@ func _update_preview(warden: WardenDefinition) -> void:
 	# Calculate actual stats after modifiers (base: 50 HP, 1 energy, 1 draw)
 	var hp: int = 50 + int(warden.stat_modifiers.get("max_hp", 0))
 	var energy: int = 1 + int(warden.stat_modifiers.get("energy_per_turn", 0))
-	var draw: int = 1 + int(warden.stat_modifiers.get("draw_per_turn", 0))
+	var draw_amt: int = 1 + int(warden.stat_modifiers.get("draw_per_turn", 0))
 	
 	preview_stats.text = "HP: %d | Armor: %d | Energy: %d | Draw: %d" % [
-		hp, warden.base_armor, energy, draw
+		hp, warden.base_armor, energy, draw_amt
 	]
 	preview_passive.text = "[b]Passive:[/b] %s" % warden.passive_description
 	

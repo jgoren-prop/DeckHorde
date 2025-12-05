@@ -60,6 +60,9 @@ const CARD_BASE_PRICE: int = 30  # Fallback only
 
 
 func _ready() -> void:
+	# V4: Reset reroll count for new shop visit
+	ShopGenerator.reset_shop_reroll_count()
+	
 	# Apply interest and show XP summary when entering shop
 	_apply_wave_rewards()
 	
@@ -210,21 +213,24 @@ func _show_xp_popup(xp_info: Dictionary) -> void:
 
 
 func _refresh_shop() -> void:
-	# V2: Use ShopGenerator for biased card/artifact generation
+	# V4: Use ShopGenerator for biased card/artifact generation
 	var wave: int = RunManager.current_wave
 	
-	# Generate biased shop cards (4 slots in V2)
+	# Generate biased shop cards (4 slots)
 	shop_cards = ShopGenerator.generate_shop_cards(wave)
 	
-	# Generate biased artifacts (3 slots in V2)
+	# Generate biased artifacts (3 slots)
 	shop_artifacts = ShopGenerator.generate_shop_artifacts(wave)
 	
-	# Update service costs based on wave
+	# Update service costs based on wave and V4 reroll count
 	remove_cost = ShopGenerator.get_remove_card_cost(wave)
 	reroll_cost = ShopGenerator.get_reroll_cost(wave)
 	
 	_populate_card_slots()
 	_populate_artifact_slots()
+	
+	# V4: Check for shop-clearing reward after refresh
+	_check_shop_clearing_reward()
 
 
 # V2: Artifact generation moved to ShopGenerator for family biasing
@@ -324,12 +330,13 @@ func _create_artifact_slot(artifact: Dictionary, index: int) -> PanelContainer:
 	style.content_margin_top = 8.0
 	style.content_margin_bottom = 8.0
 	
-	# Border color by rarity (1=common, 2=uncommon, 3=rare, 4=legendary)
-	match artifact.rarity:
-		1: style.border_color = Color(0.5, 0.5, 0.5)  # Common - Gray
-		2: style.border_color = Color(0.3, 0.8, 0.3)  # Uncommon - Green
-		3: style.border_color = Color(0.3, 0.6, 1.0)  # Rare - Blue
-		4: style.border_color = Color(1.0, 0.8, 0.3)  # Legendary - Gold
+	# Border color by rarity (0=common, 1=uncommon, 2=rare, 3=legendary)
+	var rarity: int = artifact.get("rarity", 0)
+	match rarity:
+		0: style.border_color = Color(0.5, 0.5, 0.5)  # Common - Gray
+		1: style.border_color = Color(0.3, 0.8, 0.3)  # Uncommon - Green
+		2: style.border_color = Color(0.3, 0.6, 1.0)  # Rare - Blue
+		3: style.border_color = Color(1.0, 0.8, 0.3)  # Legendary - Gold
 		_: style.border_color = Color(0.5, 0.5, 0.5)  # Default to common
 	
 	panel.add_theme_stylebox_override("panel", style)
@@ -348,7 +355,7 @@ func _create_artifact_slot(artifact: Dictionary, index: int) -> PanelContainer:
 	
 	# Name
 	var name_label: Label = Label.new()
-	name_label.text = artifact.artifact_name
+	name_label.text = artifact.get("name", "Unknown")
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	name_label.add_theme_font_size_override("font_size", 13)
 	name_label.add_theme_color_override("font_color", Color(1, 0.9, 0.7))
@@ -362,7 +369,7 @@ func _create_artifact_slot(artifact: Dictionary, index: int) -> PanelContainer:
 	vbox.add_child(desc_container)
 	
 	var desc_label: Label = Label.new()
-	desc_label.text = artifact.description
+	desc_label.text = artifact.get("description", "")
 	desc_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	desc_label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
 	desc_label.add_theme_font_size_override("font_size", 11)
@@ -377,7 +384,7 @@ func _create_artifact_slot(artifact: Dictionary, index: int) -> PanelContainer:
 	vbox.add_child(spacer)
 	
 	# Price
-	var price: int = artifact.cost
+	var price: int = artifact.get("cost", 0)
 	var price_label: Label = Label.new()
 	price_label.text = "%d ⚙️" % price
 	price_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -492,7 +499,15 @@ func _update_ui() -> void:
 	scrap_label.text = str(RunManager.scrap)
 	
 	remove_cost_label.text = "%d Scrap" % remove_cost
-	reroll_cost_label.text = "%d Scrap" % reroll_cost
+	
+	# V4: Update reroll cost with current reroll count, or show FREE if reward available
+	reroll_cost = ShopGenerator.get_reroll_cost(RunManager.current_wave)
+	if ShopGenerator.has_shop_clearing_reward():
+		reroll_cost_label.text = "FREE!"
+		reroll_cost_label.add_theme_color_override("font_color", Color(0.3, 1.0, 0.5))
+	else:
+		reroll_cost_label.text = "%d Scrap" % reroll_cost
+		reroll_cost_label.remove_theme_color_override("font_color")
 	
 	# Refresh card/artifact displays to update price colors
 	_populate_card_slots()
@@ -522,24 +537,30 @@ func _on_shop_card_clicked(card_def, _tier: int, index: int) -> void:  # card_de
 		_check_merges()  # Check if new card enables merge
 		_update_tag_tracker()  # Update tag counts
 		_update_card_collection()  # Update card collection display
+		
+		# V4: Check for shop-clearing reward
+		_check_shop_clearing_reward()
 	else:
 		print("[Shop] Not enough scrap!")
 		_show_not_enough_scrap()
 
 
 func _on_artifact_buy_pressed(artifact: Dictionary, index: int) -> void:
-	var price: int = artifact.cost
+	var price: int = artifact.get("cost", 0)
 	
 	if RunManager.spend_scrap(price):
 		AudioManager.play_shop_purchase()
 		# Add artifact
-		ArtifactManager.acquire_artifact(artifact.artifact_id)
-		print("[Shop] Bought artifact: ", artifact.artifact_name)
+		ArtifactManager.equip_artifact(artifact.get("artifact_id", ""))
+		print("[Shop] Bought artifact: ", artifact.get("name", "Unknown"))
 		
 		# Remove from shop
 		shop_artifacts.remove_at(index)
 		_populate_artifact_slots()
 		_update_owned_artifacts()  # Update owned artifacts display
+		
+		# V4: Check for shop-clearing reward
+		_check_shop_clearing_reward()
 	else:
 		print("[Shop] Not enough scrap for artifact!")
 		_show_not_enough_scrap()
@@ -648,13 +669,67 @@ func _on_deck_view_close() -> void:
 
 
 func _on_reroll_pressed() -> void:
-	if RunManager.spend_scrap(reroll_cost):
+	# V4: Check for free reroll from shop-clearing reward first
+	if ShopGenerator.consume_shop_clearing_reward():
 		_refresh_shop()
 		_check_merges()
 		_update_ui()
-		print("[Shop] Rerolled shop (cost: %d)" % reroll_cost)
+		_show_free_reroll_popup()
+		print("[Shop] V4: Free reroll used (shop-clearing reward)")
+		return
+	
+	if RunManager.spend_scrap(reroll_cost):
+		# V4: Increment reroll count AFTER successful reroll
+		ShopGenerator.increment_reroll_count()
+		_refresh_shop()
+		_check_merges()
+		_update_ui()
+		print("[Shop] Rerolled shop (cost: %d, reroll count: %d)" % [reroll_cost, ShopGenerator.current_shop_reroll_count])
 	else:
 		_show_not_enough_scrap()
+
+
+func _check_shop_clearing_reward() -> void:
+	"""V4: Check if shop-clearing reward should be granted."""
+	if ShopGenerator.check_shop_clearing_reward(shop_cards.size(), shop_artifacts.size()):
+		_show_shop_cleared_popup()
+
+
+func _show_free_reroll_popup() -> void:
+	"""V4: Show popup when free reroll is used."""
+	var popup: Label = Label.new()
+	popup.text = "🎁 FREE REROLL!"
+	popup.add_theme_font_size_override("font_size", 24)
+	popup.add_theme_color_override("font_color", Color(0.3, 1.0, 0.5))
+	popup.add_theme_color_override("font_outline_color", Color(0, 0, 0))
+	popup.add_theme_constant_override("outline_size", 3)
+	popup.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	popup.position = Vector2(get_viewport_rect().size.x / 2 - 100, get_viewport_rect().size.y / 2 - 50)
+	add_child(popup)
+	
+	var tween: Tween = create_tween()
+	tween.tween_property(popup, "position:y", popup.position.y - 50, 0.5).set_ease(Tween.EASE_OUT)
+	tween.tween_interval(0.8)
+	tween.tween_property(popup, "modulate:a", 0.0, 0.5)
+	tween.tween_callback(popup.queue_free)
+
+
+func _show_shop_cleared_popup() -> void:
+	"""V4: Show popup when shop is cleared and free reroll is available."""
+	var popup: Label = Label.new()
+	popup.text = "🛒 Shop Cleared! Free Reroll Available!"
+	popup.add_theme_font_size_override("font_size", 20)
+	popup.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
+	popup.add_theme_color_override("font_outline_color", Color(0, 0, 0))
+	popup.add_theme_constant_override("outline_size", 3)
+	popup.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	popup.position = Vector2(get_viewport_rect().size.x / 2 - 180, 80)
+	add_child(popup)
+	
+	var tween: Tween = create_tween()
+	tween.tween_interval(2.5)
+	tween.tween_property(popup, "modulate:a", 0.0, 0.5)
+	tween.tween_callback(popup.queue_free)
 
 
 func _on_continue_pressed() -> void:
