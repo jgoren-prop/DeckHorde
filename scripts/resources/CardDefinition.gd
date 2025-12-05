@@ -40,7 +40,7 @@ const TagConstantsClass = preload("res://scripts/constants/TagConstants.gd")
 @export var base_cost: int = 1
 
 # Effect type determines how the card is resolved
-@export_enum("instant_damage", "heal", "buff", "apply_hex", "apply_hex_multi", "gain_armor", "ring_barrier", "damage_and_heal", "damage_and_armor", "armor_and_lifesteal", "draw_cards", "push_enemies", "lane_buff", "scaling_damage", "apply_burn", "apply_burn_multi", "v5_damage", "v5_multi_hit", "v5_aoe", "v5_ring_damage", "splash_damage", "last_damaged", "explosive_damage", "beam_damage", "piercing_damage", "shock_damage", "corrosive_damage", "energy_refund", "hex_transfer", "armor_and_heal", "damage_and_draw", "scatter_damage", "energy_and_draw", "gambit", "damage_and_hex", "shield_bash", "targeted_group_damage") var effect_type: String = "instant_damage"
+@export_enum("instant_damage", "heal", "buff", "apply_hex", "apply_hex_multi", "gain_armor", "ring_barrier", "damage_and_heal", "damage_and_armor", "armor_and_lifesteal", "draw_cards", "push_enemies", "lane_buff", "scaling_damage", "apply_burn", "apply_burn_multi", "v5_damage", "v5_multi_hit", "v5_aoe", "v5_ring_damage", "splash_damage", "last_damaged", "explosive_damage", "beam_damage", "piercing_damage", "shock_damage", "corrosive_damage", "energy_refund", "hex_transfer", "armor_and_heal", "damage_and_draw", "scatter_damage", "energy_and_draw", "gambit", "damage_and_hex", "shield_bash", "targeted_group_damage", "apply_execute", "v6_ripple_damage") var effect_type: String = "instant_damage"
 
 # =============================================================================
 # V5 DAMAGE AND SCALING
@@ -69,6 +69,22 @@ const TagConstantsClass = preload("res://scripts/constants/TagConstants.gd")
 
 ## V5: Can hits repeat on same target?
 @export var can_repeat_target: bool = true
+
+# =============================================================================
+# V6 HORDE COMBAT: Execute and Ripple
+# =============================================================================
+
+## V6: Execute threshold (%) - if enemy HP is at or below this %, instant kill on hit
+@export var execute_threshold: int = 0  # 0 = disabled, e.g. 20 = execute enemies at 20% HP or below
+
+## V6: Ripple effect type - triggered when an enemy is killed by this card
+@export_enum("none", "chain_damage", "group_damage", "aoe_damage", "spread_damage") var ripple_type: String = "none"
+
+## V6: Ripple value - damage amount or multiplier for ripple effect
+@export var ripple_damage: int = 0
+
+## V6: Ripple hits - number of additional targets for chain effects
+@export var ripple_count: int = 1
 
 # Legacy damage fields (kept for compatibility)
 @export var hex_damage: int = 0

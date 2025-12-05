@@ -14,6 +14,7 @@ signal wave_changed(wave: int)
 signal stats_changed()  # V2: Emitted when player stats change
 signal xp_changed(current: int, required: int, level: int)  # XP system
 signal level_up(new_level: int, hp_gained: int)  # Level up notification
+signal levelup_choices_available(options: Array)  # Brotato-style stat pick UI trigger
 
 # Constants (Brotato Economy: 20 waves for full economy experience)
 const MAX_WAVES: int = 20
@@ -24,6 +25,11 @@ var max_waves: int = MAX_WAVES
 var danger_level: int = 1
 var enemies_killed: int = 0
 var essence_earned: int = 0
+
+# Brotato Economy Constants
+const STARTING_SCRAP: int = 25  # Enough to buy 1 cheap card or stat upgrade
+const BASE_WAVE_SCRAP: int = 10  # Guaranteed scrap for completing any wave
+const WAVE_SCRAP_SCALING: int = 3  # Additional scrap per wave number
 
 # V2: Player stats resource (replaces individual stat vars)
 var player_stats = PlayerStatsClass.new()
@@ -97,6 +103,23 @@ var current_level: int:
 var xp_gained_this_wave: int = 0
 var levels_gained_this_wave: int = 0
 
+# Brotato-style level-up stat allocation
+var pending_levelups: int = 0  # Number of level-ups waiting for stat selection
+var current_levelup_options: Array = []  # Current options being displayed
+
+# Stat options pool for level-up choices
+const LEVELUP_STAT_OPTIONS: Array = [
+	{"id": "max_hp", "name": "+3 Max HP", "stat": "max_hp", "value": 3, "icon": "❤️", "description": "Increase maximum health"},
+	{"id": "energy", "name": "+1 Energy/Turn", "stat": "energy_per_turn", "value": 1, "icon": "⚡", "description": "Play more cards each turn"},
+	{"id": "draw", "name": "+1 Draw/Turn", "stat": "draw_per_turn", "value": 1, "icon": "📜", "description": "Draw more cards at turn start"},
+	{"id": "kinetic", "name": "+5 Kinetic", "stat": "kinetic", "value": 5, "icon": "🔫", "description": "Flat damage for gun builds"},
+	{"id": "thermal", "name": "+5 Thermal", "stat": "thermal", "value": 5, "icon": "🔥", "description": "Flat damage for explosive builds"},
+	{"id": "arcane", "name": "+5 Arcane", "stat": "arcane", "value": 5, "icon": "✨", "description": "Flat damage for curse builds"},
+	{"id": "crit_chance", "name": "+5% Crit Chance", "stat": "crit_chance", "value": 5.0, "icon": "🎯", "description": "Increased critical hit chance"},
+	{"id": "damage", "name": "+10% Damage", "stat": "damage_percent", "value": 10.0, "icon": "⚔️", "description": "All damage increased"},
+	{"id": "armor_start", "name": "+3 Armor/Wave", "stat": "armor_start", "value": 3, "icon": "🛡️", "description": "Start each wave with armor"},
+]
+
 
 func _ready() -> void:
 	print("[RunManager] V2 Initialized with PlayerStats")
@@ -107,19 +130,22 @@ func reset_run() -> void:
 	player_stats.reset_to_defaults()
 	current_hp = player_stats.max_hp
 	armor = 0
-	scrap = 0
+	scrap = STARTING_SCRAP  # Brotato Economy: Start with some gold
 	deck.clear()
 	enemies_killed = 0
 	essence_earned = 0
 	cheat_death_available = true
 	
-	# XP tracking
+	# XP tracking and level-up state
 	xp_gained_this_wave = 0
 	levels_gained_this_wave = 0
+	pending_levelups = 0
+	current_levelup_options = []
 	
 	# Brotato Economy: Reset shop state
 	ShopGenerator.reset_shop_state()
 	
+	print("[RunManager] Brotato Economy: Starting with %d scrap" % STARTING_SCRAP)
 	stats_changed.emit()
 
 
@@ -386,6 +412,38 @@ func get_interest_preview() -> Dictionary:
 	}
 
 
+func get_wave_completion_bonus() -> int:
+	"""Brotato Economy: Get guaranteed scrap bonus for completing current wave.
+	This is awarded regardless of reward choice."""
+	return BASE_WAVE_SCRAP + (current_wave * WAVE_SCRAP_SCALING)
+
+
+func get_wave_completion_bonus_with_penalty() -> int:
+	"""Get wave completion bonus with breach penalty applied.
+	Each breach (enemy melee attack) reduces bonus by 5%, capped at 50% loss."""
+	var base_bonus: int = get_wave_completion_bonus()
+	var penalty_mult: float = CombatManager.get_breach_penalty_percent()
+	return int(float(base_bonus) * penalty_mult)
+
+
+func award_wave_completion_bonus() -> int:
+	"""Award the wave completion bonus (with breach penalty). Returns amount awarded."""
+	var base_bonus: int = get_wave_completion_bonus()
+	var penalty_mult: float = CombatManager.get_breach_penalty_percent()
+	var final_bonus: int = int(float(base_bonus) * penalty_mult)
+	
+	add_scrap(final_bonus)
+	
+	var breaches: int = CombatManager.get_breaches_this_wave()
+	if breaches > 0:
+		var lost_scrap: int = base_bonus - final_bonus
+		print("[RunManager] Wave completion bonus: +%d scrap (-%d from %d breaches)" % [final_bonus, lost_scrap, breaches])
+	else:
+		print("[RunManager] Wave completion bonus: +%d scrap (PERFECT - no breaches!)" % final_bonus)
+	
+	return final_bonus
+
+
 func add_card_to_deck(card_id: String, tier: int) -> void:
 	deck.append({"card_id": card_id, "tier": tier})
 	print("[RunManager] Added card to deck: ", card_id)
@@ -462,7 +520,7 @@ func reset_wave_state() -> void:
 
 
 # =============================================================================
-# BROTATO ECONOMY: XP / LEVELING SYSTEM
+# BROTATO ECONOMY: XP / LEVELING SYSTEM WITH STAT ALLOCATION
 # =============================================================================
 
 func add_xp(base_amount: int) -> void:
@@ -480,32 +538,91 @@ func add_xp(base_amount: int) -> void:
 
 
 func _check_level_up() -> void:
-	"""Check if player has enough XP to level up. Can level multiple times."""
+	"""Check if player has enough XP to level up. Queue pending level-ups."""
 	var leveled: bool = true
 	while leveled:
 		var required: int = player_stats.get_xp_for_next_level()
 		if player_stats.current_xp >= required:
-			_perform_level_up()
+			_queue_level_up()
 		else:
 			leveled = false
 
 
-func _perform_level_up() -> void:
-	"""Perform a level up: increase level, add max HP, heal that amount."""
+func _queue_level_up() -> void:
+	"""Queue a level-up for stat selection instead of auto-applying."""
 	player_stats.current_level += 1
 	levels_gained_this_wave += 1
+	pending_levelups += 1
 	
-	# Brotato-style: +1 Max HP per level, and heal that amount
-	var hp_gained: int = 1
-	player_stats.max_hp += hp_gained
-	current_hp = mini(current_hp + hp_gained, player_stats.max_hp)
+	print("[RunManager] LEVEL UP queued! Now level %d. Pending choices: %d" % [player_stats.current_level, pending_levelups])
 	
-	print("[RunManager] LEVEL UP! Now level %d. Max HP: %d" % [player_stats.current_level, player_stats.max_hp])
+	# Trigger the stat selection UI
+	_offer_levelup_choices()
+
+
+func _offer_levelup_choices() -> void:
+	"""Generate and offer level-up stat choices to the player."""
+	if pending_levelups <= 0:
+		return
 	
-	level_up.emit(player_stats.current_level, hp_gained)
-	hp_changed.emit(current_hp, max_hp)
-	health_changed.emit(current_hp, max_hp)
+	current_levelup_options = get_levelup_options()
+	levelup_choices_available.emit(current_levelup_options)
+
+
+func get_levelup_options(count: int = 4) -> Array:
+	"""Get random stat options for level-up selection.
+	Returns 'count' random unique options from the pool."""
+	var available: Array = LEVELUP_STAT_OPTIONS.duplicate()
+	available.shuffle()
+	
+	var options: Array = []
+	for i: int in range(mini(count, available.size())):
+		options.append(available[i].duplicate())
+	
+	return options
+
+
+func apply_levelup_choice(choice_id: String) -> void:
+	"""Apply the selected stat bonus from level-up."""
+	if pending_levelups <= 0:
+		push_warning("[RunManager] No pending level-ups to apply")
+		return
+	
+	# Find the option
+	var chosen_option: Dictionary = {}
+	for option: Dictionary in LEVELUP_STAT_OPTIONS:
+		if option.id == choice_id:
+			chosen_option = option
+			break
+	
+	if chosen_option.is_empty():
+		push_warning("[RunManager] Unknown level-up choice: " + choice_id)
+		return
+	
+	# Apply the stat bonus
+	player_stats.apply_modifier(chosen_option.stat, chosen_option.value)
+	pending_levelups -= 1
+	
+	print("[RunManager] Applied level-up bonus: %s (+%s %s)" % [
+		chosen_option.name, str(chosen_option.value), chosen_option.stat])
+	
+	# Emit signals
+	level_up.emit(player_stats.current_level, 0)  # 0 hp_gained since we use stat choices now
 	stats_changed.emit()
+	
+	# Check if more level-ups pending
+	if pending_levelups > 0:
+		_offer_levelup_choices()
+
+
+func has_pending_levelups() -> bool:
+	"""Check if there are pending level-up choices."""
+	return pending_levelups > 0
+
+
+func get_pending_levelup_count() -> int:
+	"""Get the number of pending level-up choices."""
+	return pending_levelups
 
 
 func get_xp_info() -> Dictionary:
@@ -517,5 +634,6 @@ func get_xp_info() -> Dictionary:
 		"progress": player_stats.get_xp_progress(),
 		"xp_gain_percent": player_stats.xp_gain_percent,
 		"xp_this_wave": xp_gained_this_wave,
-		"levels_this_wave": levels_gained_this_wave
+		"levels_this_wave": levels_gained_this_wave,
+		"pending_levelups": pending_levelups
 	}

@@ -37,12 +37,12 @@ func _create_default_wardens() -> Array[WardenDefinition]:
 	ash.warden_id = "ash_warden"
 	ash.warden_name = "Ash Warden"
 	ash.description = "Ex-riot cop branded with a burning sigil."
-	ash.passive_description = "Gun +15% dmg. Close/Melee +10% dmg. +10 HP, +2 energy."
-	ash.base_armor = 2
-	# Brotato Economy: Use stat_modifiers for HP/energy bonuses
+	ash.passive_description = "Gun +15% dmg. Close/Melee +10% dmg. +5 HP, +1 energy."
+	ash.base_armor = 1
+	# Brotato-style: Small bonuses that add up over time
 	ash.stat_modifiers = {
-		"max_hp": 10,  # +10 HP (50 -> 60)
-		"energy_per_turn": 2,  # +2 energy (1 -> 3)
+		"max_hp": 5,  # +5 HP (20 -> 25)
+		"energy_per_turn": 1,  # +1 energy (1 -> 2)
 		"gun_damage_percent": 15.0,  # +15% gun damage
 		"damage_vs_melee_percent": 10.0,  # +10% vs Melee
 		"damage_vs_close_percent": 10.0   # +10% vs Close
@@ -50,15 +50,9 @@ func _create_default_wardens() -> Array[WardenDefinition]:
 	ash.passive_id = ""  # No special passive, all via stat_modifiers
 	ash.portrait_color = Color(1.0, 0.4, 0.2)
 	ash.icon = "🔥"
-	# V3: Gun-focused deck with damage and buff cards
+	# Brotato-style: Start with 1 themed weapon
 	ash.starting_deck = [
-		{"card_id": "pistol", "tier": 1, "count": 2},              # Basic gun
-		{"card_id": "shotgun", "tier": 1, "count": 1},             # Splash damage
-		{"card_id": "heavy_pistol", "tier": 1, "count": 1},        # Strong single target
-		{"card_id": "assault_rifle", "tier": 1, "count": 1},       # Multi-target
-		{"card_id": "focus_fire", "tier": 1, "count": 1},          # Lane buff for guns
-		{"card_id": "reinforce", "tier": 1, "count": 1},           # Defense
-		{"card_id": "quick_hands", "tier": 1, "count": 2}          # Draw cards
+		{"card_id": "shotgun", "tier": 1, "count": 1}  # Thematic gun with splash
 	]
 	result.append(ash)
 	
@@ -67,27 +61,21 @@ func _create_default_wardens() -> Array[WardenDefinition]:
 	gloom.warden_id = "gloom_warden"
 	gloom.warden_name = "Gloom Warden"
 	gloom.description = "Cult defector bound to a parasitic entity."
-	gloom.passive_description = "Hex +20% dmg. Heal -10%. +15 HP, +2 energy."
-	gloom.base_armor = 1
-	# Brotato Economy: Use stat_modifiers for HP/energy bonuses
+	gloom.passive_description = "Hex +20% dmg. Heal -10%. +5 HP, +1 energy."
+	gloom.base_armor = 0
+	# Brotato-style: Small bonuses that add up over time
 	gloom.stat_modifiers = {
-		"max_hp": 15,  # +15 HP (50 -> 65)
-		"energy_per_turn": 2,  # +2 energy (1 -> 3)
+		"max_hp": 5,  # +5 HP (20 -> 25)
+		"energy_per_turn": 1,  # +1 energy (1 -> 2)
 		"hex_damage_percent": 20.0,   # +20% hex damage
 		"heal_power_percent": -10.0   # -10% heal power
 	}
 	gloom.passive_id = ""  # hex_lifesteal to be added in V2 Phase 7+
 	gloom.portrait_color = Color(0.5, 0.2, 0.6)
 	gloom.icon = "🌑"
-	# V3: Hex-focused deck with hex and beam synergies
+	# Brotato-style: Start with 1 themed weapon
 	gloom.starting_deck = [
-		{"card_id": "pistol", "tier": 1, "count": 2},              # Basic gun
-		{"card_id": "hex_bolt", "tier": 1, "count": 2},            # Basic hex
-		{"card_id": "curse_wave", "tier": 1, "count": 1},          # Damage + hex AOE
-		{"card_id": "curse", "tier": 1, "count": 1},               # Apply hex instant
-		{"card_id": "soul_drain", "tier": 1, "count": 1},          # Lifesteal arcane
-		{"card_id": "reinforce", "tier": 1, "count": 1},           # Defense
-		{"card_id": "quick_hands", "tier": 1, "count": 2}          # Draw cards
+		{"card_id": "hex_bolt", "tier": 1, "count": 1}  # Thematic hex weapon
 	]
 	result.append(gloom)
 	
@@ -96,42 +84,36 @@ func _create_default_wardens() -> Array[WardenDefinition]:
 	glass.warden_id = "glass_warden"
 	glass.warden_name = "Glass Warden"
 	glass.description = "Sigil-knight encased in reflective glass armor."
-	glass.passive_description = "Survive fatal hit once/wave. Armor +25%. +20 HP, +1 energy."
-	glass.base_armor = 4
-	# Brotato Economy: Use stat_modifiers for HP/energy bonuses
+	glass.passive_description = "Survive fatal hit once/wave. Armor +25%. +10 HP."
+	glass.base_armor = 2
+	# Brotato-style: Tankier but less energy
 	glass.stat_modifiers = {
-		"max_hp": 20,  # +20 HP (50 -> 70)
-		"energy_per_turn": 1,  # +1 energy (1 -> 2) - drawback vs other wardens
+		"max_hp": 10,  # +10 HP (20 -> 30) - tankiest warden
 		"armor_gain_percent": 25.0  # +25% armor gain
+		# Note: No energy bonus - needs to buy it
 	}
 	glass.passive_id = "cheat_death"  # Special passive: survive fatal hit once per wave
 	glass.portrait_color = Color(0.7, 0.9, 1.0)
 	glass.icon = "💎"
-	# V3: Defense-focused deck with armor and barrier synergies
+	# Brotato-style: Start with 1 themed weapon
 	glass.starting_deck = [
-		{"card_id": "pistol", "tier": 1, "count": 2},              # Basic gun
-		{"card_id": "reinforce", "tier": 1, "count": 2},           # Basic armor
-		{"card_id": "fortify", "tier": 1, "count": 1},             # Strong armor
-		{"card_id": "deploy_barrier", "tier": 1, "count": 2},      # Barrier traps
-		{"card_id": "shield_bash", "tier": 1, "count": 1},         # Armor + damage
-		{"card_id": "bulwark", "tier": 1, "count": 1},             # Fortress gun
-		{"card_id": "quick_hands", "tier": 1, "count": 1}          # Draw cards
+		{"card_id": "shield_bash", "tier": 1, "count": 1}  # Thematic armor weapon
 	]
 	result.append(glass)
 	
 	# =============================================================================
-	# VETERAN WARDEN - Neutral baseline for Brotato-style buildcraft (V4)
+	# VETERAN WARDEN - Neutral baseline for Brotato-style buildcraft
 	# =============================================================================
 	var veteran: WardenDefinition = WardenDefinition.new()
 	veteran.warden_id = "veteran_warden"
 	veteran.warden_name = "Veteran Warden"
 	veteran.description = "Battle-hardened generalist who has seen every horror."
-	veteran.passive_description = "Balanced stats. +20 HP, +2 energy. No special bonuses."
+	veteran.passive_description = "Balanced stats. +5 HP, +1 energy. No special bonuses."
 	veteran.base_armor = 0
-	# Brotato Economy: Veteran gets standard bonuses but no special modifiers
+	# Brotato-style: Small starting bonuses
 	veteran.stat_modifiers = {
-		"max_hp": 20,  # +20 HP (50 -> 70)
-		"energy_per_turn": 2  # +2 energy (1 -> 3)
+		"max_hp": 5,  # +5 HP (20 -> 25)
+		"energy_per_turn": 1  # +1 energy (1 -> 2)
 	}
 	# V4: Empty preferred_tags = no family bias, random family each run
 	veteran.preferred_tags = []
@@ -139,16 +121,9 @@ func _create_default_wardens() -> Array[WardenDefinition]:
 	veteran.portrait_color = Color(0.6, 0.6, 0.7)  # Neutral gray-blue
 	veteran.icon = "⚔️"
 	veteran.is_unlocked_by_default = true  # V2 baseline, always available
-	# V3 Starter Deck: 10-card balanced design
+	# Brotato-style: Start with just 1 basic weapon, build from scratch
 	veteran.starting_deck = [
-		{"card_id": "pistol", "tier": 1, "count": 2},              # 2x basic gun - baseline damage
-		{"card_id": "shotgun", "tier": 1, "count": 1},             # 1x splash gun - group clear
-		{"card_id": "focus_fire", "tier": 1, "count": 1},          # 1x lane buff - damage boost
-		{"card_id": "hex_bolt", "tier": 1, "count": 1},            # 1x hex - synergy setup
-		{"card_id": "deploy_barrier", "tier": 1, "count": 1},      # 1x barrier - ring control
-		{"card_id": "reinforce", "tier": 1, "count": 1},           # 1x defense - armor
-		{"card_id": "repulsor", "tier": 1, "count": 1},            # 1x ring control - push
-		{"card_id": "quick_hands", "tier": 1, "count": 2}          # 2x draw - card advantage
+		{"card_id": "pistol", "tier": 1, "count": 1}  # Basic gun - the classic starter
 	]
 	result.append(veteran)
 	

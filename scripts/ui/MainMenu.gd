@@ -5,6 +5,7 @@ extends Control
 @onready var meta_button: Button = $VBoxContainer/MetaButton
 @onready var settings_button: Button = $VBoxContainer/SettingsButton
 @onready var card_collection_button: Button = $VBoxContainer/CardCollectionButton
+@onready var dev_tools_button: Button = $VBoxContainer/DevToolsButton
 @onready var quit_button: Button = $VBoxContainer/QuitButton
 
 # Card Collection viewer overlay (created dynamically)
@@ -56,6 +57,12 @@ func _on_card_collection_pressed() -> void:
 	print("[MainMenu] Card Collection pressed")
 	AudioManager.play_button_click()
 	_show_card_collection()
+
+
+func _on_dev_tools_pressed() -> void:
+	print("[MainMenu] Dev Tools pressed")
+	AudioManager.play_button_click()
+	GameManager.change_scene("res://scenes/devtools/EncounterDesigner.tscn")
 
 
 func _on_quit_pressed() -> void:

@@ -140,35 +140,39 @@ func _update_breakdown() -> void:
 		text += "\n[color=#ffcc55]Subtotal:[/color] %d\n" % subtotal
 		
 		# Multipliers
-		text += "\n[color=#88ddff]Multipliers:[/color]\n"
-		
 		var damage_type: String = card_def.damage_type
 		var type_mult: float = 1.0
-		var type_percent: float = 0.0
+		var type_bonus: float = 0.0  # Bonus over baseline (0 = no bonus)
 		
 		if RunManager and RunManager.player_stats:
 			match damage_type:
 				"kinetic":
-					type_percent = RunManager.player_stats.kinetic_percent
+					type_mult = RunManager.player_stats.get_kinetic_multiplier()
+					type_bonus = RunManager.player_stats.kinetic_percent - 100.0  # Bonus over 100%
 				"thermal":
-					type_percent = RunManager.player_stats.thermal_percent
+					type_mult = RunManager.player_stats.get_thermal_multiplier()
+					type_bonus = RunManager.player_stats.thermal_percent - 100.0
 				"arcane":
-					type_percent = RunManager.player_stats.arcane_percent
-			type_mult = 1.0 + type_percent / 100.0
+					type_mult = RunManager.player_stats.get_arcane_multiplier()
+					type_bonus = RunManager.player_stats.arcane_percent - 100.0
 			
-			var global_percent: float = RunManager.player_stats.damage_percent
-			var global_mult: float = 1.0 + global_percent / 100.0
+			var global_mult: float = RunManager.player_stats.get_damage_multiplier()
+			var global_bonus: float = RunManager.player_stats.damage_percent - 100.0  # Bonus over 100%
 			
-			if type_percent > 0:
-				text += "  [color=#bbbbbb]%s damage:[/color] +%d%%\n" % [damage_type.capitalize(), int(type_percent)]
-			if global_percent > 0:
-				text += "  [color=#bbbbbb]All damage:[/color] +%d%%\n" % int(global_percent)
-			
-			var total_mult: float = type_mult * global_mult
-			text += "  [color=#ffaa55]Total multiplier:[/color] ×%.2f\n" % total_mult
+			# Only show multipliers section if there are actual bonuses
+			var has_bonuses: bool = type_bonus > 0 or global_bonus > 0
+			if has_bonuses:
+				text += "\n[color=#88ddff]Multipliers:[/color]\n"
+				if type_bonus > 0:
+					text += "  [color=#bbbbbb]%s damage:[/color] +%d%%\n" % [damage_type.capitalize(), int(type_bonus)]
+				if global_bonus > 0:
+					text += "  [color=#bbbbbb]All damage:[/color] +%d%%\n" % int(global_bonus)
+				
+				var total_mult: float = type_mult * global_mult
+				text += "  [color=#ffaa55]Total multiplier:[/color] ×%.2f\n" % total_mult
 			
 			# Final damage
-			var final: int = int(subtotal * total_mult)
+			var final: int = int(subtotal * type_mult * global_mult)
 			text += "\n[color=#44ff44]Final Damage:[/color] %d\n" % final
 		else:
 			text += "  (No stats available)\n"
@@ -192,15 +196,16 @@ func _update_effects() -> void:
 	"""Update the effects/glossary section."""
 	var text: String = ""
 	
-	# Check for status effects
+	# Check for status effects using actual CardDefinition properties
 	var has_effects: bool = false
 	
-	var hex_stacks: int = card_def.hex_stacks if card_def.get("hex_stacks") else card_def.hex_damage
-	var burn_stacks: int = card_def.burn_stacks if card_def.get("burn_stacks") else card_def.burn_damage
-	var barrier_dmg: int = card_def.barrier_damage if card_def.get("barrier_damage") else 0
-	var barrier_uses: int = card_def.barrier_uses if card_def.get("barrier_uses") else card_def.duration
+	var hex_stacks: int = card_def.hex_damage
+	var burn_stacks: int = card_def.burn_damage
 	
-	if hex_stacks > 0 or burn_stacks > 0 or barrier_dmg > 0:
+ 	# Barrier is determined by effect_type
+	var is_barrier_card: bool = card_def.effect_type == "ring_barrier"
+	
+	if hex_stacks > 0 or burn_stacks > 0 or is_barrier_card:
 		text += "\n[color=#aaaaaa]── EFFECTS ──[/color]\n\n"
 		has_effects = true
 	
@@ -220,7 +225,10 @@ func _update_effects() -> void:
 		text += "[color=#ff7744]🔥 Burn:[/color] Apply %d stacks\n" % final_burn
 		text += "  [color=#888888]At end of turn:\n  Deal Burn damage, reduce stacks by 1[/color]\n\n"
 	
-	if barrier_dmg > 0:
+	if is_barrier_card:
+		# Barrier info from effect_params if available
+		var barrier_dmg: int = card_def.effect_params.get("barrier_damage", card_def.base_damage) as int
+		var barrier_uses: int = card_def.effect_params.get("barrier_uses", 3) as int
 		var dmg_bonus: float = 1.0
 		var uses_bonus: int = 0
 		if RunManager and RunManager.player_stats:
@@ -231,13 +239,13 @@ func _update_effects() -> void:
 		text += "[color=#77ddff]🚧 Barrier:[/color] %d damage, %d uses\n" % [final_dmg, final_uses]
 		text += "  [color=#888888]When enemy crosses barrier:\n  Deal damage, lose 1 use[/color]\n\n"
 	
-	# Other effects
-	var armor: int = card_def.armor_gain if card_def.get("armor_gain") else card_def.armor_amount
+	# Other effects - use actual CardDefinition property names
+	var armor: int = card_def.armor_amount
 	if armor > 0:
 		text += "[color=#77ccff]🛡 Armor:[/color] Gain %d\n" % armor
 		text += "  [color=#888888]Absorbs damage before HP[/color]\n\n"
 	
-	var cards_drawn: int = card_def.draw_cards if card_def.get("draw_cards") else card_def.cards_to_draw
+	var cards_drawn: int = card_def.cards_to_draw
 	if cards_drawn > 0:
 		text += "[color=#77ff77]📜 Draw:[/color] %d cards\n\n" % cards_drawn
 	
@@ -273,4 +281,3 @@ func _input(event: InputEvent) -> void:
 		if not tooltip_rect.has_point(mouse_pos):
 			hide_tooltip()
 			closed.emit()
-

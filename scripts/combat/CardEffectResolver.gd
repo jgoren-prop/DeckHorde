@@ -101,6 +101,12 @@ static func resolve(card_def, tier: int, target_ring: int, combat: Node) -> void
 		"v5_ring_damage":
 			_resolve_v5_ring_damage(card_def, tier, target_ring, combat)
 		
+		# V6 Horde Combat Effect Types
+		"apply_execute":
+			_resolve_apply_execute(card_def, tier, target_ring, combat)
+		"v6_ripple_damage":
+			_resolve_v6_ripple_damage(card_def, tier, target_ring, combat)
+		
 		# Status Effect Types
 		"apply_hex":
 			_resolve_apply_hex(card_def, tier, target_ring, combat)
@@ -219,7 +225,7 @@ static func _resolve_apply_hex(card_def, tier: int, target_ring: int, combat: No
 
 
 static func _resolve_apply_hex_multi(card_def, tier: int, combat: Node) -> void:
-	"""Apply hex to multiple random enemies."""
+	"""Apply hex to multiple enemies, prioritizing closest."""
 	var hex_damage: int = card_def.get_scaled_value("hex_damage", tier)
 	var target_count: int = card_def.get_scaled_value("target_count", tier)
 	
@@ -227,13 +233,15 @@ static func _resolve_apply_hex_multi(card_def, tier: int, combat: Node) -> void:
 	var potency_mult: float = RunManager.player_stats.get_hex_potency_multiplier()
 	hex_damage = int(float(hex_damage) * potency_mult)
 	
-	var all_enemies: Array = combat.battlefield.get_all_enemies()
-	all_enemies.shuffle()
+	# Get enemies sorted by proximity (Melee first, then Close, Mid, Far)
+	var sorted_enemies: Array = []
+	for ring: int in range(4):
+		sorted_enemies.append_array(combat.battlefield.get_enemies_in_ring(ring))
 	
-	var count: int = min(target_count, all_enemies.size())
+	var count: int = mini(target_count, sorted_enemies.size())
 	for i: int in range(count):
-		combat.enemy_hexed.emit(all_enemies[i], hex_damage)
-		all_enemies[i].apply_status("hex", hex_damage, -1)
+		combat.enemy_hexed.emit(sorted_enemies[i], hex_damage)
+		sorted_enemies[i].apply_status("hex", hex_damage, -1)
 
 
 static func _resolve_gain_armor(card_def, tier: int) -> void:
@@ -341,7 +349,7 @@ static func _resolve_v5_damage(card_def, _tier: int, target_ring: int, combat: N
 		
 		"random_enemy":
 			var ring_mask: int = _build_ring_mask(card_def.target_rings)
-			_deal_v5_damage_to_random(ring_mask, damage, is_crit, card_def.target_count, combat)
+			_deal_v5_damage_to_closest(ring_mask, damage, is_crit, card_def.target_count, combat)
 		
 		"all_enemies":
 			_deal_v5_damage_to_all(damage, is_crit, combat)
@@ -377,7 +385,7 @@ static func _resolve_v5_multi_hit(card_def, _tier: int, combat: Node) -> void:
 		if is_crit:
 			crit_count += 1
 		
-		_deal_v5_damage_to_random(ring_mask, damage, is_crit, 1, combat)
+		_deal_v5_damage_to_closest(ring_mask, damage, is_crit, 1, combat)
 		total_damage += damage
 	
 	print("[CardEffectResolver V5] Multi-hit: ", hit_count, " hits, ", total_damage, " total damage, ", crit_count, " crits")
@@ -446,6 +454,193 @@ static func _resolve_v5_ring_damage(card_def, _tier: int, target_ring: int, comb
 	RunManager.player_stats.cards_played += 1
 
 
+# =============================================================================
+# V6 HORDE COMBAT EFFECT HANDLERS
+# =============================================================================
+
+static func _resolve_apply_execute(card_def, _tier: int, target_ring: int, combat: Node) -> void:
+	"""Apply Execute status to enemies - if they fall below threshold %, instant kill on next hit."""
+	var execute_threshold: int = card_def.execute_threshold
+	if execute_threshold <= 0:
+		execute_threshold = 20  # Default 20% threshold
+	
+	var rings_to_target: Array[int] = []
+	if card_def.requires_target:
+		rings_to_target = [target_ring]
+	elif card_def.target_type == "all_enemies" or card_def.target_type == "all_rings":
+		rings_to_target = [0, 1, 2, 3]
+	else:
+		rings_to_target.assign(card_def.target_rings)
+	
+	var count: int = 0
+	for ring: int in rings_to_target:
+		var enemies: Array = combat.battlefield.get_enemies_in_ring(ring)
+		for enemy in enemies:
+			enemy.apply_status("execute", execute_threshold, -1)
+			count += 1
+	
+	print("[CardEffectResolver V6] Applied Execute (", execute_threshold, "% threshold) to ", count, " enemies")
+	RunManager.player_stats.cards_played += 1
+
+
+static func _resolve_v6_ripple_damage(card_def, _tier: int, target_ring: int, combat: Node) -> void:
+	"""Deal damage with Ripple effect - on kill, triggers additional effects."""
+	var damage_result: Dictionary = calculate_v5_damage(card_def, true)
+	var damage: int = damage_result.damage
+	var is_crit: bool = damage_result.is_crit
+	
+	# Handle self-damage
+	if card_def.self_damage > 0:
+		var self_dmg: int = card_def.self_damage
+		self_dmg = maxi(0, self_dmg - RunManager.player_stats.self_damage_reduction)
+		if self_dmg > 0:
+			RunManager.take_damage(self_dmg)
+	
+	# Get target
+	var ring_mask: int = _build_ring_mask(card_def.target_rings)
+	if card_def.requires_target:
+		ring_mask = 1 << target_ring
+	
+	# Track kills for ripple
+	var killed_enemies: Array = []
+	var target = combat.battlefield.get_closest_enemy_in_rings(ring_mask)
+	
+	if target:
+		_deal_damage_to_enemy_with_ripple_tracking(target, damage, is_crit, combat, killed_enemies)
+	
+	# Process ripple effects for each kill
+	if card_def.ripple_type != "none" and not killed_enemies.is_empty():
+		_process_ripple_effects(card_def, killed_enemies, combat)
+	
+	RunManager.player_stats.cards_played += 1
+
+
+static func _deal_damage_to_enemy_with_ripple_tracking(enemy, damage: int, _is_crit: bool, combat: Node, killed_enemies: Array) -> void:
+	"""Deal damage and track if enemy was killed for ripple effects."""
+	combat.enemy_targeted.emit(enemy)
+	
+	var result: Dictionary = enemy.take_damage(damage)
+	var total_damage: int = result.total_damage
+	
+	combat.enemy_damaged.emit(enemy, total_damage, result.hex_triggered)
+	
+	if enemy.current_hp <= 0:
+		killed_enemies.append(enemy)
+		combat._handle_enemy_death(enemy, result.hex_triggered)
+		RunManager.player_stats.kills_this_turn += 1
+	
+	combat.damage_dealt_to_enemies.emit(total_damage, enemy.ring)
+
+
+static func _process_ripple_effects(card_def, killed_enemies: Array, combat: Node) -> void:
+	"""Process ripple effects when enemies are killed."""
+	for killed_enemy in killed_enemies:
+		match card_def.ripple_type:
+			"chain_damage":
+				# Deal damage to next closest enemy(s)
+				_ripple_chain_damage(card_def, killed_enemy, combat)
+			"group_damage":
+				# Deal damage to all enemies in the same group
+				_ripple_group_damage(card_def, killed_enemy, combat)
+			"aoe_damage":
+				# Deal damage to all enemies in the same ring
+				_ripple_aoe_damage(card_def, killed_enemy, combat)
+			"spread_damage":
+				# Deal damage proportional to group size to all in group
+				_ripple_spread_damage(card_def, killed_enemy, combat)
+
+
+static func _ripple_chain_damage(card_def, _killed_enemy, combat: Node) -> void:
+	"""Chain damage to nearby enemies on kill."""
+	var ripple_damage: int = card_def.ripple_damage
+	var ripple_count: int = card_def.ripple_count
+	
+	# Get remaining enemies sorted by proximity
+	var enemies: Array = []
+	for ring: int in range(4):
+		enemies.append_array(combat.battlefield.get_enemies_in_ring(ring))
+	
+	var hit_count: int = 0
+	for enemy in enemies:
+		if enemy.current_hp > 0 and hit_count < ripple_count:
+			var result: Dictionary = enemy.take_damage(ripple_damage)
+			combat.enemy_damaged.emit(enemy, result.total_damage, result.hex_triggered)
+			if enemy.current_hp <= 0:
+				combat._handle_enemy_death(enemy, result.hex_triggered)
+			hit_count += 1
+	
+	print("[CardEffectResolver V6] Ripple chain: ", hit_count, " enemies hit for ", ripple_damage, " each")
+
+
+static func _ripple_group_damage(card_def, killed_enemy, combat: Node) -> void:
+	"""Deal damage to all enemies in the killed enemy's group."""
+	var ripple_damage: int = card_def.ripple_damage
+	
+	if killed_enemy.group_id.is_empty():
+		return
+	
+	var all_enemies: Array = combat.battlefield.get_all_enemies()
+	var hit_count: int = 0
+	
+	for enemy in all_enemies:
+		if enemy.group_id == killed_enemy.group_id and enemy.current_hp > 0:
+			var result: Dictionary = enemy.take_damage(ripple_damage)
+			combat.enemy_damaged.emit(enemy, result.total_damage, result.hex_triggered)
+			if enemy.current_hp <= 0:
+				combat._handle_enemy_death(enemy, result.hex_triggered)
+			hit_count += 1
+	
+	print("[CardEffectResolver V6] Ripple group: ", hit_count, " enemies hit for ", ripple_damage, " each")
+
+
+static func _ripple_aoe_damage(card_def, killed_enemy, combat: Node) -> void:
+	"""Deal damage to all enemies in the same ring as the killed enemy."""
+	var ripple_damage: int = card_def.ripple_damage
+	var ring: int = killed_enemy.ring
+	
+	var enemies: Array = combat.battlefield.get_enemies_in_ring(ring)
+	var hit_count: int = 0
+	
+	for enemy in enemies:
+		if enemy.current_hp > 0:
+			var result: Dictionary = enemy.take_damage(ripple_damage)
+			combat.enemy_damaged.emit(enemy, result.total_damage, result.hex_triggered)
+			if enemy.current_hp <= 0:
+				combat._handle_enemy_death(enemy, result.hex_triggered)
+			hit_count += 1
+	
+	print("[CardEffectResolver V6] Ripple AOE: ", hit_count, " enemies in ring ", ring, " hit for ", ripple_damage, " each")
+
+
+static func _ripple_spread_damage(card_def, killed_enemy, combat: Node) -> void:
+	"""Deal damage scaled by group size - larger groups take more total damage."""
+	if killed_enemy.group_id.is_empty():
+		return
+	
+	var all_enemies: Array = combat.battlefield.get_all_enemies()
+	var group_enemies: Array = []
+	
+	for enemy in all_enemies:
+		if enemy.group_id == killed_enemy.group_id and enemy.current_hp > 0:
+			group_enemies.append(enemy)
+	
+	var group_size: int = group_enemies.size()
+	if group_size == 0:
+		return
+	
+	# Damage per enemy = base_ripple_damage * group_size / group_size = base per enemy
+	# But total damage = base_ripple_damage * group_size (scaled to number of targets)
+	var ripple_damage: int = card_def.ripple_damage
+	
+	for enemy in group_enemies:
+		var result: Dictionary = enemy.take_damage(ripple_damage)
+		combat.enemy_damaged.emit(enemy, result.total_damage, result.hex_triggered)
+		if enemy.current_hp <= 0:
+			combat._handle_enemy_death(enemy, result.hex_triggered)
+	
+	print("[CardEffectResolver V6] Ripple spread: ", group_size, " enemies hit for ", ripple_damage, " each (total: ", ripple_damage * group_size, ")")
+
+
 static func _resolve_apply_burn(card_def, tier: int, target_ring: int, combat: Node) -> void:
 	"""Apply burn stacks to enemies in a ring."""
 	var burn_amount: int = card_def.get_scaled_value("burn_damage", tier)
@@ -474,7 +669,7 @@ static func _resolve_apply_burn(card_def, tier: int, target_ring: int, combat: N
 
 
 static func _resolve_apply_burn_multi(card_def, tier: int, combat: Node) -> void:
-	"""Apply burn stacks to multiple random enemies."""
+	"""Apply burn stacks to multiple enemies, prioritizing closest."""
 	var burn_amount: int = card_def.get_scaled_value("burn_damage", tier)
 	if burn_amount <= 0:
 		burn_amount = card_def.burn_damage
@@ -484,13 +679,15 @@ static func _resolve_apply_burn_multi(card_def, tier: int, combat: Node) -> void
 	var potency_mult: float = RunManager.player_stats.get_burn_potency_multiplier()
 	burn_amount = int(float(burn_amount) * potency_mult)
 	
-	var all_enemies: Array = combat.battlefield.get_all_enemies()
-	all_enemies.shuffle()
+	# Get enemies sorted by proximity (Melee first, then Close, Mid, Far)
+	var sorted_enemies: Array = []
+	for ring: int in range(4):
+		sorted_enemies.append_array(combat.battlefield.get_enemies_in_ring(ring))
 	
-	var count: int = mini(target_count, all_enemies.size())
+	var count: int = mini(target_count, sorted_enemies.size())
 	for i: int in range(count):
-		all_enemies[i].apply_status("burn", burn_amount, -1)
-		print("[CardEffectResolver V5] Applied ", burn_amount, " Burn to ", all_enemies[i].enemy_id)
+		sorted_enemies[i].apply_status("burn", burn_amount, -1)
+		print("[CardEffectResolver V5] Applied ", burn_amount, " Burn to ", sorted_enemies[i].enemy_id)
 	
 	RunManager.player_stats.cards_played += 1
 
@@ -517,10 +714,11 @@ static func _deal_v5_damage_to_ring(ring: int, damage: int, is_crit: bool, comba
 		_deal_damage_to_enemy(enemy, damage, is_crit, combat)
 
 
-static func _deal_v5_damage_to_random(ring_mask: int, damage: int, is_crit: bool, count: int, combat: Node) -> void:
-	"""Deal V5 damage to random enemies."""
+static func _deal_v5_damage_to_closest(ring_mask: int, damage: int, is_crit: bool, count: int, combat: Node) -> void:
+	"""Deal V5 damage to closest enemies (prioritizes Melee > Close > Mid > Far).
+	For multi-hit, hits the closest enemy count times."""
 	for i: int in range(count):
-		var enemy = combat.battlefield.get_random_enemy_in_rings(ring_mask)
+		var enemy = combat.battlefield.get_closest_enemy_in_rings(ring_mask)
 		if enemy:
 			_deal_damage_to_enemy(enemy, damage, is_crit, combat)
 
@@ -587,11 +785,11 @@ static func _resolve_scaling_damage(card_def, tier: int, target_ring: int, comba
 	match card_def.target_type:
 		"random_enemy":
 			var ring_mask: int = _build_ring_mask(card_def.target_rings)
-			combat.deal_damage_to_random_enemy(ring_mask, total_damage)
+			combat.deal_damage_to_closest_enemy(ring_mask, total_damage)
 		"last_damaged":
 			combat.deal_damage_to_last_damaged(total_damage)
 		_:
-			combat.deal_damage_to_random_enemy(0b1111, total_damage)
+			combat.deal_damage_to_closest_enemy(0b1111, total_damage)
 	
 	print("[CardEffectResolver] Scaling damage: base ", base_damage, " + bonus ", bonus_damage, " = ", total_damage)
 
@@ -611,15 +809,11 @@ static func _resolve_splash_damage(card_def, tier: int, combat: Node) -> void:
 	
 	var ring_mask: int = _build_ring_mask(card_def.target_rings)
 	
-	var candidates: Array = []
-	for ring: int in range(4):
-		if ring_mask & (1 << ring):
-			candidates.append_array(combat.battlefield.get_enemies_in_ring(ring))
+	# Target the closest enemy in the allowed rings
+	var target = combat.battlefield.get_closest_enemy_in_rings(ring_mask)
 	
-	if candidates.is_empty():
+	if target == null:
 		return
-	
-	var target = candidates[randi() % candidates.size()]
 	
 	combat.enemy_targeted.emit(target)
 	await combat.get_tree().create_timer(0.3).timeout

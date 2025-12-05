@@ -1,21 +1,24 @@
 extends Control
 class_name BattlefieldRings
-## Handles drawing the battlefield rings and their visual states (threat, barriers).
+## Handles drawing the battlefield lanes and their visual states (threat, barriers).
+## V2: Horizontal lane layout - enemies march from top (FAR) to bottom (MELEE).
 
-# Ring configuration
-const RING_PROPORTIONS: Array[float] = [0.18, 0.42, 0.68, 0.95]
-const RING_COLORS: Array[Color] = [
-	Color(0.25, 0.18, 0.18, 0.20),
-	Color(0.22, 0.18, 0.15, 0.15),
-	Color(0.18, 0.18, 0.15, 0.12),
-	Color(0.15, 0.15, 0.18, 0.08)
+# Lane configuration - proportions of total height for each lane's TOP edge
+# Lane order: FAR (top) -> MID -> CLOSE -> MELEE (bottom)
+# Display order is reversed: index 0 = MELEE, index 3 = FAR
+const LANE_PROPORTIONS: Array[float] = [0.75, 0.50, 0.25, 0.0]  # Bottom edge Y% for MELEE, CLOSE, MID, FAR
+const LANE_COLORS: Array[Color] = [
+	Color(0.25, 0.12, 0.12, 0.35),  # MELEE - reddish, most dangerous
+	Color(0.22, 0.15, 0.12, 0.28),  # CLOSE - orange tint
+	Color(0.18, 0.18, 0.12, 0.22),  # MID - yellow tint
+	Color(0.12, 0.15, 0.18, 0.15)   # FAR - blue tint, safest
 ]
 const RING_NAMES: Array[String] = ["MELEE", "CLOSE", "MID", "FAR"]
-const RING_BORDER_COLORS: Array[Color] = [
-	Color(0.5, 0.35, 0.35, 0.5),
-	Color(0.45, 0.38, 0.35, 0.4),
-	Color(0.4, 0.4, 0.35, 0.35),
-	Color(0.35, 0.38, 0.45, 0.3)
+const LANE_BORDER_COLORS: Array[Color] = [
+	Color(0.6, 0.25, 0.25, 0.6),   # MELEE - red border
+	Color(0.5, 0.35, 0.25, 0.5),   # CLOSE - orange border
+	Color(0.45, 0.45, 0.25, 0.4),  # MID - yellow border
+	Color(0.25, 0.35, 0.5, 0.35)   # FAR - blue border
 ]
 
 # Threat colors
@@ -46,10 +49,12 @@ var ring_barriers: Dictionary = {}  # ring -> {damage: int, duration: int}
 var _threat_pulse_time: float = 0.0
 var _barrier_pulse_time: float = 0.0
 
-# Layout
-var arena_center: Vector2 = Vector2.ZERO
-var arena_max_radius: float = 200.0
-const SEMICIRCLE_PADDING: float = 18.0
+# Layout - for horizontal lanes, these represent the drawable area
+var arena_center: Vector2 = Vector2.ZERO  # Center of the arena (for compatibility)
+var arena_max_radius: float = 200.0  # Not used in horizontal mode, kept for compatibility
+
+# Highlight state for card targeting
+var _highlighted_rings: Array[bool] = [false, false, false, false]
 
 
 func _ready() -> void:
@@ -82,163 +87,177 @@ func _process(delta: float) -> void:
 
 
 func _draw() -> void:
-	if arena_max_radius <= 0:
+	if size.x <= 0 or size.y <= 0:
 		return
 	
-	# Semicircle arc angles (top half, facing up from center)
-	const ARC_START: float = PI  # Left side
-	const ARC_END: float = TAU   # Right side (full semicircle on top)
+	var padding: float = 10.0
+	var drawable_width: float = size.x - padding * 2
+	var drawable_height: float = size.y - padding * 2
 	
-	# Draw rings from outside in
-	for i: int in range(RING_PROPORTIONS.size() - 1, -1, -1):
-		var outer_radius: float = arena_max_radius * RING_PROPORTIONS[i]
-		var inner_radius: float = 0.0
-		if i > 0:
-			inner_radius = arena_max_radius * RING_PROPORTIONS[i - 1]
+	# Draw lanes from top (FAR) to bottom (MELEE)
+	# We iterate in reverse so FAR (index 3) is drawn first at top
+	for i: int in range(3, -1, -1):
+		var lane_rect: Rect2 = _get_lane_rect(i, padding, drawable_width, drawable_height)
 		
-		# Fill - draw as a filled arc (polygon)
-		var fill_color: Color = RING_COLORS[i]
+		# Fill color
+		var fill_color: Color = LANE_COLORS[i]
 		
-		# Apply highlight effect when ring is highlighted (card targeting)
+		# Apply highlight effect when lane is highlighted (card targeting)
 		if _highlighted_rings[i]:
-			fill_color = Color(0.25, 0.55, 0.25, 0.35)  # Green tint for valid target
+			fill_color = Color(0.2, 0.45, 0.2, 0.4)  # Green tint for valid target
 		
-		_draw_semicircle_fill(arena_center, inner_radius, outer_radius, ARC_START, ARC_END, fill_color)
+		# Draw lane background
+		draw_rect(lane_rect, fill_color, true)
 		
 		# Border with threat color (or highlight color)
 		var threat_level: ThreatLevel = ring_threat_levels[i]
-		var border_color: Color = THREAT_COLORS[threat_level]
+		var border_color: Color = THREAT_COLORS[threat_level] if threat_level != ThreatLevel.SAFE else LANE_BORDER_COLORS[i]
 		var border_width: float = THREAT_BORDER_WIDTH[threat_level]
 		
-		# Override border for highlighted rings
+		# Override border for highlighted lanes
 		if _highlighted_rings[i]:
 			border_color = Color(0.3, 0.9, 0.3, 1.0)  # Bright green border
 			border_width = 4.0
-		# Pulse critical rings (only if not highlighted)
+		# Pulse critical lanes
 		elif threat_level == ThreatLevel.CRITICAL:
 			var pulse: float = (sin(_threat_pulse_time) + 1.0) / 2.0
 			border_color = border_color.lightened(pulse * 0.3)
 			border_width += pulse * 2.0
 		
-		# Draw outer arc border
-		draw_arc(arena_center, outer_radius, ARC_START, ARC_END, 64, border_color, border_width)
+		# Draw lane borders (top and bottom lines)
+		var top_left: Vector2 = lane_rect.position
+		var top_right: Vector2 = Vector2(lane_rect.end.x, lane_rect.position.y)
+		var _bottom_left: Vector2 = Vector2(lane_rect.position.x, lane_rect.end.y)
+		var _bottom_right: Vector2 = lane_rect.end
 		
-		# Draw ring label on the right side of the arc
-		_draw_ring_label(i, outer_radius)
+		# Draw top border (except for FAR which is at the very top)
+		draw_line(top_left, top_right, border_color, border_width)
+		
+		# Draw lane label on the right side
+		_draw_lane_label(i, lane_rect)
 		
 		# Draw barrier if present
 		if ring_barriers.has(i):
-			print("[BattlefieldRings] Drawing barrier on ring ", i, " with data: ", ring_barriers[i])
-			_draw_barrier_ring(i, outer_radius, ARC_START, ARC_END)
+			_draw_barrier_lane(i, lane_rect)
 	
-	# Draw center (warden position) - at the arena center point
-	var center_radius: float = arena_max_radius * 0.08
-	draw_circle(arena_center, center_radius, Color(0.2, 0.25, 0.3, 0.8))
-	draw_arc(arena_center, center_radius, 0, TAU, 32, Color(0.5, 0.6, 0.7, 0.9), 2.0)
+	# Draw player/warden area at bottom
+	var warden_height: float = 40.0
+	var warden_rect: Rect2 = Rect2(
+		Vector2(padding, size.y - padding - warden_height),
+		Vector2(drawable_width, warden_height)
+	)
+	draw_rect(warden_rect, Color(0.15, 0.2, 0.25, 0.6), true)
+	draw_rect(warden_rect, Color(0.4, 0.5, 0.6, 0.8), false, 2.0)
+	
+	# Draw "WARDEN" label
+	var font: Font = ThemeDB.fallback_font
+	var warden_text: String = "⚔️ WARDEN"
+	var text_pos: Vector2 = warden_rect.position + Vector2(warden_rect.size.x / 2 - 40, warden_rect.size.y / 2 + 5)
+	draw_string(font, text_pos, warden_text, HORIZONTAL_ALIGNMENT_CENTER, -1, 14, Color(0.7, 0.8, 0.9, 0.9))
 
 
-func _draw_semicircle_fill(center: Vector2, inner_r: float, outer_r: float, start_angle: float, end_angle: float, color: Color) -> void:
-	"""Draw a filled semicircle/arc segment between inner and outer radius."""
-	var segments: int = 48
-	var points: PackedVector2Array = PackedVector2Array()
+func _get_lane_rect(ring: int, padding: float, drawable_width: float, drawable_height: float) -> Rect2:
+	"""Get the rectangle for a lane. Ring 0=MELEE (bottom), Ring 3=FAR (top)."""
+	# Reserve space at bottom for warden area
+	var warden_height: float = 45.0
+	var lanes_height: float = drawable_height - warden_height
+	var lane_height: float = lanes_height / 4.0
 	
-	# Outer arc (from start to end)
-	for i: int in range(segments + 1):
-		var angle: float = start_angle + (end_angle - start_angle) * float(i) / float(segments)
-		points.append(center + Vector2(cos(angle), sin(angle)) * outer_r)
+	# Calculate Y position - FAR at top, MELEE at bottom (just above warden)
+	# Ring 3 (FAR) -> y = padding
+	# Ring 0 (MELEE) -> y = padding + 3 * lane_height
+	var y_pos: float = padding + (3 - ring) * lane_height
 	
-	# Inner arc (from end back to start) - or center point if inner_r is 0
-	if inner_r > 0:
-		for i: int in range(segments, -1, -1):
-			var angle: float = start_angle + (end_angle - start_angle) * float(i) / float(segments)
-			points.append(center + Vector2(cos(angle), sin(angle)) * inner_r)
-	else:
-		points.append(center)
-	
-	draw_colored_polygon(points, color)
+	return Rect2(
+		Vector2(padding, y_pos),
+		Vector2(drawable_width, lane_height)
+	)
 
 
-func _draw_barrier_ring(ring: int, radius: float, arc_start: float = PI, arc_end: float = TAU) -> void:
-	"""Draw a barrier effect on a ring (as a semicircle arc)."""
+func _draw_barrier_lane(ring: int, lane_rect: Rect2) -> void:
+	"""Draw a barrier effect on a lane (horizontal band)."""
 	var pulse: float = (sin(_barrier_pulse_time) + 1.0) / 2.0
 	var fast_pulse: float = (sin(_barrier_pulse_time * 2.0) + 1.0) / 2.0
 	
 	# Brighter, more saturated barrier color
-	var barrier_color: Color = Color(0.2, 1.0, 0.5, 0.9)  # Bright green
+	var barrier_color: Color = Color(0.2, 1.0, 0.5, 0.9)
 	barrier_color = barrier_color.lightened(pulse * 0.15)
 	
-	# Draw THICK main barrier arc - very prominent
-	draw_arc(arena_center, radius - 4, arc_start, arc_end, 64, barrier_color, 12.0)
+	# Draw barrier line at bottom of lane (where enemies cross into next lane)
+	var barrier_y: float = lane_rect.end.y - 8.0
+	var barrier_start: Vector2 = Vector2(lane_rect.position.x + 20, barrier_y)
+	var barrier_end: Vector2 = Vector2(lane_rect.end.x - 20, barrier_y)
 	
-	# Draw secondary pulsing arc for "energy field" effect
-	var pulse_color: Color = Color(0.4, 1.0, 0.7, 0.6 + fast_pulse * 0.3)
-	draw_arc(arena_center, radius - 4, arc_start, arc_end, 64, pulse_color, 18.0 + pulse * 4.0)
+	# Main barrier line - thick and prominent
+	draw_line(barrier_start, barrier_end, barrier_color, 10.0 + pulse * 4.0)
 	
-	# Inner core glow
+	# Inner glow
 	var inner_glow: Color = Color(0.6, 1.0, 0.8, 0.5)
-	draw_arc(arena_center, radius - 10, arc_start, arc_end, 64, inner_glow, 5.0)
+	draw_line(barrier_start, barrier_end, inner_glow, 5.0)
 	
 	# Outer glow for "force field" effect
 	var outer_glow: Color = Color(0.2, 0.8, 0.4, 0.25 + pulse * 0.15)
-	draw_arc(arena_center, radius + 4, arc_start, arc_end, 64, outer_glow, 6.0)
+	draw_line(
+		Vector2(barrier_start.x, barrier_y - 6),
+		Vector2(barrier_end.x, barrier_y - 6),
+		outer_glow, 4.0
+	)
+	draw_line(
+		Vector2(barrier_start.x, barrier_y + 6),
+		Vector2(barrier_end.x, barrier_y + 6),
+		outer_glow, 4.0
+	)
 	
-	# Draw barrier "posts" at intervals along the arc for visibility
+	# Draw barrier "posts" at intervals
 	var post_count: int = 7
 	for i: int in range(post_count):
-		var angle: float = arc_start + (float(i) / float(post_count - 1)) * (arc_end - arc_start)
-		var post_pos: Vector2 = arena_center + Vector2(cos(angle), sin(angle)) * radius
-		var post_inner: Vector2 = arena_center + Vector2(cos(angle), sin(angle)) * (radius - 20)
+		var x: float = barrier_start.x + (float(i) / float(post_count - 1)) * (barrier_end.x - barrier_start.x)
+		var post_top: Vector2 = Vector2(x, barrier_y - 15)
+		var post_bottom: Vector2 = Vector2(x, barrier_y + 5)
 		
-		# Post line
 		var post_color: Color = barrier_color
 		post_color.a = 0.6 + fast_pulse * 0.3
-		draw_line(post_inner, post_pos, post_color, 3.0)
-		
-		# Post cap (small circle at outer end)
-		draw_circle(post_pos, 5.0 + pulse * 2.0, post_color)
+		draw_line(post_top, post_bottom, post_color, 3.0)
+		draw_circle(post_top, 4.0 + pulse * 2.0, post_color)
 	
-	# Draw barrier info label at the top center of the ring - LARGER and more visible
+	# Draw barrier info label
 	if ring_barriers.has(ring):
 		var barrier: Dictionary = ring_barriers[ring]
-		var label_angle: float = PI * 1.5  # Top center of semicircle
-		var label_radius: float = radius - 35
-		var label_pos: Vector2 = arena_center + Vector2(cos(label_angle), sin(label_angle)) * label_radius
+		var label_pos: Vector2 = Vector2(lane_rect.get_center().x, barrier_y - 25)
 		
 		var font: Font = ThemeDB.fallback_font
-		var barrier_text: String = "🛡️ BARRIER: " + str(barrier.damage) + " DMG × " + str(barrier.duration)
+		var barrier_text: String = "🛡️ " + str(barrier.damage) + " DMG × " + str(barrier.duration)
 		
-		# Draw larger background for better readability
-		var text_size: Vector2 = font.get_string_size(barrier_text, HORIZONTAL_ALIGNMENT_CENTER, -1, 18)
-		var bg_rect: Rect2 = Rect2(label_pos - Vector2(text_size.x / 2 + 8, 14), Vector2(text_size.x + 16, 26))
+		# Draw background
+		var text_size: Vector2 = font.get_string_size(barrier_text, HORIZONTAL_ALIGNMENT_CENTER, -1, 16)
+		var bg_rect: Rect2 = Rect2(label_pos - Vector2(text_size.x / 2 + 8, 12), Vector2(text_size.x + 16, 22))
 		
 		# Pulsing background glow
-		var glow_rect: Rect2 = bg_rect.grow(3.0 + pulse * 2.0)
-		draw_rect(glow_rect, Color(0.2, 0.8, 0.4, 0.3 + pulse * 0.15), true)
+		var glow_rect: Rect2 = bg_rect.grow(2.0 + pulse * 1.5)
+		draw_rect(glow_rect, Color(0.2, 0.8, 0.4, 0.2 + pulse * 0.1), true)
 		
 		# Main background
-		draw_rect(bg_rect, Color(0.0, 0.15, 0.05, 0.9), true)
-		draw_rect(bg_rect, barrier_color, false, 2.5)
+		draw_rect(bg_rect, Color(0.0, 0.12, 0.05, 0.92), true)
+		draw_rect(bg_rect, barrier_color, false, 2.0)
 		
-		# Draw the text - bright and pulsing
+		# Text
 		var text_color: Color = Color(0.7, 1.0, 0.8, 1.0).lightened(pulse * 0.2)
-		draw_string(font, label_pos - Vector2(text_size.x / 2, -4), barrier_text, HORIZONTAL_ALIGNMENT_CENTER, -1, 18, text_color)
+		draw_string(font, label_pos - Vector2(text_size.x / 2, -4), barrier_text, HORIZONTAL_ALIGNMENT_CENTER, -1, 16, text_color)
 
 
-func _draw_ring_label(ring: int, radius: float) -> void:
-	"""Draw the ring name label on the right side of the arc."""
-	# Position label on the right edge of the ring, slightly above center line
-	var label_angle: float = TAU - 0.15  # Just before the right edge
-	var label_radius: float = radius - 20
-	var label_pos: Vector2 = arena_center + Vector2(cos(label_angle), sin(label_angle)) * label_radius
-	
+func _draw_lane_label(ring: int, lane_rect: Rect2) -> void:
+	"""Draw the lane name label on the right side."""
 	var font: Font = ThemeDB.fallback_font
-	var label_color: Color = Color(0.7, 0.7, 0.7, 0.7)
+	var label_color: Color = LANE_BORDER_COLORS[ring].lightened(0.3)
+	label_color.a = 0.8
 	
-	# Offset to align text properly
-	label_pos.x -= 30
-	label_pos.y -= 5
+	# Position on right side, vertically centered in lane
+	var label_pos: Vector2 = Vector2(
+		lane_rect.end.x - 55,
+		lane_rect.position.y + lane_rect.size.y / 2 + 4
+	)
 	
-	draw_string(font, label_pos, RING_NAMES[ring], HORIZONTAL_ALIGNMENT_LEFT, -1, 11, label_color)
+	draw_string(font, label_pos, RING_NAMES[ring], HORIZONTAL_ALIGNMENT_LEFT, -1, 12, label_color)
 
 
 func set_threat_level(ring: int, level: ThreatLevel, damage: int = 0, has_bomber: bool = false) -> void:
@@ -254,13 +273,10 @@ func set_threat_level(ring: int, level: ThreatLevel, damage: int = 0, has_bomber
 
 func set_barrier(ring: int, damage: int, duration: int) -> void:
 	"""Set a barrier on a ring."""
-	print("[BattlefieldRings] set_barrier called: ring=", ring, " damage=", damage, " duration=", duration)
 	if damage > 0 and duration > 0:
 		ring_barriers[ring] = {"damage": damage, "duration": duration}
-		print("[BattlefieldRings] Barrier ADDED to ring ", ring, " - ring_barriers now: ", ring_barriers)
 	else:
 		ring_barriers.erase(ring)
-		print("[BattlefieldRings] Barrier REMOVED from ring ", ring)
 	queue_redraw()
 
 
@@ -271,42 +287,38 @@ func clear_barrier(ring: int) -> void:
 
 
 func get_ring_radius(ring: int) -> float:
-	"""Get the outer radius of a ring."""
-	if ring < 0 or ring >= RING_PROPORTIONS.size():
-		return 0.0
-	return arena_max_radius * RING_PROPORTIONS[ring]
+	"""Get the Y position for a ring (for compatibility - returns center Y of lane)."""
+	var lane_rect: Rect2 = _get_lane_rect(ring, 10.0, size.x - 20.0, size.y - 20.0)
+	return lane_rect.get_center().y
 
 
 func get_ring_center_radius(ring: int) -> float:
-	"""Get the center radius of a ring (between inner and outer)."""
-	var outer: float = get_ring_radius(ring)
-	var inner: float = 0.0
-	if ring > 0:
-		inner = get_ring_radius(ring - 1)
-	return (inner + outer) / 2.0
+	"""Get the center Y position of a ring."""
+	return get_ring_radius(ring)
+
+
+func get_lane_rect(ring: int) -> Rect2:
+	"""Public accessor for lane rectangle."""
+	return _get_lane_rect(ring, 10.0, size.x - 20.0, size.y - 20.0)
+
+
+func get_lane_center_y(ring: int) -> float:
+	"""Get the Y coordinate for the center of a lane."""
+	var lane_rect: Rect2 = get_lane_rect(ring)
+	return lane_rect.get_center().y
 
 
 func recalculate_layout() -> void:
-	"""Recalculate layout based on current size for a semicircle."""
-	# For a semicircle facing upward, place center at bottom-center of arena
-	# with some padding so the warden circle is visible
-	var padding: float = SEMICIRCLE_PADDING
-	arena_center = Vector2(size.x / 2, size.y - padding)
-	
-	# Radius can use full width (since it's a semicircle) or height minus padding
-	# Use whichever is smaller to ensure it fits
-	var max_by_width: float = (size.x / 2) * 0.98  # allow rings to push further horizontally
-	var max_by_height: float = (size.y - padding * 2) * 0.98  # reduce unused space vertically
-	arena_max_radius = min(max_by_width, max_by_height)
-	
+	"""Recalculate layout based on current size."""
+	# For horizontal layout, center is at the middle-bottom of the arena
+	arena_center = Vector2(size.x / 2, size.y - 50)
+	arena_max_radius = size.y / 2  # Not really used, kept for compatibility
 	queue_redraw()
 
 
 # ================================================================
 # HIGHLIGHT API - Used for card targeting visual feedback
 # ================================================================
-
-var _highlighted_rings: Array[bool] = [false, false, false, false]
 
 func highlight_all_rings(should_highlight: bool) -> void:
 	"""Highlight or unhighlight all rings."""
@@ -334,16 +346,15 @@ func highlight_rings(rings: Array, should_highlight: bool) -> void:
 
 
 func get_ring_at_position(pos: Vector2) -> int:
-	"""Determine which ring a position is in. Returns -1 if outside all rings or below center."""
-	# For semicircle, only detect in the upper half (above the center line)
-	if pos.y > arena_center.y:
-		return -1
+	"""Determine which ring/lane a position is in. Returns -1 if outside all lanes."""
+	var padding: float = 10.0
+	var drawable_width: float = size.x - padding * 2
+	var drawable_height: float = size.y - padding * 2
 	
-	var distance: float = (pos - arena_center).length()
-	
-	for i: int in range(RING_PROPORTIONS.size()):
-		var ring_radius: float = arena_max_radius * RING_PROPORTIONS[i]
-		if distance <= ring_radius:
+	# Check each lane
+	for i: int in range(4):
+		var lane_rect: Rect2 = _get_lane_rect(i, padding, drawable_width, drawable_height)
+		if lane_rect.has_point(pos):
 			return i
 	
 	return -1

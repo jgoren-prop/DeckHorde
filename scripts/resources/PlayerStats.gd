@@ -89,8 +89,8 @@ class_name PlayerStats
 # V5 DEFENSE STATS
 # =============================================================================
 
-## Maximum health
-@export var max_hp: int = 50
+## Maximum health (Brotato-style: start weak, scale up)
+@export var max_hp: int = 20
 
 ## Current armor (blocks damage)
 @export var armor: int = 0
@@ -105,14 +105,14 @@ class_name PlayerStats
 # V5 ECONOMY / TEMPO STATS
 # =============================================================================
 
-## Cards drawn at turn start
-@export var draw_per_turn: int = 5
+## Cards drawn at turn start (Brotato-style: start low, upgrade in shop)
+@export var draw_per_turn: int = 3
 
-## Energy per turn
-@export var energy_per_turn: int = 3
+## Energy per turn (Brotato-style: start with 1, upgrade in shop)
+@export var energy_per_turn: int = 1
 
-## Maximum hand size
-@export var hand_size: int = 7
+## Maximum hand size (Brotato-style: start low)
+@export var hand_size: int = 5
 
 ## Scrap gain multiplier (100.0 = 100%)
 @export var scrap_gain_percent: float = 100.0
@@ -153,6 +153,23 @@ class_name PlayerStats
 @export var xp_gain_percent: float = 100.0
 
 # =============================================================================
+# V6 HORDE SLAUGHTER STATS
+# =============================================================================
+
+## Bonus hits added to all weapons
+@export var bonus_hits: int = 0
+
+## Damage multiplier for multi-hit weapons (100.0 = 100%)
+@export var multi_hit_damage_percent: float = 100.0
+
+## Bonus execute threshold applied to all enemies
+@export var execute_threshold_bonus: int = 0
+
+## If > 0, all multi-hit weapons can repeat targets
+@export var all_repeat_target: int = 0
+
+
+# =============================================================================
 # LEGACY COMPATIBILITY (will be removed after full V5 migration)
 # =============================================================================
 
@@ -164,7 +181,7 @@ class_name PlayerStats
 @export var armor_gain_percent: float = 100.0
 @export var heal_power_percent: float = 100.0
 @export var barrier_strength_percent: float = 100.0
-@export var hand_size_max: int = 7
+@export var hand_size_max: int = 5
 
 
 # =============================================================================
@@ -438,6 +455,15 @@ func apply_modifier(stat_name: String, value: float) -> void:
 		"hand_size_max":
 			hand_size_max += int(value)
 			hand_size += int(value)  # Also apply to V5 stat
+		# V6 Horde Slaughter stats
+		"bonus_hits":
+			bonus_hits += int(value)
+		"multi_hit_damage_percent":
+			multi_hit_damage_percent += value
+		"execute_threshold_bonus":
+			execute_threshold_bonus += int(value)
+		"all_repeat_target":
+			all_repeat_target += int(value)
 		_:
 			push_warning("[PlayerStats] Unknown stat: " + stat_name)
 
@@ -475,15 +501,15 @@ func reset_to_defaults() -> void:
 	# V5 Barrier stats
 	barrier_damage_bonus = 0
 	barrier_uses_bonus = 0
-	# V5 Defense stats
-	max_hp = 50
+	# V5 Defense stats (Brotato-style: start weak)
+	max_hp = 20
 	armor = 0
 	armor_start = 0
 	self_damage_reduction = 0
-	# V5 Economy stats
-	draw_per_turn = 5
-	energy_per_turn = 3
-	hand_size = 7
+	# V5 Economy stats (Brotato-style: start low, upgrade in shop)
+	draw_per_turn = 3
+	energy_per_turn = 1
+	hand_size = 5
 	scrap_gain_percent = 100.0
 	shop_price_percent = 100.0
 	reroll_base_cost = 2
@@ -496,6 +522,11 @@ func reset_to_defaults() -> void:
 	current_xp = 0
 	current_level = 0
 	xp_gain_percent = 100.0
+	# V6 Horde Slaughter stats
+	bonus_hits = 0
+	multi_hit_damage_percent = 100.0
+	execute_threshold_bonus = 0
+	all_repeat_target = 0
 	# Legacy stats
 	gun_damage_percent = 100.0
 	hex_damage_percent = 100.0
@@ -504,7 +535,7 @@ func reset_to_defaults() -> void:
 	armor_gain_percent = 100.0
 	heal_power_percent = 100.0
 	barrier_strength_percent = 100.0
-	hand_size_max = 7
+	hand_size_max = 5
 
 
 func reset_turn_stats() -> void:
@@ -567,6 +598,11 @@ func clone():
 	copy.current_xp = current_xp
 	copy.current_level = current_level
 	copy.xp_gain_percent = xp_gain_percent
+	# V6 Horde Slaughter stats
+	copy.bonus_hits = bonus_hits
+	copy.multi_hit_damage_percent = multi_hit_damage_percent
+	copy.execute_threshold_bonus = execute_threshold_bonus
+	copy.all_repeat_target = all_repeat_target
 	# Legacy stats
 	copy.gun_damage_percent = gun_damage_percent
 	copy.hex_damage_percent = hex_damage_percent

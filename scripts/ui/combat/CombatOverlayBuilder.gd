@@ -201,20 +201,20 @@ static func create_deck_viewer_overlay(parent: Control) -> Dictionary:
 
 
 static func create_dev_panel(parent: Control) -> Dictionary:
-	"""Create a dev cheat panel in the top-right corner.
+	"""Create a dev cheat panel in the bottom-right corner.
 	Returns dictionary with panel and vbox references."""
 	var dev_panel: PanelContainer = PanelContainer.new()
 	dev_panel.name = "DevPanel"
 	
-	# Position in top-right corner using manual anchors
+	# Position in bottom-right corner using manual anchors
 	dev_panel.anchor_left = 1.0
 	dev_panel.anchor_right = 1.0
-	dev_panel.anchor_top = 0.0
-	dev_panel.anchor_bottom = 0.0
+	dev_panel.anchor_top = 1.0
+	dev_panel.anchor_bottom = 1.0
 	dev_panel.offset_left = -180
-	dev_panel.offset_top = 55
+	dev_panel.offset_top = -470
 	dev_panel.offset_right = -10
-	dev_panel.offset_bottom = 210
+	dev_panel.offset_bottom = -315
 	
 	# Style the panel
 	var style: StyleBoxFlat = StyleBoxFlat.new()
@@ -292,5 +292,7 @@ static func create_hint_label(parent: Control, text: String, color: Color, y_off
 	parent.add_child(hint)
 	
 	return hint
+
+
 
 

@@ -38,6 +38,7 @@ func _init() -> void:
 func apply_status(effect_name: String, value: int, duration: int = -1) -> void:
 	"""Apply a status effect to this enemy.
 	V5: Hex and Burn both stack.
+	V6: Execute threshold - if HP% is at or below value%, instant kill on any hit.
 	"""
 	if status_effects.has(effect_name):
 		# Stack effects
@@ -48,6 +49,9 @@ func apply_status(effect_name: String, value: int, duration: int = -1) -> void:
 			"burn":
 				# Burn stacks
 				status_effects[effect_name].value += value
+			"execute":
+				# Execute: take the higher threshold
+				status_effects[effect_name].value = maxi(status_effects[effect_name].value, value)
 			_:
 				# Other effects refresh duration
 				status_effects[effect_name].duration = duration
@@ -134,11 +138,13 @@ func take_damage(base_damage: int, ignore_armor: bool = false) -> Dictionary:
 	Apply damage to this enemy.
 	V5 Armor mechanic: Each HIT removes 1 armor. No damage spillover.
 	V5 Hex: When hexed enemy takes damage, +damage equal to Hex stacks (scaled by hex_potency), then consumed.
+	V6 Execute: If enemy HP% is at or below Execute threshold after damage, instant kill.
 	
-	Returns: {total_damage: int, hex_triggered: bool, hex_bonus: int, armor_absorbed: bool}
+	Returns: {total_damage: int, hex_triggered: bool, hex_bonus: int, armor_absorbed: bool, executed: bool}
 	"""
 	var hex_bonus: int = 0
 	var hex_triggered: bool = false
+	var executed: bool = false
 	
 	# Check for hex stacks (V5: triggers before armor, scaled by hex_potency)
 	if has_status("hex"):
@@ -166,11 +172,21 @@ func take_damage(base_damage: int, ignore_armor: bool = false) -> Dictionary:
 			"hex_triggered": hex_triggered,
 			"hex_bonus": hex_bonus,
 			"armor_absorbed": true,
-			"armor_remaining": armor
+			"armor_remaining": armor,
+			"executed": false
 		}
 	
 	# Apply damage to HP
 	current_hp -= total_damage
+	
+	# V6: Check Execute threshold AFTER damage is applied
+	if has_status("execute") and current_hp > 0:
+		var execute_threshold: int = get_status_value("execute")
+		var hp_percent: float = get_hp_percentage() * 100.0
+		if hp_percent <= float(execute_threshold):
+			print("[EnemyInstance V6] EXECUTE! ", enemy_id, " at ", hp_percent, "% HP (threshold: ", execute_threshold, "%)")
+			current_hp = 0
+			executed = true
 	
 	# Clamp HP to 0 (never show negative HP)
 	if current_hp < 0:
@@ -181,7 +197,8 @@ func take_damage(base_damage: int, ignore_armor: bool = false) -> Dictionary:
 		"hex_triggered": hex_triggered,
 		"hex_bonus": hex_bonus,
 		"armor_absorbed": false,
-		"armor_remaining": armor
+		"armor_remaining": armor,
+		"executed": executed
 	}
 
 
@@ -189,13 +206,15 @@ func take_multi_hit_damage(damage_per_hit: int, hit_count: int, ignore_armor: bo
 	"""
 	Apply multiple hits of damage (for multi-hit weapons).
 	V5: Multi-hit weapons are effective against armor since each hit removes 1 armor.
+	V6: Also tracks Execute triggers.
 	
-	Returns: {total_damage: int, hits_dealt: int, armor_stripped: int, hex_triggered: bool}
+	Returns: {total_damage: int, hits_dealt: int, armor_stripped: int, hex_triggered: bool, executed: bool}
 	"""
 	var total_damage: int = 0
 	var hits_dealt: int = 0
 	var armor_stripped: int = 0
 	var hex_triggered: bool = false
+	var executed: bool = false
 	
 	for i: int in range(hit_count):
 		if current_hp <= 0:
@@ -211,12 +230,16 @@ func take_multi_hit_damage(damage_per_hit: int, hit_count: int, ignore_armor: bo
 		
 		if result.hex_triggered:
 			hex_triggered = true
+		
+		if result.executed:
+			executed = true
 	
 	return {
 		"total_damage": total_damage,
 		"hits_dealt": hits_dealt,
 		"armor_stripped": armor_stripped,
-		"hex_triggered": hex_triggered
+		"hex_triggered": hex_triggered,
+		"executed": executed
 	}
 
 

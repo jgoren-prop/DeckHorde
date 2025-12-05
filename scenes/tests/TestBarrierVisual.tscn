@@ -27,3 +27,5 @@ anchor_bottom = 1.0
 [node name="TestRunner" type="Node" parent="."]
 script = ExtResource("2_test")
 
+
+

@@ -16,11 +16,19 @@ var offered_cards: Array[CardDefinition] = []
 var interest_panel: PanelContainer = null
 var xp_panel: PanelContainer = null
 
-const BASE_SCRAP_REWARD: int = 30
-const BASE_HEAL_AMOUNT: int = 15
+# Brotato-style economy: Base wave completion bonus is ALWAYS awarded
+# Scrap reward is a BONUS on top of guaranteed income
+const BONUS_SCRAP_REWARD: int = 10  # Extra scrap if choosing scrap option
+const BASE_HEAL_AMOUNT: int = 8
+
+# Wave completion bonus (awarded to everyone)
+var wave_completion_bonus: int = 0
 
 
 func _ready() -> void:
+	# Brotato Economy: Award guaranteed wave completion bonus FIRST
+	wave_completion_bonus = RunManager.award_wave_completion_bonus()
+	_display_wave_bonus()
 	# Brotato Economy: Apply interest before showing rewards
 	_apply_and_display_interest()
 	# Show XP and level-up info
@@ -37,15 +45,73 @@ func _apply_and_display_interest() -> void:
 		_create_interest_display(interest_data, interest_amount)
 
 
+func _display_wave_bonus() -> void:
+	"""Display the guaranteed wave completion bonus."""
+	if wave_completion_bonus <= 0:
+		return
+	
+	var bonus_panel: PanelContainer = PanelContainer.new()
+	bonus_panel.name = "WaveBonusPanel"
+	
+	# Position at top center (above interest)
+	bonus_panel.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	bonus_panel.offset_top = 20
+	bonus_panel.offset_bottom = 90
+	bonus_panel.offset_left = -180
+	bonus_panel.offset_right = 180
+	
+	var style: StyleBoxFlat = StyleBoxFlat.new()
+	style.bg_color = Color(0.15, 0.12, 0.08, 0.95)
+	style.border_color = Color(0.9, 0.75, 0.3)
+	style.set_border_width_all(2)
+	style.set_corner_radius_all(8)
+	style.content_margin_left = 15.0
+	style.content_margin_right = 15.0
+	style.content_margin_top = 10.0
+	style.content_margin_bottom = 10.0
+	bonus_panel.add_theme_stylebox_override("panel", style)
+	
+	var vbox: VBoxContainer = VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 4)
+	bonus_panel.add_child(vbox)
+	
+	# Title
+	var title_lbl: Label = Label.new()
+	title_lbl.text = "✅ WAVE COMPLETE"
+	title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title_lbl.add_theme_font_size_override("font_size", 14)
+	title_lbl.add_theme_color_override("font_color", Color(0.9, 0.8, 0.4))
+	vbox.add_child(title_lbl)
+	
+	# Bonus amount
+	var amount_lbl: Label = Label.new()
+	amount_lbl.text = "+%d Scrap" % wave_completion_bonus
+	amount_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	amount_lbl.add_theme_font_size_override("font_size", 24)
+	amount_lbl.add_theme_color_override("font_color", Color(1.0, 0.9, 0.5))
+	vbox.add_child(amount_lbl)
+	
+	add_child(bonus_panel)
+	
+	# Animate - fade in, stay, then move up and fade
+	bonus_panel.modulate.a = 0.0
+	var tween: Tween = create_tween()
+	tween.tween_property(bonus_panel, "modulate:a", 1.0, 0.3)
+	tween.tween_interval(1.5)
+	tween.tween_property(bonus_panel, "offset_top", -30, 0.4)
+	tween.parallel().tween_property(bonus_panel, "modulate:a", 0.0, 0.4)
+	tween.tween_callback(bonus_panel.queue_free)
+
+
 func _create_interest_display(data: Dictionary, earned: int) -> void:
 	"""Create the interest display panel at the top of the screen."""
 	interest_panel = PanelContainer.new()
 	interest_panel.name = "InterestPanel"
 	
-	# Position at top center
+	# Position below wave bonus panel
 	interest_panel.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	interest_panel.offset_top = 20
-	interest_panel.offset_bottom = 100
+	interest_panel.offset_top = 100
+	interest_panel.offset_bottom = 180
 	interest_panel.offset_left = -200
 	interest_panel.offset_right = 200
 	
@@ -110,9 +176,9 @@ func _display_xp_summary() -> void:
 	xp_panel = PanelContainer.new()
 	xp_panel.name = "XPPanel"
 	
-	# Position below interest panel
+	# Position below wave bonus and interest panels
 	xp_panel.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	xp_panel.offset_top = 110  # Below interest panel
+	xp_panel.offset_top = 140  # Below interest panel
 	xp_panel.offset_bottom = 220
 	xp_panel.offset_left = -200
 	xp_panel.offset_right = 200
@@ -204,11 +270,11 @@ func _setup_display() -> void:
 	var xp_info: Dictionary = RunManager.get_xp_info()
 	wave_info.text = "Wave %d cleared | Level %d | Scrap: %d" % [RunManager.current_wave, xp_info.level, RunManager.scrap]
 	
-	# Calculate rewards based on wave
-	var scrap_reward: int = BASE_SCRAP_REWARD + RunManager.current_wave * 5
+	# Calculate bonus rewards (on top of guaranteed wave completion bonus)
+	var bonus_scrap: int = BONUS_SCRAP_REWARD + RunManager.current_wave * 2
 	var heal_amount: int = BASE_HEAL_AMOUNT + RunManager.current_wave * 2
 	
-	scrap_description.text = "+%d" % scrap_reward
+	scrap_description.text = "+%d BONUS" % bonus_scrap
 	heal_description.text = "+%d HP" % heal_amount
 	
 	# Special text for elite/boss waves
@@ -225,8 +291,9 @@ func _on_card_reward_pressed() -> void:
 
 
 func _on_scrap_reward_pressed() -> void:
-	var reward: int = BASE_SCRAP_REWARD + RunManager.current_wave * 5
-	RunManager.add_scrap(reward)
+	# Bonus scrap on top of guaranteed wave completion bonus
+	var bonus: int = BONUS_SCRAP_REWARD + RunManager.current_wave * 2
+	RunManager.add_scrap(bonus)
 	_proceed_to_shop()
 
 

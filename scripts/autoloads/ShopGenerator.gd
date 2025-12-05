@@ -2,9 +2,37 @@ extends Node
 ## ShopGenerator - V5 Brotato-style shop with category biasing
 ## Uses 8 V5 categories for build identity
 ## V5: Interest system, new pricing, stat upgrades
+## V5.1: Magnetism system - bias towards owned weapon types and artifact synergies
 
 # V5 Category definitions (from TagConstants)
 const CATEGORIES: Array[String] = ["kinetic", "thermal", "arcane", "fortress", "shadow", "utility", "control", "volatile"]
+
+# =============================================================================
+# V5.1 MAGNETISM SYSTEM - Weapon Family Definitions
+# =============================================================================
+# Cards are grouped into "weapon families" for magnetism. If you own cards from
+# a family, you're more likely to see more of that family in the shop.
+
+const WEAPON_FAMILIES: Dictionary = {
+	"pistol": ["pistol", "heavy_pistol", "double_tap"],
+	"shotgun": ["shotgun", "reckless_blast"],
+	"rifle": ["assault_rifle", "sniper_rifle", "burst_fire", "precision_shot", "marksman", "chain_gun"],
+	"grenade": ["frag_grenade", "cluster_bomb", "rocket", "firebomb", "inferno", "napalm_strike"],
+	"hex": ["hex_bolt", "curse_wave", "hex_detonation", "spreading_plague", "dark_ritual"],
+	"lifesteal": ["soul_drain", "life_siphon", "blood_rocket"],
+	"armor": ["shield_bash", "iron_volley", "bulwark_shot", "fortified_barrage", "reactive_shell", "siege_cannon"],
+	"crit": ["assassins_strike", "shadow_bolt", "killing_blow", "shadow_barrage", "backstab"],
+	"multi_hit": ["rapid_fire", "chain_gun", "burst_fire", "assault_rifle", "cluster_bomb", "shadow_barrage"],
+	"burn": ["incendiary", "firebomb", "inferno", "napalm_strike", "overcharge"],
+	"control": ["repulsor", "barrier_shot", "lockdown", "far_strike", "killzone", "perimeter"],
+	"volatile": ["overcharge", "reckless_blast", "blood_rocket", "unstable_core", "kamikaze_swarm", "desperation", "overdrive"],
+}
+
+# Magnetism weights - how much to boost based on ownership
+const MAGNETISM_WEAPON_FAMILY_BASE: float = 0.3  # Per owned card in family
+const MAGNETISM_WEAPON_FAMILY_CAP: float = 1.5   # Maximum family bonus
+const MAGNETISM_ARTIFACT_SYNERGY: float = 0.4    # Per synergistic artifact
+const MAGNETISM_STAT_SYNERGY: float = 0.25       # Per relevant stat point (scaled)
 
 # Shop structure (V5)
 const CARD_SLOTS: int = 4
@@ -23,11 +51,11 @@ var current_shop_reroll_count: int = 0
 # V5 CARD PRICING
 # =============================================================================
 
-# Base prices by rarity (average of V5 ranges)
+# Base prices by rarity (Brotato-style: cheaper early game)
 const RARITY_BASE_PRICES: Dictionary = {
-	0: 15,   # Common: 12-18
-	1: 38,   # Uncommon: 30-45
-	2: 75,   # Rare: 65-85
+	0: 10,   # Common: 8-12 (was 12-18)
+	1: 25,   # Uncommon: 20-30 (was 30-45)
+	2: 50,   # Rare: 40-60 (was 65-85)
 }
 
 # Tier multipliers for card prices
@@ -148,8 +176,8 @@ const V5_STAT_UPGRADES: Dictionary = {
 		"description": "+1 card drawn per turn",
 		"stat": "draw_per_turn",
 		"value": 1,
-		"base_price": 45,
-		"price_increment": 20,
+		"base_price": 25,  # Reduced from 45 - critical early stat
+		"price_increment": 15,
 		"cap": 8,
 	},
 	"energy_up": {
@@ -158,8 +186,8 @@ const V5_STAT_UPGRADES: Dictionary = {
 		"description": "+1 energy per turn",
 		"stat": "energy_per_turn",
 		"value": 1,
-		"base_price": 55,
-		"price_increment": 25,
+		"base_price": 30,  # Reduced from 55 - critical early stat
+		"price_increment": 20,
 		"cap": 6,
 	},
 }
@@ -228,6 +256,166 @@ func get_primary_secondary_categories() -> Dictionary:
 		"secondary": secondary,
 		"secondary_score": secondary_score
 	}
+
+
+# =============================================================================
+# V5.1 MAGNETISM SYSTEM
+# =============================================================================
+
+func _get_card_weapon_families(card_id: String) -> Array[String]:
+	"""Get all weapon families a card belongs to."""
+	var families: Array[String] = []
+	for family: String in WEAPON_FAMILIES:
+		if card_id in WEAPON_FAMILIES[family]:
+			families.append(family)
+	return families
+
+
+func _get_owned_weapon_family_counts() -> Dictionary:
+	"""Count how many cards the player owns in each weapon family."""
+	var counts: Dictionary = {}
+	for family: String in WEAPON_FAMILIES:
+		counts[family] = 0
+	
+	for entry: Dictionary in RunManager.deck:
+		var card_id: String = entry.card_id
+		var card_count: int = entry.get("count", 1)
+		for family: String in WEAPON_FAMILIES:
+			if card_id in WEAPON_FAMILIES[family]:
+				counts[family] += card_count
+	
+	return counts
+
+
+func _calculate_weapon_family_magnetism(card) -> float:
+	"""Calculate magnetism bonus for a card based on owned weapon families."""
+	if card == null:
+		return 0.0
+	
+	var family_counts: Dictionary = _get_owned_weapon_family_counts()
+	var card_families: Array[String] = _get_card_weapon_families(card.card_id)
+	
+	var total_bonus: float = 0.0
+	for family: String in card_families:
+		var owned: int = family_counts.get(family, 0)
+		if owned > 0:
+			# Scale bonus: first owned card gives full bonus, diminishing returns
+			var family_bonus: float = MAGNETISM_WEAPON_FAMILY_BASE * sqrt(float(owned))
+			total_bonus += minf(family_bonus, MAGNETISM_WEAPON_FAMILY_CAP)
+	
+	return total_bonus
+
+
+func _calculate_artifact_synergy_magnetism(card) -> float:
+	"""Calculate magnetism bonus based on artifact synergies."""
+	if card == null:
+		return 0.0
+	
+	var total_bonus: float = 0.0
+	var equipped: Array = ArtifactManager.get_equipped_artifacts()
+	
+	for artifact_id: String in equipped:
+		var artifact = ArtifactManager.get_artifact(artifact_id)
+		if artifact == null:
+			continue
+		
+		# Check if artifact boosts this card's damage type
+		var trigger: String = artifact.trigger_type
+		
+		# Kinetic synergy
+		if trigger in ["on_kinetic_attack", "on_kinetic_kill"]:
+			if card.damage_type == "kinetic" or card.kinetic_scaling > 0:
+				total_bonus += MAGNETISM_ARTIFACT_SYNERGY
+		
+		# Thermal synergy
+		if trigger in ["on_thermal_attack", "on_thermal_kill"]:
+			if card.damage_type == "thermal" or card.thermal_scaling > 0:
+				total_bonus += MAGNETISM_ARTIFACT_SYNERGY
+		
+		# Arcane synergy
+		if trigger in ["on_arcane_damage", "on_arcane_kill"]:
+			if card.damage_type == "arcane" or card.arcane_scaling > 0:
+				total_bonus += MAGNETISM_ARTIFACT_SYNERGY
+		
+		# Shadow/crit synergy
+		if trigger in ["on_shadow_crit", "on_crit"]:
+			if card.has_category("Shadow") or card.crit_chance_bonus > 0:
+				total_bonus += MAGNETISM_ARTIFACT_SYNERGY
+		
+		# Fortress synergy
+		if trigger in ["on_fortress_play", "on_armor_gain"]:
+			if card.has_category("Fortress") or card.armor_amount > 0:
+				total_bonus += MAGNETISM_ARTIFACT_SYNERGY
+		
+		# Control/barrier synergy
+		if trigger in ["on_barrier_trigger"]:
+			if card.has_category("Control") or "barrier" in card.effect_params:
+				total_bonus += MAGNETISM_ARTIFACT_SYNERGY
+		
+		# Volatile synergy (self-damage)
+		if trigger in ["on_player_damage"]:
+			if card.has_category("Volatile") or card.self_damage > 0:
+				total_bonus += MAGNETISM_ARTIFACT_SYNERGY
+		
+		# Utility synergy (card play/draw)
+		if trigger in ["on_card_play", "on_draw", "on_first_utility"]:
+			if card.has_category("Utility") or card.cards_to_draw > 0:
+				total_bonus += MAGNETISM_ARTIFACT_SYNERGY
+	
+	return total_bonus
+
+
+func _calculate_stat_synergy_magnetism(card) -> float:
+	"""Calculate magnetism bonus based on player stats that would benefit this card."""
+	if card == null:
+		return 0.0
+	
+	var stats = RunManager.player_stats
+	if stats == null:
+		return 0.0
+	
+	var total_bonus: float = 0.0
+	
+	# Cards with scaling benefit from flat stat investment
+	if card.kinetic_scaling > 0:
+		var kinetic_stat: int = stats.get_flat_damage_stat("kinetic")
+		if kinetic_stat > 0:
+			# Scale logarithmically to avoid excessive bonus
+			total_bonus += MAGNETISM_STAT_SYNERGY * log(1.0 + float(kinetic_stat) / 5.0)
+	
+	if card.thermal_scaling > 0:
+		var thermal_stat: int = stats.get_flat_damage_stat("thermal")
+		if thermal_stat > 0:
+			total_bonus += MAGNETISM_STAT_SYNERGY * log(1.0 + float(thermal_stat) / 5.0)
+	
+	if card.arcane_scaling > 0:
+		var arcane_stat: int = stats.get_flat_damage_stat("arcane")
+		if arcane_stat > 0:
+			total_bonus += MAGNETISM_STAT_SYNERGY * log(1.0 + float(arcane_stat) / 5.0)
+	
+	if card.armor_start_scaling > 0:
+		var armor_stat: int = stats.get_flat_damage_stat("armor_start")
+		if armor_stat > 0:
+			total_bonus += MAGNETISM_STAT_SYNERGY * log(1.0 + float(armor_stat) / 3.0)
+	
+	if card.crit_chance_bonus > 0 or card.crit_damage_scaling > 0:
+		var crit_chance: float = stats.get_crit_chance()
+		if crit_chance > 0.05:  # More than base 5%
+			total_bonus += MAGNETISM_STAT_SYNERGY * (crit_chance - 0.05) * 5.0
+	
+	return total_bonus
+
+
+func _calculate_card_magnetism(card) -> float:
+	"""Calculate total magnetism score for a card."""
+	if card == null:
+		return 0.0
+	
+	var weapon_family: float = _calculate_weapon_family_magnetism(card)
+	var artifact_synergy: float = _calculate_artifact_synergy_magnetism(card)
+	var stat_synergy: float = _calculate_stat_synergy_magnetism(card)
+	
+	return weapon_family + artifact_synergy + stat_synergy
 
 
 # =============================================================================
@@ -336,7 +524,7 @@ func _generate_late_wave_cards(wave: int, used_ids: Array) -> Array:
 
 
 func _calculate_category_weights(categories_data: Dictionary) -> Dictionary:
-	"""Calculate category weights for biased sampling."""
+	"""Calculate category weights for biased sampling (including artifact synergies)."""
 	var weights: Dictionary = {}
 	
 	# Base weight for all categories
@@ -351,7 +539,60 @@ func _calculate_category_weights(categories_data: Dictionary) -> Dictionary:
 	if categories_data.secondary != "":
 		weights[categories_data.secondary] += 1.0
 	
+	# V5.1: Boost categories based on artifact synergies
+	var artifact_category_bonuses: Dictionary = _get_artifact_category_bonuses()
+	for category: String in artifact_category_bonuses:
+		if weights.has(category):
+			weights[category] += artifact_category_bonuses[category]
+	
 	return weights
+
+
+func _get_artifact_category_bonuses() -> Dictionary:
+	"""Get category weight bonuses from equipped artifacts."""
+	var bonuses: Dictionary = {}
+	var equipped: Array = ArtifactManager.get_equipped_artifacts()
+	
+	for artifact_id: String in equipped:
+		var artifact = ArtifactManager.get_artifact(artifact_id)
+		if artifact == null:
+			continue
+		
+		var trigger: String = artifact.trigger_type
+		var bonus: float = 0.3  # Per artifact
+		
+		# Map artifact triggers to categories
+		if trigger in ["on_kinetic_attack", "on_kinetic_kill"]:
+			bonuses["kinetic"] = bonuses.get("kinetic", 0.0) + bonus
+		elif trigger in ["on_thermal_attack", "on_thermal_kill"]:
+			bonuses["thermal"] = bonuses.get("thermal", 0.0) + bonus
+		elif trigger in ["on_arcane_damage", "on_arcane_kill"]:
+			bonuses["arcane"] = bonuses.get("arcane", 0.0) + bonus
+		elif trigger in ["on_fortress_play", "on_armor_gain"]:
+			bonuses["fortress"] = bonuses.get("fortress", 0.0) + bonus
+		elif trigger in ["on_shadow_crit"]:
+			bonuses["shadow"] = bonuses.get("shadow", 0.0) + bonus
+		elif trigger in ["on_first_utility", "on_card_play", "on_draw"]:
+			bonuses["utility"] = bonuses.get("utility", 0.0) + bonus
+		elif trigger in ["on_barrier_trigger"]:
+			bonuses["control"] = bonuses.get("control", 0.0) + bonus
+		elif trigger in ["on_player_damage"]:
+			bonuses["volatile"] = bonuses.get("volatile", 0.0) + bonus
+		
+		# Also check stat modifiers for category affinity
+		if artifact.stat_modifiers.size() > 0:
+			if artifact.stat_modifiers.has("kinetic") or artifact.stat_modifiers.has("kinetic_percent"):
+				bonuses["kinetic"] = bonuses.get("kinetic", 0.0) + bonus * 0.5
+			if artifact.stat_modifiers.has("thermal") or artifact.stat_modifiers.has("thermal_percent"):
+				bonuses["thermal"] = bonuses.get("thermal", 0.0) + bonus * 0.5
+			if artifact.stat_modifiers.has("arcane") or artifact.stat_modifiers.has("arcane_percent"):
+				bonuses["arcane"] = bonuses.get("arcane", 0.0) + bonus * 0.5
+			if artifact.stat_modifiers.has("armor_start"):
+				bonuses["fortress"] = bonuses.get("fortress", 0.0) + bonus * 0.5
+			if artifact.stat_modifiers.has("crit_chance") or artifact.stat_modifiers.has("crit_damage"):
+				bonuses["shadow"] = bonuses.get("shadow", 0.0) + bonus * 0.5
+	
+	return bonuses
 
 
 func _sample_category_by_weight(weights: Dictionary) -> String:
@@ -372,7 +613,7 @@ func _sample_category_by_weight(weights: Dictionary) -> String:
 
 
 func _get_card_from_category(category: String, exclude_ids: Array, wave: int):
-	"""Get a random card from a specific V5 category."""
+	"""Get a magnetism-weighted card from a specific V5 category."""
 	var available: Array = []
 	
 	# Determine max tier based on wave
@@ -389,14 +630,14 @@ func _get_card_from_category(category: String, exclude_ids: Array, wave: int):
 				available.append(card)
 	
 	if available.size() > 0:
-		return available[randi() % available.size()]
+		return _select_card_with_magnetism(available)
 	
 	# Fallback to any card
 	return _get_random_card(exclude_ids, wave)
 
 
 func _get_random_card(exclude_ids: Array, wave: int):
-	"""Get a random card from any category."""
+	"""Get a magnetism-weighted card from any category."""
 	var max_tier: int = _get_max_tier_for_wave(wave)
 	var available: Array = []
 	
@@ -410,8 +651,45 @@ func _get_random_card(exclude_ids: Array, wave: int):
 				available.append(card)
 	
 	if available.size() > 0:
-		return available[randi() % available.size()]
+		return _select_card_with_magnetism(available)
 	return null
+
+
+func _select_card_with_magnetism(available_cards: Array):
+	"""Select a card from available pool using magnetism-weighted random selection.
+	Cards that synergize with your build have higher chance to appear."""
+	if available_cards.size() == 0:
+		return null
+	
+	if available_cards.size() == 1:
+		return available_cards[0]
+	
+	# Calculate weights for each card
+	var weights: Array[float] = []
+	var total_weight: float = 0.0
+	
+	for card in available_cards:
+		# Base weight of 1.0 for all cards
+		var weight: float = 1.0
+		
+		# Add magnetism bonus
+		var magnetism: float = _calculate_card_magnetism(card)
+		weight += magnetism
+		
+		weights.append(weight)
+		total_weight += weight
+	
+	# Weighted random selection
+	var roll: float = randf() * total_weight
+	var cumulative: float = 0.0
+	
+	for i: int in range(available_cards.size()):
+		cumulative += weights[i]
+		if roll <= cumulative:
+			return available_cards[i]
+	
+	# Fallback to last card (shouldn't happen)
+	return available_cards[available_cards.size() - 1]
 
 
 func _get_max_tier_for_wave(wave: int) -> int:
@@ -600,16 +878,16 @@ func get_heal_cost(wave: int) -> int:
 
 
 # =============================================================================
-# ARTIFACT GENERATION (stub for V5 artifacts)
+# ARTIFACT GENERATION (V5.1 with magnetism)
 # =============================================================================
 
 func generate_shop_artifacts(_wave: int) -> Array:
-	"""Generate artifact offers for the shop."""
+	"""Generate artifact offers for the shop with magnetism bias."""
 	var artifacts: Array = []
 	var used_ids: Array = []
 	
 	for _slot: int in range(ARTIFACT_SLOTS):
-		var artifact: Dictionary = _get_random_artifact(used_ids)
+		var artifact: Dictionary = _get_random_artifact_with_magnetism(used_ids)
 		if artifact.size() > 0:
 			artifacts.append(artifact)
 			used_ids.append(artifact.artifact_id)
@@ -618,7 +896,7 @@ func generate_shop_artifacts(_wave: int) -> Array:
 
 
 func _get_random_artifact(exclude_ids: Array) -> Dictionary:
-	"""Get a random artifact."""
+	"""Get a random artifact (legacy, no magnetism)."""
 	var available: Array = ArtifactManager.get_available_artifacts()
 	var filtered: Array = []
 	
@@ -629,6 +907,115 @@ func _get_random_artifact(exclude_ids: Array) -> Dictionary:
 	if filtered.size() > 0:
 		return filtered[randi() % filtered.size()]
 	return {}
+
+
+func _get_random_artifact_with_magnetism(exclude_ids: Array) -> Dictionary:
+	"""Get an artifact using magnetism-weighted selection.
+	Artifacts that synergize with your cards/stats appear more often."""
+	var available: Array = ArtifactManager.get_available_artifacts()
+	var filtered: Array = []
+	
+	for artifact: Dictionary in available:
+		if artifact.artifact_id not in exclude_ids:
+			filtered.append(artifact)
+	
+	if filtered.size() == 0:
+		return {}
+	
+	if filtered.size() == 1:
+		return filtered[0]
+	
+	# Calculate weights based on build synergy
+	var weights: Array[float] = []
+	var total_weight: float = 0.0
+	var categories_data: Dictionary = get_primary_secondary_categories()
+	var primary_cat: String = categories_data.primary.to_lower() if categories_data.primary != "" else ""
+	var secondary_cat: String = categories_data.secondary.to_lower() if categories_data.secondary != "" else ""
+	
+	for artifact: Dictionary in filtered:
+		var weight: float = 1.0
+		var artifact_id: String = artifact.artifact_id
+		var full_artifact = ArtifactManager.get_artifact(artifact_id)
+		
+		if full_artifact:
+			# Boost artifacts that match player's damage type focus
+			if full_artifact.stat_modifiers.size() > 0:
+				# Check for category alignment
+				if primary_cat != "":
+					if full_artifact.stat_modifiers.has(primary_cat) or \
+					   full_artifact.stat_modifiers.has(primary_cat + "_percent"):
+						weight += 0.8  # Strong bonus for primary category match
+				
+				if secondary_cat != "":
+					if full_artifact.stat_modifiers.has(secondary_cat) or \
+					   full_artifact.stat_modifiers.has(secondary_cat + "_percent"):
+						weight += 0.4  # Moderate bonus for secondary category match
+			
+			# Boost artifacts with triggers that match owned cards
+			var trigger: String = full_artifact.trigger_type
+			if trigger != "passive" and trigger != "":
+				# Check if player has cards that would trigger this
+				var trigger_bonus: float = _get_artifact_trigger_synergy(trigger)
+				weight += trigger_bonus
+		
+		weights.append(weight)
+		total_weight += weight
+	
+	# Weighted random selection
+	var roll: float = randf() * total_weight
+	var cumulative: float = 0.0
+	
+	for i: int in range(filtered.size()):
+		cumulative += weights[i]
+		if roll <= cumulative:
+			return filtered[i]
+	
+	return filtered[filtered.size() - 1]
+
+
+func _get_artifact_trigger_synergy(trigger: String) -> float:
+	"""Calculate synergy bonus for an artifact trigger based on owned cards."""
+	var bonus: float = 0.0
+	
+	for entry: Dictionary in RunManager.deck:
+		var card = CardDatabase.get_card(entry.card_id)
+		if card == null:
+			continue
+		
+		var count: int = entry.get("count", 1)
+		var match_found: bool = false
+		
+		# Check trigger alignment with card properties
+		match trigger:
+			"on_kinetic_attack", "on_kinetic_kill":
+				if card.damage_type == "kinetic" or card.kinetic_scaling > 0:
+					match_found = true
+			"on_thermal_attack", "on_thermal_kill":
+				if card.damage_type == "thermal" or card.thermal_scaling > 0:
+					match_found = true
+			"on_arcane_damage", "on_arcane_kill":
+				if card.damage_type == "arcane" or card.arcane_scaling > 0:
+					match_found = true
+			"on_crit", "on_shadow_crit":
+				if card.crit_chance_bonus > 0 or card.has_category("Shadow"):
+					match_found = true
+			"on_fortress_play", "on_armor_gain":
+				if card.armor_amount > 0 or card.has_category("Fortress"):
+					match_found = true
+			"on_kill":
+				# Most cards can trigger on-kill
+				match_found = true
+			"on_player_damage":
+				if card.self_damage > 0 or card.has_category("Volatile"):
+					match_found = true
+			"on_draw", "on_card_play":
+				if card.cards_to_draw > 0 or card.has_category("Utility"):
+					match_found = true
+		
+		if match_found:
+			bonus += 0.15 * sqrt(float(count))  # Diminishing returns per card
+	
+	return minf(bonus, 1.0)  # Cap at 1.0 bonus
 
 
 # =============================================================================

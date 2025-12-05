@@ -178,3 +178,5 @@ func _draw_ring_labels(center: Vector2, max_radius: float) -> void:
 		var text_color: Color = Color(1.0, 1.0, 1.0, 0.9) if is_targeted else Color(0.6, 0.6, 0.6, 0.5)
 		draw_string(font, label_pos, label, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, text_color)
 
+
+

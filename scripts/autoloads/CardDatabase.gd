@@ -1,7 +1,8 @@
 extends Node
-## CardDatabase - V5 Card Pool
-## 54 Weapons + 24 Instants = 78 total cards
-## All weapons use V5 damage formula with stat scaling
+## CardDatabase - V6 Horde Slaughter Card Pool
+## ~35 Weapons + ~15 Instants = ~50 total cards
+## Multi-hit is CORE - most weapons hit 2+ times
+## Simplified to 5 categories: Kinetic, Thermal, Arcane, Volatile, Utility
 
 signal cards_loaded()
 
@@ -16,39 +17,34 @@ const TagConstantsClass = preload("res://scripts/constants/TagConstants.gd")
 
 
 func _ready() -> void:
-	_create_v5_cards()
-	print("[CardDatabase] V5 Card Pool initialized with ", cards.size(), " cards (",
+	_create_v6_cards()
+	print("[CardDatabase] V6 Card Pool initialized with ", cards.size(), " cards (",
 		weapons.size(), " weapons, ", instants.size(), " instants)")
 
 
-func _create_v5_cards() -> void:
-	"""Create the V5 card pool."""
-	# Create weapons by category
+func _create_v6_cards() -> void:
+	"""Create the V6 horde-focused card pool."""
+	# Create weapons by category (5 categories, ~35 weapons)
 	_create_kinetic_weapons()
 	_create_thermal_weapons()
 	_create_arcane_weapons()
-	_create_fortress_weapons()
-	_create_shadow_weapons()
-	_create_utility_weapons()
-	_create_control_weapons()
 	_create_volatile_weapons()
+	_create_utility_weapons()
 	
-	# Create instant cards
-	_create_universal_instants()
-	_create_category_instants()
-	_create_dual_category_instants()
+	# Create instant cards (~15 instants)
+	_create_instant_cards()
 	
 	cards_loaded.emit()
 
 
 # =============================================================================
-# V5 WEAPON CREATION HELPERS
+# V6 WEAPON CREATION HELPERS
 # =============================================================================
 
 func _create_weapon(id: String, card_name: String, cost: int, base: int, damage_type: String,
 		categories: Array[String], scaling: Dictionary, crit_chance: float, crit_damage: float,
-		effect: String = "", desc: String = "", hit_count: int = 1, rarity: int = 1) -> CardDef:
-	"""Helper to create a V5 weapon card."""
+		hit_count: int = 1, effect: String = "", rarity: int = 1) -> CardDef:
+	"""Helper to create a V6 weapon card. Multi-hit is default."""
 	var card := CardDef.new()
 	card.card_id = id
 	card.card_name = card_name
@@ -74,10 +70,10 @@ func _create_weapon(id: String, card_name: String, cost: int, base: int, damage_
 	card.barriers_scaling = scaling.get("barriers", 0)
 	
 	# Set crit
-	card.crit_chance_bonus = crit_chance - 5.0  # Base is 5%, so subtract
-	card.crit_damage_bonus = crit_damage - 150.0  # Base is 150%, so subtract
+	card.crit_chance_bonus = crit_chance - 5.0  # Base is 5%
+	card.crit_damage_bonus = crit_damage - 150.0  # Base is 150%
 	
-	# Set effect type
+	# Set effect type based on hit count and effect string
 	if hit_count > 1:
 		card.effect_type = "v5_multi_hit"
 		card.target_type = "random_enemy"
@@ -96,25 +92,22 @@ func _create_weapon(id: String, card_name: String, cost: int, base: int, damage_
 		card.target_rings = [0, 1, 2, 3]
 	
 	# Build description
-	if desc.is_empty():
-		desc = _build_weapon_description(card, effect)
-	card.description = desc
+	card.description = _build_weapon_description(card, effect)
 	
-	# Store effect info in params
+	# Store effect info
 	if not effect.is_empty():
 		card.effect_params["effect_text"] = effect
 	
-	# Legacy tags for backward compatibility
+	# Legacy tags
 	card.tags = _categories_to_legacy_tags(categories)
 	
 	return card
 
 
 func _build_weapon_description(card: CardDef, effect: String) -> String:
-	"""Build a description string for a weapon."""
+	"""Build description string for a weapon."""
 	var desc: String = ""
 	
-	# Base damage line
 	if card.hit_count > 1:
 		desc = "Deal {damage} damage %d times." % card.hit_count
 	elif card.effect_type == "v5_ring_damage":
@@ -124,7 +117,6 @@ func _build_weapon_description(card: CardDef, effect: String) -> String:
 	else:
 		desc = "Deal {damage} damage."
 	
-	# Add effect text
 	if not effect.is_empty():
 		desc += " " + effect
 	
@@ -132,7 +124,7 @@ func _build_weapon_description(card: CardDef, effect: String) -> String:
 
 
 func _categories_to_legacy_tags(categories: Array[String]) -> Array:
-	"""Convert V5 categories to legacy tags for backward compatibility."""
+	"""Convert categories to legacy tags."""
 	var tags: Array = []
 	for cat: String in categories:
 		tags.append(TagConstantsClass.category_to_legacy_tag(cat))
@@ -143,18 +135,15 @@ func _register_card(card: CardDef) -> void:
 	"""Register a card in all indexes."""
 	cards[card.card_id] = card
 	
-	# Index by category
 	for category: String in card.categories:
 		if not cards_by_category.has(category):
 			cards_by_category[category] = []
 		cards_by_category[category].append(card)
 	
-	# Index by damage type
 	if not cards_by_type.has(card.damage_type):
 		cards_by_type[card.damage_type] = []
 	cards_by_type[card.damage_type].append(card)
 	
-	# Track weapons vs instants
 	if card.is_instant_card:
 		instants.append(card)
 	else:
@@ -162,404 +151,251 @@ func _register_card(card: CardDef) -> void:
 
 
 # =============================================================================
-# KINETIC-PRIMARY WEAPONS (10 Cards)
+# KINETIC WEAPONS (10 Cards) - Raw damage, armor shred via multi-hit
 # =============================================================================
 
 func _create_kinetic_weapons() -> void:
-	# Pistol - basic gun
+	# Pistol - starter weapon, 2 hits
 	var pistol := _create_weapon("pistol", "Pistol", 1, 2, "kinetic",
-		["Kinetic"], {"kinetic": 100}, 5.0, 150.0)
+		["Kinetic"], {"kinetic": 80}, 5.0, 150.0, 2)
 	_register_card(pistol)
 	
-	# Heavy Pistol - upgraded pistol
-	var heavy_pistol := _create_weapon("heavy_pistol", "Heavy Pistol", 2, 3, "kinetic",
-		["Kinetic"], {"kinetic": 120}, 5.0, 150.0)
-	_register_card(heavy_pistol)
+	# SMG - rapid fire, 4 hits
+	var smg := _create_weapon("smg", "SMG", 1, 1, "kinetic",
+		["Kinetic"], {"kinetic": 50}, 5.0, 150.0, 4)
+	smg.can_repeat_target = true
+	_register_card(smg)
 	
-	# Shotgun - splash damage (Kinetic + Thermal)
-	var shotgun := _create_weapon("shotgun", "Shotgun", 2, 2, "kinetic",
-		["Kinetic", "Thermal"], {"kinetic": 80}, 5.0, 150.0, "+2 splash to group")
-	shotgun.splash_damage = 2
-	shotgun.effect_type = "splash_damage"
-	_register_card(shotgun)
-	
-	# Assault Rifle - hits 3 random (Kinetic + Utility)
-	var assault := _create_weapon("assault_rifle", "Assault Rifle", 2, 1, "kinetic",
-		["Kinetic", "Utility"], {"kinetic": 60}, 5.0, 150.0, "", "", 3)
+	# Assault Rifle - reliable 3 hits
+	var assault := _create_weapon("assault_rifle", "Assault Rifle", 2, 2, "kinetic",
+		["Kinetic"], {"kinetic": 70}, 5.0, 150.0, 3)
 	_register_card(assault)
 	
-	# Sniper Rifle - Far/Mid only, high crit (Kinetic + Shadow)
-	var sniper := _create_weapon("sniper_rifle", "Sniper Rifle", 2, 4, "kinetic",
-		["Kinetic", "Shadow"], {"kinetic": 150}, 15.0, 200.0, "Far/Mid only")
-	sniper.target_rings = [2, 3]  # Mid, Far only
+	# Minigun - bullet hose, 8 hits (armor shredder)
+	var minigun := _create_weapon("minigun", "Minigun", 3, 1, "kinetic",
+		["Kinetic"], {"kinetic": 40}, 5.0, 150.0, 8)
+	minigun.can_repeat_target = true
+	_register_card(minigun)
+	
+	# Shotgun - 3 hits with splash
+	var shotgun := _create_weapon("shotgun", "Shotgun", 2, 2, "kinetic",
+		["Kinetic"], {"kinetic": 60}, 5.0, 150.0, 3, "+2 splash")
+	shotgun.splash_damage = 2
+	_register_card(shotgun)
+	
+	# Sniper - single hit, high crit
+	var sniper := _create_weapon("sniper", "Sniper Rifle", 2, 6, "kinetic",
+		["Kinetic"], {"kinetic": 120}, 20.0, 200.0, 1, "High crit chance")
 	_register_card(sniper)
 	
-	# Burst Fire - hits 3x (Kinetic + Utility)
-	var burst := _create_weapon("burst_fire", "Burst Fire", 2, 1, "kinetic",
-		["Kinetic", "Utility"], {"kinetic": 50}, 5.0, 150.0, "", "", 3)
+	# Burst Fire - 3 fast hits, cheap
+	var burst := _create_weapon("burst_fire", "Burst Fire", 1, 2, "kinetic",
+		["Kinetic"], {"kinetic": 60}, 8.0, 160.0, 3)
 	_register_card(burst)
 	
-	# Chain Gun - hits 5x (Kinetic + Utility)
-	var chain := _create_weapon("chain_gun", "Chain Gun", 2, 0, "kinetic",
-		["Kinetic", "Utility"], {"kinetic": 40}, 5.0, 150.0, "", "", 5)
-	chain.can_repeat_target = true
-	_register_card(chain)
+	# Heavy Rifle - 2 hits, high damage
+	var heavy := _create_weapon("heavy_rifle", "Heavy Rifle", 2, 4, "kinetic",
+		["Kinetic"], {"kinetic": 100}, 5.0, 150.0, 2)
+	_register_card(heavy)
 	
-	# Double Tap - hits 2x (Kinetic + Shadow)
-	var double := _create_weapon("double_tap", "Double Tap", 1, 1, "kinetic",
-		["Kinetic", "Shadow"], {"kinetic": 70}, 12.0, 175.0, "", "", 2)
-	_register_card(double)
-	
-	# Marksman - +50% vs Far (Kinetic + Shadow)
-	var marksman := _create_weapon("marksman", "Marksman", 2, 2, "kinetic",
-		["Kinetic", "Shadow"], {"kinetic": 100}, 18.0, 200.0, "+50% vs Far")
-	marksman.effect_params["far_bonus"] = 0.5
-	_register_card(marksman)
-	
-	# Railgun - ignores armor (Kinetic + Fortress)
-	var railgun := _create_weapon("railgun", "Railgun", 3, 5, "kinetic",
-		["Kinetic", "Fortress"], {"kinetic": 180}, 5.0, 150.0, "Ignores armor")
+	# Railgun - 1 hit, ignores armor
+	var railgun := _create_weapon("railgun", "Railgun", 3, 10, "kinetic",
+		["Kinetic"], {"kinetic": 150}, 10.0, 175.0, 1, "Ignores armor")
 	railgun.effect_params["ignore_armor"] = true
 	_register_card(railgun)
+	
+	# Machine Pistol - 5 hits, budget option
+	var machine := _create_weapon("machine_pistol", "Machine Pistol", 1, 1, "kinetic",
+		["Kinetic"], {"kinetic": 40}, 5.0, 150.0, 5)
+	machine.can_repeat_target = true
+	_register_card(machine)
 
 
 # =============================================================================
-# THERMAL-PRIMARY WEAPONS (7 Cards)
+# THERMAL WEAPONS (7 Cards) - Burn, AOE, ring damage
 # =============================================================================
 
 func _create_thermal_weapons() -> void:
-	# Frag Grenade - ring damage (Thermal + Volatile)
-	var frag := _create_weapon("frag_grenade", "Frag Grenade", 2, 2, "thermal",
-		["Thermal", "Volatile"], {"thermal": 100}, 5.0, 150.0, "Hits entire ring")
-	frag.effect_type = "v5_ring_damage"
-	frag.target_type = "ring"
-	frag.requires_target = true
-	_register_card(frag)
+	# Flamethrower - 3 hits + burn
+	var flame := _create_weapon("flamethrower", "Flamethrower", 2, 2, "thermal",
+		["Thermal"], {"thermal": 70}, 5.0, 150.0, 3, "Apply 2 Burn")
+	flame.burn_damage = 2
+	flame.can_repeat_target = true
+	_register_card(flame)
 	
-	# Rocket - splash to group
-	var rocket := _create_weapon("rocket", "Rocket", 3, 3, "thermal",
-		["Thermal"], {"thermal": 120}, 5.0, 150.0, "+3 splash to group")
-	rocket.splash_damage = 3
-	rocket.effect_type = "splash_damage"
-	_register_card(rocket)
-	
-	# Incendiary - apply burn (Thermal + Arcane)
-	var incendiary := _create_weapon("incendiary", "Incendiary", 2, 1, "thermal",
-		["Thermal", "Arcane"], {"thermal": 80}, 5.0, 150.0, "Apply 3 Burn")
-	incendiary.burn_damage = 3
-	_register_card(incendiary)
-	
-	# Firebomb - ring + burn (Thermal + Control)
-	var firebomb := _create_weapon("firebomb", "Firebomb", 2, 1, "thermal",
-		["Thermal", "Control"], {"thermal": 70}, 5.0, 150.0, "Ring, apply 2 Burn each")
+	# Firebomb - ring damage + burn
+	var firebomb := _create_weapon("firebomb", "Firebomb", 2, 3, "thermal",
+		["Thermal"], {"thermal": 80}, 5.0, 150.0, 1, "Ring. Apply 3 Burn each")
 	firebomb.effect_type = "v5_ring_damage"
-	firebomb.burn_damage = 2
+	firebomb.burn_damage = 3
 	firebomb.target_type = "ring"
 	firebomb.requires_target = true
 	_register_card(firebomb)
 	
-	# Cluster Bomb - hits 4 random (Thermal + Utility)
-	var cluster := _create_weapon("cluster_bomb", "Cluster Bomb", 2, 1, "thermal",
-		["Thermal", "Utility"], {"thermal": 60}, 5.0, 150.0, "", "", 4)
-	_register_card(cluster)
+	# Rocket Launcher - splash damage
+	var rocket := _create_weapon("rocket", "Rocket Launcher", 3, 5, "thermal",
+		["Thermal"], {"thermal": 100}, 5.0, 150.0, 1, "+4 splash to group")
+	rocket.splash_damage = 4
+	rocket.effect_type = "splash_damage"
+	_register_card(rocket)
 	
-	# Inferno - ring + heavy burn
-	var inferno := _create_weapon("inferno", "Inferno", 3, 2, "thermal",
-		["Thermal"], {"thermal": 100}, 5.0, 150.0, "Ring, apply 3 Burn each")
-	inferno.effect_type = "v5_ring_damage"
-	inferno.burn_damage = 3
-	inferno.target_type = "ring"
-	inferno.requires_target = true
-	_register_card(inferno)
-	
-	# Napalm Strike - ALL enemies + burn (Thermal + Volatile)
-	var napalm := _create_weapon("napalm_strike", "Napalm Strike", 3, 2, "thermal",
-		["Thermal", "Volatile"], {"thermal": 90}, 5.0, 150.0, "ALL enemies, apply 2 Burn")
+	# Napalm - ALL enemies + burn
+	var napalm := _create_weapon("napalm", "Napalm Strike", 3, 2, "thermal",
+		["Thermal"], {"thermal": 60}, 5.0, 150.0, 1, "ALL enemies. Apply 2 Burn")
 	napalm.effect_type = "v5_aoe"
 	napalm.target_type = "all_enemies"
 	napalm.burn_damage = 2
 	_register_card(napalm)
+	
+	# Incendiary - 2 hits + heavy burn
+	var incendiary := _create_weapon("incendiary", "Incendiary Rounds", 2, 2, "thermal",
+		["Thermal"], {"thermal": 70}, 5.0, 150.0, 2, "Apply 4 Burn")
+	incendiary.burn_damage = 4
+	_register_card(incendiary)
+	
+	# Molotov - cheap ring burn
+	var molotov := _create_weapon("molotov", "Molotov", 1, 2, "thermal",
+		["Thermal"], {"thermal": 50}, 5.0, 150.0, 1, "Ring. Apply 2 Burn each")
+	molotov.effect_type = "v5_ring_damage"
+	molotov.burn_damage = 2
+	molotov.target_type = "ring"
+	molotov.requires_target = true
+	_register_card(molotov)
+	
+	# Inferno - heavy AOE
+	var inferno := _create_weapon("inferno", "Inferno", 3, 4, "thermal",
+		["Thermal"], {"thermal": 90}, 5.0, 150.0, 1, "ALL enemies")
+	inferno.effect_type = "v5_aoe"
+	inferno.target_type = "all_enemies"
+	_register_card(inferno)
 
 
 # =============================================================================
-# ARCANE-PRIMARY WEAPONS (7 Cards)
+# ARCANE WEAPONS (8 Cards) - Hex, execute, lifesteal
 # =============================================================================
 
 func _create_arcane_weapons() -> void:
-	# Hex Bolt - apply hex
-	var hex_bolt := _create_weapon("hex_bolt", "Hex Bolt", 1, 1, "arcane",
-		["Arcane"], {"arcane": 80}, 5.0, 150.0, "Apply 3 Hex")
+	# Hex Bolt - 2 hits + hex
+	var hex_bolt := _create_weapon("hex_bolt", "Hex Bolt", 1, 2, "arcane",
+		["Arcane"], {"arcane": 70}, 5.0, 150.0, 2, "Apply 3 Hex")
 	hex_bolt.hex_damage = 3
 	_register_card(hex_bolt)
 	
-	# Curse Wave - ring + hex (Arcane + Control)
-	var curse_wave := _create_weapon("curse_wave", "Curse Wave", 2, 1, "arcane",
-		["Arcane", "Control"], {"arcane": 60}, 5.0, 150.0, "Ring, apply 2 Hex each")
-	curse_wave.effect_type = "v5_ring_damage"
-	curse_wave.hex_damage = 2
-	curse_wave.target_type = "ring"
-	curse_wave.requires_target = true
-	_register_card(curse_wave)
+	# Curse - 3 hits + hex
+	var curse := _create_weapon("curse", "Curse", 2, 2, "arcane",
+		["Arcane"], {"arcane": 80}, 5.0, 150.0, 3, "Apply 4 Hex")
+	curse.hex_damage = 4
+	_register_card(curse)
 	
-	# Soul Drain - heal (Arcane + Volatile)
-	var soul_drain := _create_weapon("soul_drain", "Soul Drain", 2, 2, "arcane",
-		["Arcane", "Volatile"], {"arcane": 100}, 5.0, 150.0, "Heal 3")
-	soul_drain.heal_amount = 3
-	_register_card(soul_drain)
+	# Soul Drain - 2 hits + heal
+	var soul := _create_weapon("soul_drain", "Soul Drain", 2, 3, "arcane",
+		["Arcane"], {"arcane": 90}, 5.0, 150.0, 2, "Heal 3")
+	soul.heal_amount = 3
+	_register_card(soul)
 	
-	# Hex Detonation - consumes hex (Arcane + Shadow)
-	var hex_det := _create_weapon("hex_detonation", "Hex Detonation", 2, 1, "arcane",
-		["Arcane", "Shadow"], {"arcane": 70}, 20.0, 200.0, "Consumes Hex: +1 dmg per stack")
-	hex_det.effect_params["consume_hex"] = true
-	_register_card(hex_det)
+	# Void Strike - execute effect
+	var void_strike := _create_weapon("void_strike", "Void Strike", 2, 4, "arcane",
+		["Arcane"], {"arcane": 100}, 5.0, 150.0, 1, "Apply Execute 4 HP")
+	void_strike.effect_type = "apply_execute"
+	void_strike.effect_params["execute_threshold"] = 4
+	_register_card(void_strike)
 	
-	# Life Siphon - heal
-	var life_siphon := _create_weapon("life_siphon", "Life Siphon", 1, 1, "arcane",
-		["Arcane"], {"arcane": 60}, 5.0, 150.0, "Heal 2")
-	life_siphon.heal_amount = 2
-	_register_card(life_siphon)
+	# Mind Shatter - 4 hits
+	var shatter := _create_weapon("mind_shatter", "Mind Shatter", 2, 2, "arcane",
+		["Arcane"], {"arcane": 60}, 5.0, 150.0, 4)
+	_register_card(shatter)
 	
-	# Dark Ritual - ring + hex + self damage (Arcane + Volatile)
-	var dark_ritual := _create_weapon("dark_ritual", "Dark Ritual", 2, 1, "arcane",
-		["Arcane", "Volatile"], {"arcane": 50}, 5.0, 150.0, "Ring, apply 3 Hex. Take 2 damage")
-	dark_ritual.effect_type = "v5_ring_damage"
-	dark_ritual.hex_damage = 3
-	dark_ritual.self_damage = 2
-	dark_ritual.target_type = "ring"
-	dark_ritual.requires_target = true
-	_register_card(dark_ritual)
-	
-	# Spreading Plague - hex spread on kill (Arcane + Control)
-	var plague := _create_weapon("spreading_plague", "Spreading Plague", 2, 2, "arcane",
-		["Arcane", "Control"], {"arcane": 90}, 5.0, 150.0, "Apply 4 Hex. On kill, spread 2 to ring")
-	plague.hex_damage = 4
-	plague.effect_params["spread_hex_on_kill"] = 2
-	_register_card(plague)
-
-
-# =============================================================================
-# FORTRESS-PRIMARY WEAPONS (6 Cards)
-# =============================================================================
-
-func _create_fortress_weapons() -> void:
-	# Shield Bash - gain armor (Fortress + Control)
-	var shield_bash := _create_weapon("shield_bash", "Shield Bash", 1, 2, "kinetic",
-		["Fortress", "Control"], {"kinetic": 50, "armor_start": 20}, 5.0, 150.0, "Gain 2 armor")
-	shield_bash.armor_amount = 2
-	_register_card(shield_bash)
-	
-	# Iron Volley - gain armor
-	var iron_volley := _create_weapon("iron_volley", "Iron Volley", 2, 2, "kinetic",
-		["Fortress"], {"kinetic": 60, "armor_start": 25}, 5.0, 150.0, "Gain 3 armor")
-	iron_volley.armor_amount = 3
-	_register_card(iron_volley)
-	
-	# Bulwark Shot - bonus armor per melee enemy (Fortress + Control)
-	var bulwark := _create_weapon("bulwark_shot", "Bulwark Shot", 2, 1, "kinetic",
-		["Fortress", "Control"], {"kinetic": 40, "armor_start": 35}, 5.0, 150.0, "+1 armor per Melee enemy")
-	bulwark.effect_params["armor_per_melee"] = 1
-	_register_card(bulwark)
-	
-	# Fortified Barrage - ring + armor
-	var fortified := _create_weapon("fortified_barrage", "Fortified Barrage", 3, 2, "kinetic",
-		["Fortress"], {"kinetic": 50, "armor_start": 40}, 5.0, 150.0, "Ring. Gain 4 armor")
-	fortified.effect_type = "v5_ring_damage"
-	fortified.armor_amount = 4
-	fortified.target_type = "ring"
-	fortified.requires_target = true
-	_register_card(fortified)
-	
-	# Reactive Shell - (Fortress + Shadow)
-	var reactive := _create_weapon("reactive_shell", "Reactive Shell", 2, 2, "kinetic",
-		["Fortress", "Shadow"], {"kinetic": 70, "armor_start": 30}, 15.0, 175.0)
-	_register_card(reactive)
-	
-	# Siege Cannon - costs armor (Fortress + Volatile)
-	var siege := _create_weapon("siege_cannon", "Siege Cannon", 3, 3, "kinetic",
-		["Fortress", "Volatile"], {"kinetic": 80, "armor_start": 50}, 5.0, 150.0, "Costs 2 armor to play")
-	siege.effect_params["armor_cost"] = 2
-	_register_card(siege)
-
-
-# =============================================================================
-# SHADOW-PRIMARY WEAPONS (6 Cards)
-# =============================================================================
-
-func _create_shadow_weapons() -> void:
-	# Assassin's Strike - (Shadow + Utility)
-	var assassin := _create_weapon("assassins_strike", "Assassin's Strike", 1, 1, "kinetic",
-		["Shadow", "Utility"], {"kinetic": 60, "crit_damage": 15}, 20.0, 200.0)
-	_register_card(assassin)
-	
-	# Shadow Bolt
-	var shadow_bolt := _create_weapon("shadow_bolt", "Shadow Bolt", 1, 2, "kinetic",
-		["Shadow"], {"kinetic": 70, "crit_damage": 10}, 15.0, 175.0)
-	_register_card(shadow_bolt)
-	
-	# Precision Shot - Mid/Far only (Shadow + Kinetic)
-	var precision := _create_weapon("precision_shot", "Precision Shot", 2, 2, "kinetic",
-		["Shadow", "Kinetic"], {"kinetic": 80, "crit_damage": 20}, 25.0, 200.0, "Mid/Far only")
-	precision.target_rings = [2, 3]
-	_register_card(precision)
-	
-	# Backstab - Far only (Shadow + Control)
-	var backstab := _create_weapon("backstab", "Backstab", 2, 2, "kinetic",
-		["Shadow", "Control"], {"kinetic": 90, "crit_damage": 25}, 30.0, 175.0, "Far only, +2 vs Far")
-	backstab.target_rings = [3]
-	backstab.effect_params["far_bonus_flat"] = 2
-	_register_card(backstab)
-	
-	# Killing Blow - high crit
-	var killing := _create_weapon("killing_blow", "Killing Blow", 3, 2, "kinetic",
-		["Shadow"], {"kinetic": 100, "crit_damage": 35}, 35.0, 250.0)
-	_register_card(killing)
-	
-	# Shadow Barrage - hits 3x, each crits separately (Shadow + Utility)
-	var barrage := _create_weapon("shadow_barrage", "Shadow Barrage", 2, 1, "kinetic",
-		["Shadow", "Utility"], {"kinetic": 50, "crit_damage": 15}, 20.0, 175.0, "", "", 3)
+	# Arcane Barrage - 5 hits
+	var barrage := _create_weapon("arcane_barrage", "Arcane Barrage", 3, 2, "arcane",
+		["Arcane"], {"arcane": 50}, 5.0, 150.0, 5)
 	_register_card(barrage)
+	
+	# Death Mark - apply execute to multiple
+	var death_mark := _create_weapon("death_mark", "Death Mark", 2, 2, "arcane",
+		["Arcane"], {"arcane": 70}, 5.0, 150.0, 3, "Apply Execute 3 HP each")
+	death_mark.effect_type = "apply_execute"
+	death_mark.effect_params["execute_threshold"] = 3
+	_register_card(death_mark)
+	
+	# Life Siphon - cheap heal
+	var siphon := _create_weapon("life_siphon", "Life Siphon", 1, 2, "arcane",
+		["Arcane"], {"arcane": 60}, 5.0, 150.0, 2, "Heal 2")
+	siphon.heal_amount = 2
+	_register_card(siphon)
 
 
 # =============================================================================
-# UTILITY-PRIMARY WEAPONS (6 Cards)
-# =============================================================================
-
-func _create_utility_weapons() -> void:
-	# Quick Shot - 0 cost, draw 1 (Utility + Kinetic)
-	var quick := _create_weapon("quick_shot", "Quick Shot", 0, 1, "kinetic",
-		["Utility", "Kinetic"], {"kinetic": 50, "cards_played": 1}, 5.0, 150.0, "Draw 1")
-	quick.cards_to_draw = 1
-	_register_card(quick)
-	
-	# Flurry
-	var flurry := _create_weapon("flurry", "Flurry", 1, 1, "kinetic",
-		["Utility"], {"kinetic": 40, "cards_played": 2}, 5.0, 150.0)
-	_register_card(flurry)
-	
-	# Chain Strike - next card -1 cost (Utility + Shadow)
-	var chain_strike := _create_weapon("chain_strike", "Chain Strike", 1, 2, "kinetic",
-		["Utility", "Shadow"], {"kinetic": 60, "cards_played": 1}, 12.0, 175.0, "Next card -1 cost")
-	chain_strike.effect_params["next_card_discount"] = 1
-	_register_card(chain_strike)
-	
-	# Momentum - no base, high scaling
-	var momentum := _create_weapon("momentum", "Momentum", 1, 0, "kinetic",
-		["Utility"], {"kinetic": 30, "cards_played": 3}, 5.0, 150.0)
-	_register_card(momentum)
-	
-	# Rapid Fire - hits 4x (Utility + Kinetic)
-	var rapid := _create_weapon("rapid_fire", "Rapid Fire", 2, 0, "kinetic",
-		["Utility", "Kinetic"], {"kinetic": 40, "cards_played": 1}, 5.0, 150.0, "", "", 4)
-	_register_card(rapid)
-	
-	# Overdrive - draw 2, discard 1, self damage (Utility + Volatile)
-	var overdrive := _create_weapon("overdrive", "Overdrive", 2, 2, "kinetic",
-		["Utility", "Volatile"], {"kinetic": 70, "cards_played": 2}, 5.0, 150.0, "Draw 2, discard 1. Take 1 damage")
-	overdrive.cards_to_draw = 2
-	overdrive.self_damage = 1
-	overdrive.effect_params["discard_count"] = 1
-	_register_card(overdrive)
-
-
-# =============================================================================
-# CONTROL-PRIMARY WEAPONS (6 Cards)
-# =============================================================================
-
-func _create_control_weapons() -> void:
-	# Repulsor - push (Control + Kinetic)
-	var repulsor := _create_weapon("repulsor", "Repulsor", 1, 2, "kinetic",
-		["Control", "Kinetic"], {"kinetic": 60, "barriers": 2}, 5.0, 150.0, "Push target 1 ring")
-	repulsor.push_amount = 1
-	_register_card(repulsor)
-	
-	# Barrier Shot - place barrier
-	var barrier_shot := _create_weapon("barrier_shot", "Barrier Shot", 2, 2, "kinetic",
-		["Control"], {"kinetic": 50, "barriers": 3}, 5.0, 150.0, "Place barrier (2dmg, 2 uses)")
-	barrier_shot.effect_params["place_barrier"] = true
-	barrier_shot.effect_params["barrier_damage"] = 2
-	barrier_shot.effect_params["barrier_uses"] = 2
-	_register_card(barrier_shot)
-	
-	# Lockdown - ring, enemies can't advance (Control + Fortress)
-	var lockdown := _create_weapon("lockdown", "Lockdown", 2, 1, "kinetic",
-		["Control", "Fortress"], {"kinetic": 40, "barriers": 2}, 5.0, 150.0, "Ring, enemies can't advance")
-	lockdown.effect_type = "v5_ring_damage"
-	lockdown.effect_params["prevent_advance"] = true
-	lockdown.target_type = "ring"
-	lockdown.requires_target = true
-	_register_card(lockdown)
-	
-	# Far Strike - bonus vs Far (Control + Shadow)
-	var far_strike := _create_weapon("far_strike", "Far Strike", 1, 2, "kinetic",
-		["Control", "Shadow"], {"kinetic": 80}, 15.0, 175.0, "+3 vs Far, +2 if no Melee enemies")
-	far_strike.effect_params["far_bonus_flat"] = 3
-	far_strike.effect_params["no_melee_bonus"] = 2
-	_register_card(far_strike)
-	
-	# Killzone - hits all that moved this turn
-	var killzone := _create_weapon("killzone", "Killzone", 3, 2, "kinetic",
-		["Control"], {"kinetic": 70, "barriers": 4}, 5.0, 150.0, "Hits all that moved this turn")
-	killzone.effect_params["hit_moved_only"] = true
-	_register_card(killzone)
-	
-	# Perimeter (Control + Fortress)
-	var perimeter := _create_weapon("perimeter", "Perimeter", 2, 1, "kinetic",
-		["Control", "Fortress"], {"kinetic": 40, "barriers": 5}, 5.0, 150.0)
-	_register_card(perimeter)
-
-
-# =============================================================================
-# VOLATILE-PRIMARY WEAPONS (6 Cards)
+# VOLATILE WEAPONS (5 Cards) - High risk/reward, self-damage
 # =============================================================================
 
 func _create_volatile_weapons() -> void:
-	# Overcharge - self damage (Volatile + Thermal)
+	# Blood Cannon - 4 hits + self damage
+	var blood := _create_weapon("blood_cannon", "Blood Cannon", 2, 3, "thermal",
+		["Volatile"], {"thermal": 80, "missing_hp": 20}, 5.0, 150.0, 4, "Take 3 damage")
+	blood.self_damage = 3
+	blood.can_repeat_target = true
+	_register_card(blood)
+	
+	# Pain Spike - 3 hits with high damage
+	var pain := _create_weapon("pain_spike", "Pain Spike", 2, 4, "thermal",
+		["Volatile"], {"thermal": 90, "missing_hp": 25}, 5.0, 150.0, 3)
+	_register_card(pain)
+	
+	# Chaos Bolt - 6 random hits
+	var chaos := _create_weapon("chaos_bolt", "Chaos Bolt", 2, 2, "thermal",
+		["Volatile"], {"thermal": 60, "missing_hp": 15}, 10.0, 175.0, 6, "Random targets")
+	_register_card(chaos)
+	
+	# Berserker Strike - scales with missing HP
+	var berserker := _create_weapon("berserker", "Berserker Strike", 2, 3, "thermal",
+		["Volatile"], {"thermal": 50, "missing_hp": 50}, 15.0, 175.0, 3, "+1 dmg per 5 missing HP")
+	_register_card(berserker)
+	
+	# Overcharge - 5 hits, costs HP
 	var overcharge := _create_weapon("overcharge", "Overcharge", 1, 2, "thermal",
-		["Volatile", "Thermal"], {"thermal": 80, "missing_hp": 15}, 5.0, 150.0, "Take 2 damage")
-	overcharge.self_damage = 2
+		["Volatile"], {"thermal": 70, "missing_hp": 20}, 5.0, 150.0, 5, "Take 4 damage")
+	overcharge.self_damage = 4
+	overcharge.can_repeat_target = true
 	_register_card(overcharge)
-	
-	# Reckless Blast - splash + self damage (Volatile + Thermal)
-	var reckless := _create_weapon("reckless_blast", "Reckless Blast", 2, 3, "thermal",
-		["Volatile", "Thermal"], {"thermal": 100, "missing_hp": 20}, 5.0, 150.0, "+3 splash. Take 3 damage")
-	reckless.splash_damage = 3
-	reckless.self_damage = 3
-	reckless.effect_type = "splash_damage"
-	_register_card(reckless)
-	
-	# Blood Rocket - ring, self damage, heal on kill (Volatile + Arcane)
-	var blood_rocket := _create_weapon("blood_rocket", "Blood Rocket", 2, 2, "thermal",
-		["Volatile", "Arcane"], {"thermal": 70, "missing_hp": 25}, 5.0, 150.0, "Ring. Take 2 damage. Heal 1 per kill")
-	blood_rocket.effect_type = "v5_ring_damage"
-	blood_rocket.self_damage = 2
-	blood_rocket.effect_params["heal_per_kill"] = 1
-	blood_rocket.target_type = "ring"
-	blood_rocket.requires_target = true
-	_register_card(blood_rocket)
-	
-	# Unstable Core - high self damage, no damage if kill
-	var unstable := _create_weapon("unstable_core", "Unstable Core", 2, 4, "thermal",
-		["Volatile"], {"thermal": 120, "missing_hp": 15}, 5.0, 150.0, "Take 4 damage. Kill = no self-damage")
-	unstable.self_damage = 4
-	unstable.effect_params["no_self_damage_on_kill"] = true
-	_register_card(unstable)
-	
-	# Kamikaze Swarm - ALL enemies, heavy self damage (Volatile + Thermal)
-	var kamikaze := _create_weapon("kamikaze_swarm", "Kamikaze Swarm", 3, 2, "thermal",
-		["Volatile", "Thermal"], {"thermal": 80, "missing_hp": 30}, 5.0, 150.0, "ALL enemies. Take 5 damage")
-	kamikaze.effect_type = "v5_aoe"
-	kamikaze.target_type = "all_enemies"
-	kamikaze.self_damage = 5
-	_register_card(kamikaze)
-	
-	# Desperation - (Volatile + Shadow)
-	var desperation := _create_weapon("desperation", "Desperation", 1, 1, "thermal",
-		["Volatile", "Shadow"], {"thermal": 60, "missing_hp": 40}, 25.0, 200.0)
-	_register_card(desperation)
 
 
 # =============================================================================
-# INSTANT CARDS (24 Cards)
+# UTILITY WEAPONS (5 Cards) - Draw, energy, support
+# =============================================================================
+
+func _create_utility_weapons() -> void:
+	# Quick Shot - 2 hits, draw 1
+	var quick := _create_weapon("quick_shot", "Quick Shot", 0, 1, "kinetic",
+		["Utility"], {"kinetic": 40, "cards_played": 1}, 5.0, 150.0, 2, "Draw 1")
+	quick.cards_to_draw = 1
+	_register_card(quick)
+	
+	# Scanner - 2 hits, next card +2 damage
+	var scanner := _create_weapon("scanner", "Scanner", 1, 2, "kinetic",
+		["Utility"], {"kinetic": 50}, 5.0, 150.0, 2, "Next weapon +2 damage")
+	scanner.effect_params["next_weapon_bonus"] = 2
+	_register_card(scanner)
+	
+	# Rapid Fire - 4 hits, cheap
+	var rapid := _create_weapon("rapid_fire", "Rapid Fire", 1, 1, "kinetic",
+		["Utility"], {"kinetic": 40}, 5.0, 150.0, 4)
+	rapid.can_repeat_target = true
+	_register_card(rapid)
+	
+	# Precision Strike - 1 hit, guaranteed crit
+	var precision := _create_weapon("precision", "Precision Strike", 2, 4, "kinetic",
+		["Utility"], {"kinetic": 80}, 100.0, 200.0, 1, "Always crits")
+	_register_card(precision)
+	
+	# Energy Siphon - 2 hits, +1 energy
+	var siphon := _create_weapon("energy_siphon", "Energy Siphon", 1, 2, "kinetic",
+		["Utility"], {"kinetic": 50}, 5.0, 150.0, 2, "+1 Energy")
+	siphon.effect_params["grant_energy"] = 1
+	_register_card(siphon)
+
+
+# =============================================================================
+# INSTANT CARDS (15 Cards) - Support, buffs, status
 # =============================================================================
 
 func _create_instant(id: String, card_name: String, cost: int, rarity: int,
@@ -577,171 +413,115 @@ func _create_instant(id: String, card_name: String, cost: int, rarity: int,
 	card.play_mode = "instant"
 	card.effect_type = effect_type
 	card.damage_type = "none"
-	card.tier = 1  # Instants don't have tiers but need a default
+	card.tier = 1
 	card.tags = ["skill"]
 	return card
 
 
-func _create_universal_instants() -> void:
-	# Bandage - heal 5
-	var bandage := _create_instant("bandage", "Bandage", 1, 1, [], "heal", "Heal 5")
-	bandage.heal_amount = 5
-	_register_card(bandage)
+func _create_instant_cards() -> void:
+	# === DAMAGE SUPPORT (5) ===
 	
-	# Med Kit - heal 10
-	var medkit := _create_instant("med_kit", "Med Kit", 2, 1, [], "heal", "Heal 10")
-	medkit.heal_amount = 10
-	_register_card(medkit)
+	# Amplify - +3 damage to all weapons this turn
+	var amplify := _create_instant("amplify", "Amplify", 1, 1, [], "lane_buff", "+3 damage to all weapons this turn")
+	amplify.lane_buff_type = "all_weapons_bonus"
+	amplify.lane_buff_value = 3
+	_register_card(amplify)
 	
-	# Stim Pack - +2 energy
-	var stim := _create_instant("stim_pack", "Stim Pack", 1, 1, [], "buff", "+2 Energy this turn")
-	stim.buff_type = "energy"
-	stim.buff_value = 2
-	_register_card(stim)
+	# Focus Fire - next weapon +3 hits
+	var focus := _create_instant("focus_fire", "Focus Fire", 1, 2, [], "buff", "Next weapon +3 hits")
+	focus.buff_type = "extra_hits"
+	focus.buff_value = 3
+	_register_card(focus)
 	
-	# Tactical Draw - draw 2
-	var tactical := _create_instant("tactical_draw", "Tactical Draw", 1, 1, [], "draw_cards", "Draw 2")
-	tactical.cards_to_draw = 2
-	_register_card(tactical)
-
-
-func _create_category_instants() -> void:
-	# KINETIC
-	var focus_fire := _create_instant("focus_fire", "Focus Fire", 1, 1,
-		["Kinetic"], "lane_buff", "Next weapon +3 damage")
-	focus_fire.lane_buff_type = "next_weapon_effect"
-	focus_fire.lane_buff_value = 3
-	_register_card(focus_fire)
+	# Execute Order - apply Execute 5 to 3 enemies
+	var execute := _create_instant("execute_order", "Execute Order", 2, 2, ["Arcane"], "apply_execute", "Apply Execute 5 HP to 3 enemies")
+	execute.effect_params["execute_threshold"] = 5
+	execute.target_count = 3
+	execute.target_type = "random_enemy"
+	_register_card(execute)
 	
-	var reload := _create_instant("reload", "Reload", 1, 2,
-		["Kinetic"], "draw_cards", "If hand < 3 cards, draw to 3")
+	# Ripple Charge - next kill triggers ripple
+	var ripple := _create_instant("ripple_charge", "Ripple Charge", 1, 2, [], "buff", "Next kill: 3 damage to group")
+	ripple.buff_type = "ripple_on_kill"
+	ripple.buff_value = 3
+	_register_card(ripple)
+	
+	# Shred Armor - strip 3 armor from all enemies
+	var shred := _create_instant("shred_armor", "Shred Armor", 1, 1, ["Kinetic"], "buff", "All enemies -3 armor")
+	shred.buff_type = "shred_armor"
+	shred.buff_value = 3
+	_register_card(shred)
+	
+	# === DEFENSE (4) ===
+	
+	# Barrier - place barrier on ring
+	var barrier := _create_instant("barrier", "Barrier", 2, 1, [], "ring_barrier", "Place barrier (3 dmg, 2 uses)")
+	barrier.base_damage = 3
+	barrier.effect_params["barrier_uses"] = 2
+	barrier.target_type = "ring"
+	barrier.requires_target = true
+	barrier.target_rings = [0, 1, 2, 3]
+	_register_card(barrier)
+	
+	# Armor Up - gain 5 armor
+	var armor := _create_instant("armor_up", "Armor Up", 1, 1, [], "gain_armor", "Gain 5 armor")
+	armor.armor_amount = 5
+	_register_card(armor)
+	
+	# Heal - restore 8 HP
+	var heal := _create_instant("heal", "Heal", 1, 1, [], "heal", "Restore 8 HP")
+	heal.heal_amount = 8
+	_register_card(heal)
+	
+	# Shield Wall - +3 armor, draw 1
+	var wall := _create_instant("shield_wall", "Shield Wall", 2, 2, [], "gain_armor", "Gain 3 armor. Draw 1")
+	wall.armor_amount = 3
+	wall.cards_to_draw = 1
+	_register_card(wall)
+	
+	# === ECONOMY/TEMPO (3) ===
+	
+	# Reload - draw 3 cards
+	var reload := _create_instant("reload", "Reload", 1, 1, [], "draw_cards", "Draw 3")
 	reload.cards_to_draw = 3
-	reload.effect_params["conditional_draw"] = true
 	_register_card(reload)
 	
-	# THERMAL
-	var ignite := _create_instant("ignite", "Ignite", 1, 1,
-		["Thermal"], "apply_burn", "Apply 4 Burn to target")
-	ignite.burn_damage = 4
-	ignite.target_type = "random_enemy"
-	_register_card(ignite)
+	# Surge - +2 energy this turn
+	var surge := _create_instant("surge", "Surge", 0, 1, [], "buff", "+2 Energy this turn")
+	surge.buff_type = "energy"
+	surge.buff_value = 2
+	_register_card(surge)
 	
-	var heat_wave := _create_instant("heat_wave", "Heat Wave", 2, 2,
-		["Thermal"], "apply_burn_multi", "Apply 2 Burn to ALL enemies")
-	heat_wave.burn_damage = 2
-	heat_wave.target_type = "all_enemies"
-	_register_card(heat_wave)
+	# Scavenge - +8 scrap
+	var scavenge := _create_instant("scavenge", "Scavenge", 1, 2, [], "buff", "Gain 8 scrap")
+	scavenge.buff_type = "scrap"
+	scavenge.buff_value = 8
+	_register_card(scavenge)
 	
-	# ARCANE
-	var curse := _create_instant("curse", "Curse", 1, 1,
-		["Arcane"], "apply_hex", "Apply 4 Hex to target")
-	curse.hex_damage = 4
-	curse.target_type = "random_enemy"
-	_register_card(curse)
+	# === STATUS (3) ===
 	
-	var mass_hex := _create_instant("mass_hex", "Mass Hex", 2, 2,
-		["Arcane"], "apply_hex_multi", "Apply 2 Hex to ALL enemies")
-	mass_hex.hex_damage = 2
+	# Mass Hex - apply 3 hex to all enemies
+	var mass_hex := _create_instant("mass_hex", "Mass Hex", 2, 2, ["Arcane"], "apply_hex_multi", "Apply 3 Hex to ALL enemies")
+	mass_hex.hex_damage = 3
 	mass_hex.target_type = "all_enemies"
 	_register_card(mass_hex)
 	
-	# FORTRESS
-	var reinforce := _create_instant("reinforce", "Reinforce", 1, 1,
-		["Fortress"], "gain_armor", "Gain 5 armor")
-	reinforce.armor_amount = 5
-	_register_card(reinforce)
+	# Ignite - apply 4 burn to ring
+	var ignite := _create_instant("ignite", "Ignite", 1, 1, ["Thermal"], "apply_burn", "Apply 4 Burn to ring")
+	ignite.burn_damage = 4
+	ignite.target_type = "ring"
+	ignite.requires_target = true
+	ignite.target_rings = [0, 1, 2, 3]
+	_register_card(ignite)
 	
-	var fortify := _create_instant("fortify", "Fortify", 2, 2,
-		["Fortress"], "gain_armor", "Gain armor = your ArmorStart stat")
-	fortify.effect_params["armor_equals_stat"] = "armor_start"
-	_register_card(fortify)
-	
-	# SHADOW
-	var mark_target := _create_instant("mark_target", "Mark Target", 1, 2,
-		["Shadow"], "buff", "Next weapon guaranteed crit")
-	mark_target.buff_type = "guaranteed_crit"
-	_register_card(mark_target)
-	
-	var setup_kill := _create_instant("setup_kill", "Setup Kill", 2, 2,
-		["Shadow"], "buff", "Next weapon +50% crit damage")
-	setup_kill.buff_type = "crit_damage_bonus"
-	setup_kill.buff_value = 50
-	_register_card(setup_kill)
-	
-	# UTILITY
-	var quick_hands := _create_instant("quick_hands", "Quick Hands", 0, 1,
-		["Utility"], "draw_cards", "Draw 1")
-	quick_hands.cards_to_draw = 1
-	_register_card(quick_hands)
-	
-	var tempo := _create_instant("tempo", "Tempo", 1, 2,
-		["Utility"], "draw_cards", "Draw 2. Next card costs 1 less")
-	tempo.cards_to_draw = 2
-	tempo.effect_params["next_card_discount"] = 1
-	_register_card(tempo)
-	
-	# CONTROL
-	var deploy_barrier := _create_instant("deploy_barrier", "Deploy Barrier", 2, 1,
-		["Control"], "ring_barrier", "Place barrier (2 dmg, 3 uses) on any ring")
-	deploy_barrier.base_damage = 2
-	deploy_barrier.effect_params["barrier_uses"] = 3
-	deploy_barrier.target_type = "ring"
-	deploy_barrier.requires_target = true
-	deploy_barrier.target_rings = [0, 1, 2, 3]  # Can target any ring
-	_register_card(deploy_barrier)
-	
-	var hold_line := _create_instant("hold_the_line", "Hold the Line", 2, 2,
-		["Control"], "buff", "Enemies can't advance this turn")
-	hold_line.buff_type = "prevent_advance"
-	_register_card(hold_line)
-	
-	# VOLATILE
-	var adrenaline := _create_instant("adrenaline", "Adrenaline", 1, 1,
-		["Volatile"], "buff", "Take 3 damage. +3 Energy this turn")
-	adrenaline.self_damage = 3
-	adrenaline.buff_type = "energy"
-	adrenaline.buff_value = 3
-	_register_card(adrenaline)
-	
-	var pain_threshold := _create_instant("pain_threshold", "Pain Threshold", 1, 1,
-		["Volatile"], "draw_cards", "Take 2 damage. Draw 2")
-	pain_threshold.self_damage = 2
-	pain_threshold.cards_to_draw = 2
-	_register_card(pain_threshold)
-
-
-func _create_dual_category_instants() -> void:
-	# Incendiary Rounds (Kinetic + Thermal)
-	var incendiary_rounds := _create_instant("incendiary_rounds", "Incendiary Rounds", 1, 2,
-		["Kinetic", "Thermal"], "buff", "Next weapon applies 2 Burn")
-	incendiary_rounds.buff_type = "weapon_apply_burn"
-	incendiary_rounds.burn_damage = 2
-	_register_card(incendiary_rounds)
-	
-	# Cursed Ammo (Kinetic + Arcane)
-	var cursed_ammo := _create_instant("cursed_ammo", "Cursed Ammo", 1, 2,
-		["Kinetic", "Arcane"], "buff", "Next weapon applies 2 Hex")
-	cursed_ammo.buff_type = "weapon_apply_hex"
-	cursed_ammo.hex_damage = 2
-	_register_card(cursed_ammo)
-	
-	# Burning Barrier (Control + Thermal)
-	var burning_barrier := _create_instant("burning_barrier", "Burning Barrier", 2, 3,
-		["Control", "Thermal"], "ring_barrier", "Place barrier (2 dmg, 2 uses) that applies 3 Burn when hit")
-	burning_barrier.base_damage = 2
-	burning_barrier.burn_damage = 3
-	burning_barrier.effect_params["barrier_uses"] = 2
-	burning_barrier.target_type = "ring"
-	burning_barrier.requires_target = true
-	burning_barrier.target_rings = [0, 1, 2, 3]  # Can target any ring
-	_register_card(burning_barrier)
-	
-	# Desperate Strike (Volatile + Shadow)
-	var desperate_strike := _create_instant("desperate_strike", "Desperate Strike", 1, 3,
-		["Volatile", "Shadow"], "buff", "Next weapon +1 damage per 5 missing HP")
-	desperate_strike.buff_type = "missing_hp_damage"
-	desperate_strike.effect_params["damage_per_missing_hp"] = 5
-	_register_card(desperate_strike)
+	# Weaken - enemies in ring take +2 damage
+	var weaken := _create_instant("weaken", "Weaken", 1, 1, ["Arcane"], "buff", "Enemies in ring take +2 damage")
+	weaken.buff_type = "ring_vulnerability"
+	weaken.buff_value = 2
+	weaken.target_type = "ring"
+	weaken.requires_target = true
+	weaken.target_rings = [0, 1, 2, 3]
+	_register_card(weaken)
 
 
 # =============================================================================
@@ -788,11 +568,7 @@ func get_cards_by_rarity(rarity: int) -> Array:
 
 
 func get_veteran_starter_deck() -> Array:
-	"""Get the V5 starter deck entries for Veteran warden."""
+	"""Get the V6 starter deck - start with pistol."""
 	return [
-		{"card_id": "pistol", "count": 3, "tier": 1},
-		{"card_id": "shotgun", "count": 1, "tier": 1},
-		{"card_id": "hex_bolt", "count": 2, "tier": 1},
-		{"card_id": "shield_bash", "count": 2, "tier": 1},
-		{"card_id": "quick_shot", "count": 2, "tier": 1},
+		{"card_id": "pistol", "count": 1, "tier": 1},
 	]

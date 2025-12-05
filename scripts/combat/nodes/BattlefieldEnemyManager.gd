@@ -2,6 +2,7 @@ extends Control
 class_name BattlefieldEnemyManager
 ## Manages individual enemy visuals on the battlefield.
 ## Owns enemy_visuals dictionary and handles creation, positioning, updating, and death.
+## V2: Horizontal lane layout - enemies positioned within horizontal lane bands.
 
 signal enemy_hover_entered(visual: Panel, enemy)
 signal enemy_hover_exited(visual: Panel)
@@ -10,6 +11,9 @@ signal enemy_death_finished(enemy)
 
 const IndividualEnemyPanelScene = preload("res://scenes/combat/components/IndividualEnemyPanel.tscn")
 const BattlefieldEffectsHelper = preload("res://scripts/combat/BattlefieldEffects.gd")
+
+# Total horizontal slots (matches stack system)
+const TOTAL_SLOTS: int = 12
 
 # Enemy colors - shared constant
 const ENEMY_COLORS: Dictionary = {
@@ -23,7 +27,10 @@ const ENEMY_COLORS: Dictionary = {
 	"ember_saint": Color(1.0, 0.5, 0.0),
 	"cultist": Color(0.5, 0.4, 0.6),
 	"stalker": Color(0.3, 0.3, 0.4),
-	"weakling": Color(0.5, 0.5, 0.5)
+	"weakling": Color(0.5, 0.5, 0.5),
+	"mite": Color(0.45, 0.35, 0.3),
+	"swarmling": Color(0.55, 0.4, 0.35),
+	"drone": Color(0.4, 0.4, 0.45)
 }
 
 # State
@@ -35,16 +42,20 @@ var _enemy_base_positions: Dictionary = {}  # instance_id -> Vector2
 var _enemy_position_tweens: Dictionary = {}  # instance_id -> Tween
 var _enemy_scale_tweens: Dictionary = {}  # instance_id -> Tween
 
-# Angular position tracking for individual enemy placement
-var _enemy_angular_positions: Dictionary = {}  # instance_id -> float
+# Slot tracking for individual enemy placement (horizontal position)
+var _enemy_slots: Dictionary = {}  # instance_id -> int (0-11)
+
+# Legacy angular position tracking (converted to/from slots)
+var _enemy_angular_positions: Dictionary = {}  # instance_id -> float (for compatibility)
 
 # Lane tracking for individual enemies (to ensure consistency with stack system)
 var _enemy_lanes: Dictionary = {}  # instance_id -> int
 
-# Layout info (set by parent)
-var arena_center: Vector2 = Vector2.ZERO
-var arena_max_radius: float = 200.0
-var ring_proportions: Array[float] = [0.18, 0.42, 0.68, 0.95]
+# Layout info (set by parent) - V2 uses lane rectangles
+var arena_center: Vector2 = Vector2.ZERO  # Kept for compatibility
+var arena_max_radius: float = 200.0  # Kept for compatibility
+var lane_rects: Array[Rect2] = []  # Lane rectangles [MELEE, CLOSE, MID, FAR]
+var arena_padding: float = 10.0
 
 # Z-index values per ring (Melee renders above Close, etc.)
 const RING_Z_INDEX: Array[int] = [4, 3, 2, 1]  # Melee, Close, Mid, Far
@@ -59,24 +70,43 @@ func get_enemy_color(enemy_id: String) -> Color:
 	return ENEMY_COLORS.get(enemy_id, Color(0.8, 0.3, 0.3))
 
 
+func set_enemy_slot(instance_id: int, slot: int) -> void:
+	"""Set the horizontal slot for an enemy (0-11, left to right)."""
+	_enemy_slots[instance_id] = clampi(slot, 0, TOTAL_SLOTS - 1)
+
+
+func get_enemy_slot(instance_id: int) -> int:
+	"""Get the horizontal slot for an enemy. Returns center slot (6) if not set."""
+	@warning_ignore("integer_division")
+	return _enemy_slots.get(instance_id, TOTAL_SLOTS / 2)
+
+
 func set_enemy_angular_position(instance_id: int, angle: float) -> void:
-	"""Set the angular position for an enemy. Called before creating the visual."""
+	"""DEPRECATED: V2 uses horizontal slots. Converts angle to slot for compatibility."""
 	_enemy_angular_positions[instance_id] = angle
+	# Convert angle to slot: PI (left) = 0, 2*PI (right) = TOTAL_SLOTS-1
+	var normalized: float = (angle - PI) / PI
+	var slot: int = clampi(roundi(normalized * float(TOTAL_SLOTS - 1)), 0, TOTAL_SLOTS - 1)
+	_enemy_slots[instance_id] = slot
 
 
 func get_enemy_angular_position(instance_id: int) -> float:
-	"""Get the angular position for an enemy. Returns default (top center) if not set."""
-	return _enemy_angular_positions.get(instance_id, PI * 1.5)
+	"""DEPRECATED: V2 uses horizontal slots. Returns fake angle for compatibility."""
+	if _enemy_angular_positions.has(instance_id):
+		return _enemy_angular_positions[instance_id]
+	# Convert slot back to angle
+	var slot: int = get_enemy_slot(instance_id)
+	return PI + (float(slot) / float(TOTAL_SLOTS - 1)) * PI
 
 
 func set_enemy_lane(instance_id: int, lane: int) -> void:
-	"""Set the lane for an enemy. Lane persists for z-ordering and positioning."""
-	_enemy_lanes[instance_id] = lane
+	"""Set the slot for an enemy (alias for backward compatibility)."""
+	set_enemy_slot(instance_id, lane)
 
 
 func get_enemy_lane(instance_id: int) -> int:
-	"""Get the lane for an enemy. Returns center lane (6) if not set."""
-	return _enemy_lanes.get(instance_id, 6)
+	"""Get the slot for an enemy (alias for backward compatibility)."""
+	return get_enemy_slot(instance_id)
 
 
 func create_enemy_visual(enemy) -> Panel:
@@ -262,6 +292,7 @@ func clear_all() -> void:
 	enemy_visuals.clear()
 	_enemy_base_positions.clear()
 	_enemy_angular_positions.clear()
+	_enemy_slots.clear()
 	_enemy_lanes.clear()
 	
 	for instance_id: int in destroyed_visuals.keys():
@@ -288,25 +319,51 @@ func _get_enemy_visual_size() -> Vector2:
 
 
 func _calculate_enemy_position(enemy) -> Vector2:
-	"""Calculate the position for an enemy based on their ring and angular position."""
+	"""Calculate the position for an enemy based on their ring and horizontal slot.
+	V2: Uses horizontal positioning within lane rectangles."""
 	var ring: int = enemy.ring
 	
-	# Get ring radius
-	var outer_radius: float = arena_max_radius * ring_proportions[ring]
-	var inner_radius: float = 0.0
-	if ring > 0:
-		inner_radius = arena_max_radius * ring_proportions[ring - 1]
-	# Position at 35% from inner to outer edge (match stack positioning)
-	var ring_radius: float = inner_radius + (outer_radius - inner_radius) * 0.35
+	# Get lane rectangle for this ring
+	var lane_rect: Rect2 = _get_lane_rect_for_ring(ring)
 	
-	# Use stored angular position, falling back to top center if not set
-	var angle: float = _enemy_angular_positions.get(enemy.instance_id, PI * 1.5)
+	# Get slot position
+	var slot: int = get_enemy_slot(enemy.instance_id)
 	
-	# Calculate position
-	var offset: Vector2 = Vector2(cos(angle), sin(angle)) * ring_radius
+	# Convert slot to X position within the lane
+	var x_pos: float = _slot_to_x_position(slot, lane_rect)
+	
+	# Y position is centered in the lane
 	var visual_size: Vector2 = _get_enemy_visual_size()
+	var y_pos: float = lane_rect.get_center().y - visual_size.y / 2
 	
-	return arena_center + offset - visual_size / 2
+	return Vector2(x_pos - visual_size.x / 2, y_pos)
+
+
+func _get_lane_rect_for_ring(ring: int) -> Rect2:
+	"""Get the lane rectangle for a ring. Falls back to calculation if not set."""
+	if ring >= 0 and ring < lane_rects.size():
+		return lane_rects[ring]
+	
+	# Fallback calculation based on size
+	var padding: float = arena_padding
+	var drawable_width: float = size.x - padding * 2
+	var drawable_height: float = size.y - padding * 2
+	var warden_height: float = 45.0
+	var lanes_height: float = drawable_height - warden_height
+	var lane_height: float = lanes_height / 4.0
+	
+	# Ring 3 (FAR) at top, Ring 0 (MELEE) at bottom
+	var y_pos: float = padding + (3 - ring) * lane_height
+	
+	return Rect2(Vector2(padding, y_pos), Vector2(drawable_width, lane_height))
+
+
+func _slot_to_x_position(slot: int, lane_rect: Rect2) -> float:
+	"""Convert a slot index (0-11) to an X position within the lane."""
+	slot = clampi(slot, 0, TOTAL_SLOTS - 1)
+	var usable_width: float = lane_rect.size.x - 40  # Padding on edges
+	var x_start: float = lane_rect.position.x + 20
+	return x_start + (float(slot) / float(TOTAL_SLOTS - 1)) * usable_width
 
 
 func _animate_to_position(instance_id: int, visual: Panel, target_pos: Vector2) -> void:

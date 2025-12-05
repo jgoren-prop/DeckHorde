@@ -2,6 +2,7 @@ extends Control
 class_name BattlefieldStackSystem
 ## Manages enemy stacks/groups on the battlefield.
 ## Owns stack_visuals, handles grouping, expand/collapse, and mini-panel management.
+## V2: Horizontal lane layout - enemies spread horizontally within lanes.
 
 signal stack_hover_entered(panel: Panel, stack_key: String)
 signal stack_hover_exited(panel: Panel, stack_key: String)
@@ -16,12 +17,12 @@ const BattlefieldEffectsHelper = preload("res://scripts/combat/BattlefieldEffect
 const MINI_PANEL_SIZE: Vector2 = Vector2(55.0, 50.0)
 const MINI_PANEL_VERTICAL_GAP: float = 16.0
 
-# Lane system constants
-const TOTAL_LANES: int = 12  # Fixed number of lane slots across the semicircle
-const COLLISION_BUFFER: float = 12.0  # Pixel buffer between groups
-const MAX_GROUPS_BEFORE_SCALE: int = 6  # Start scaling down after this many groups per ring
-const MIN_SCALE: float = 0.7  # Minimum scale factor for crowded rings
-const SCALE_REDUCTION_PER_GROUP: float = 0.05  # Scale reduction per extra group
+# Lane system constants - horizontal slots across each lane
+const TOTAL_SLOTS: int = 12  # Fixed number of horizontal slots per lane
+const COLLISION_BUFFER: float = 8.0  # Pixel buffer between groups
+const MAX_GROUPS_BEFORE_SCALE: int = 8  # Start scaling down after this many groups per ring
+const MIN_SCALE: float = 0.5  # Minimum scale factor for crowded rings
+const SCALE_REDUCTION_PER_GROUP: float = 0.06  # Scale reduction per extra group
 
 # Z-index values per ring (Melee renders above Close, etc.)
 const RING_Z_INDEX: Array[int] = [4, 3, 2, 1]  # Melee, Close, Mid, Far
@@ -38,7 +39,10 @@ const ENEMY_COLORS: Dictionary = {
 	"ember_saint": Color(1.0, 0.5, 0.0),
 	"cultist": Color(0.5, 0.4, 0.6),
 	"stalker": Color(0.3, 0.3, 0.4),
-	"weakling": Color(0.5, 0.5, 0.5)
+	"weakling": Color(0.5, 0.5, 0.5),
+	"mite": Color(0.45, 0.35, 0.3),
+	"swarmling": Color(0.55, 0.4, 0.35),
+	"drone": Color(0.4, 0.4, 0.45)
 }
 
 # State
@@ -50,11 +54,11 @@ var _stack_base_positions: Dictionary = {}  # stack_key -> Vector2
 var _stack_position_tweens: Dictionary = {}  # stack_key -> Tween
 var _stack_scale_tweens: Dictionary = {}  # stack_key -> Tween
 var _group_positions: Dictionary = {}  # group_id -> Vector2
-var _group_angular_positions: Dictionary = {}  # group_id -> float (DEPRECATED - kept for compatibility)
+var _group_slots: Dictionary = {}  # group_id -> slot_index (horizontal position)
 
 # Lane system state
-var _occupied_lanes: Dictionary = {}  # ring -> {lane_index: group_id}
-var _group_lanes: Dictionary = {}  # group_id -> lane_index (persists across rings)
+var _occupied_slots: Dictionary = {}  # ring -> {slot_index: group_id}
+var _group_lanes: Dictionary = {}  # group_id -> slot_index (persists across rings)
 
 # Stack hold system
 var _stack_hold_counts: Dictionary = {}  # stack_key -> int
@@ -65,10 +69,11 @@ const STACK_COLLAPSE_DELAY: float = 1.0
 var _in_weapons_phase: bool = false
 var _weapons_phase_stacks: Array[String] = []
 
-# Layout info (set by parent)
-var arena_center: Vector2 = Vector2.ZERO
-var arena_max_radius: float = 200.0
-var ring_proportions: Array[float] = [0.18, 0.42, 0.68, 0.95]
+# Layout info (set by parent) - V2 uses lane rectangles
+var arena_center: Vector2 = Vector2.ZERO  # Kept for compatibility
+var arena_max_radius: float = 200.0  # Kept for compatibility
+var lane_rects: Array[Rect2] = []  # Lane rectangles [MELEE, CLOSE, MID, FAR]
+var arena_padding: float = 10.0
 
 # Group ID counter
 var _next_group_id: int = 0
@@ -451,8 +456,8 @@ func clear_all() -> void:
 	enemy_groups.clear()
 	_stack_base_positions.clear()
 	_group_positions.clear()
-	_group_angular_positions.clear()
-	_occupied_lanes.clear()
+	_group_slots.clear()
+	_occupied_slots.clear()
 	_group_lanes.clear()
 
 
@@ -470,147 +475,171 @@ func _generate_stack_key(ring: int, enemy_id: String) -> String:
 
 
 func _calculate_stack_position(ring: int, stack_key: String) -> Vector2:
-	"""Calculate position for a stack based on ring and lane."""
-	var outer_radius: float = arena_max_radius * ring_proportions[ring]
-	var inner_radius: float = 0.0
-	if ring > 0:
-		inner_radius = arena_max_radius * ring_proportions[ring - 1]
-	# Position at 35% from inner to outer edge (clearly inside the ring, not at center)
-	var ring_radius: float = inner_radius + (outer_radius - inner_radius) * 0.35
+	"""Calculate position for a stack based on ring and horizontal slot.
+	V2: Uses horizontal positioning within lane rectangles."""
+	# Get lane rectangle for this ring
+	var lane_rect: Rect2 = _get_lane_rect_for_ring(ring)
 	
-	# Extract group_id from stack_key and get lane-based angle
+	# Extract group_id from stack_key and get slot position
 	var group_id: String = _extract_group_id_from_stack_key(stack_key)
 	@warning_ignore("integer_division")
-	var lane: int = _group_lanes.get(group_id, TOTAL_LANES / 2)  # Default to center lane
-	var angle: float = _lane_to_angle(lane)
+	var slot: int = _group_lanes.get(group_id, TOTAL_SLOTS / 2)  # Default to center slot
 	
-	var offset: Vector2 = Vector2(cos(angle), sin(angle)) * ring_radius
+	# Convert slot to X position within the lane
+	var x_pos: float = _slot_to_x_position(slot, lane_rect)
+	
+	# Y position is centered in the lane, offset by visual size
 	var visual_size: Vector2 = _get_stack_visual_size()
+	var y_pos: float = lane_rect.get_center().y - visual_size.y / 2
 	
-	return arena_center + offset - visual_size / 2
+	return Vector2(x_pos - visual_size.x / 2, y_pos)
 
 
-func _lane_to_angle(lane: int) -> float:
-	"""Convert a lane index (0-11) to an angle on the semicircle.
-	Lane 0 = PI (far left), Lane 11 = 2*PI (far right), center lanes near top."""
-	# Clamp lane to valid range
-	lane = clampi(lane, 0, TOTAL_LANES - 1)
-	# Map lane index to angle: PI (left) to 2*PI (right)
-	return PI + (float(lane) / float(TOTAL_LANES - 1)) * PI
+func _get_lane_rect_for_ring(ring: int) -> Rect2:
+	"""Get the lane rectangle for a ring. Falls back to calculation if not set."""
+	if ring >= 0 and ring < lane_rects.size():
+		return lane_rects[ring]
+	
+	# Fallback calculation based on size
+	var padding: float = arena_padding
+	var drawable_width: float = size.x - padding * 2
+	var drawable_height: float = size.y - padding * 2
+	var warden_height: float = 45.0
+	var lanes_height: float = drawable_height - warden_height
+	var lane_height: float = lanes_height / 4.0
+	
+	# Ring 3 (FAR) at top, Ring 0 (MELEE) at bottom
+	var y_pos: float = padding + (3 - ring) * lane_height
+	
+	return Rect2(Vector2(padding, y_pos), Vector2(drawable_width, lane_height))
 
 
-func _angle_to_lane(angle: float) -> int:
-	"""Convert an angle to the nearest lane index."""
-	# Normalize angle to PI to 2*PI range
-	while angle < PI:
-		angle += TAU
-	while angle > TAU:
-		angle -= TAU
-	# Map angle to lane: PI -> 0, 2*PI -> TOTAL_LANES-1
-	var normalized: float = (angle - PI) / PI
-	return clampi(roundi(normalized * float(TOTAL_LANES - 1)), 0, TOTAL_LANES - 1)
+func _slot_to_x_position(slot: int, lane_rect: Rect2) -> float:
+	"""Convert a slot index (0-11) to an X position within the lane.
+	Slot 0 = left edge, Slot 11 = right edge."""
+	slot = clampi(slot, 0, TOTAL_SLOTS - 1)
+	var usable_width: float = lane_rect.size.x - 40  # Padding on edges
+	var x_start: float = lane_rect.position.x + 20
+	return x_start + (float(slot) / float(TOTAL_SLOTS - 1)) * usable_width
 
 
-# ============== LANE ASSIGNMENT ==============
+func _x_position_to_slot(x_pos: float, lane_rect: Rect2) -> int:
+	"""Convert an X position to the nearest slot index."""
+	var usable_width: float = lane_rect.size.x - 40
+	var x_start: float = lane_rect.position.x + 20
+	var normalized: float = (x_pos - x_start) / usable_width
+	return clampi(roundi(normalized * float(TOTAL_SLOTS - 1)), 0, TOTAL_SLOTS - 1)
+
+
+# ============== SLOT ASSIGNMENT ==============
 
 func assign_random_lane(ring: int, group_id: String) -> int:
-	"""Assign a random available lane to a group. Returns the assigned lane index."""
-	var available: Array[int] = get_available_lanes(ring)
+	"""Assign a random available slot to a group. Returns the assigned slot index."""
+	var available: Array[int] = get_available_slots(ring)
 	
-	var lane: int
+	var slot: int
 	if available.is_empty():
-		# All lanes occupied - find the least crowded lane or reuse
-		lane = _find_least_crowded_lane(ring)
+		# All slots occupied - find the least crowded slot or reuse
+		slot = _find_least_crowded_slot(ring)
 	else:
-		# Pick a random available lane
-		lane = available[randi() % available.size()]
+		# Pick a random available slot
+		slot = available[randi() % available.size()]
 	
-	set_group_lane(group_id, lane, ring)
-	return lane
+	set_group_slot(group_id, slot, ring)
+	return slot
 
 
-func get_available_lanes(ring: int) -> Array[int]:
-	"""Get list of unoccupied lanes for a ring."""
+func get_available_slots(ring: int) -> Array[int]:
+	"""Get list of unoccupied slots for a ring."""
 	var available: Array[int] = []
-	var occupied: Dictionary = _occupied_lanes.get(ring, {})
+	var occupied: Dictionary = _occupied_slots.get(ring, {})
 	
-	for lane: int in range(TOTAL_LANES):
-		if not occupied.has(lane):
-			available.append(lane)
+	for slot: int in range(TOTAL_SLOTS):
+		if not occupied.has(slot):
+			available.append(slot)
 	
 	return available
 
 
+func get_available_lanes(ring: int) -> Array[int]:
+	"""Alias for get_available_slots for backward compatibility."""
+	return get_available_slots(ring)
+
+
+func set_group_slot(group_id: String, slot: int, ring: int) -> void:
+	"""Set a group's slot and mark it as occupied in the specified ring."""
+	# Store slot for group (persists across ring changes)
+	_group_lanes[group_id] = slot
+	_group_slots[group_id] = slot
+	
+	# Initialize ring's occupied slots if needed
+	if not _occupied_slots.has(ring):
+		_occupied_slots[ring] = {}
+	
+	# Mark slot as occupied by this group
+	_occupied_slots[ring][slot] = group_id
+
+
 func set_group_lane(group_id: String, lane: int, ring: int) -> void:
-	"""Set a group's lane and mark it as occupied in the specified ring."""
-	# Store lane for group (persists across ring changes)
-	_group_lanes[group_id] = lane
-	
-	# Initialize ring's occupied lanes if needed
-	if not _occupied_lanes.has(ring):
-		_occupied_lanes[ring] = {}
-	
-	# Mark lane as occupied by this group
-	_occupied_lanes[ring][lane] = group_id
-	
-	# Also store as angular position for legacy compatibility
-	_group_angular_positions[group_id] = _lane_to_angle(lane)
+	"""Alias for set_group_slot for backward compatibility."""
+	set_group_slot(group_id, lane, ring)
 
 
 func get_group_lane(group_id: String) -> int:
-	"""Get the lane assigned to a group. Returns center lane if not assigned."""
+	"""Get the slot assigned to a group. Returns center slot if not assigned."""
 	@warning_ignore("integer_division")
-	return _group_lanes.get(group_id, TOTAL_LANES / 2)
+	return _group_lanes.get(group_id, TOTAL_SLOTS / 2)
 
 
 func release_lane(group_id: String, ring: int) -> void:
-	"""Release a lane when a group is removed or moves to another ring."""
-	if not _occupied_lanes.has(ring):
+	"""Release a slot when a group is removed or moves to another ring."""
+	if not _occupied_slots.has(ring):
 		return
 	
-	var lane: int = _group_lanes.get(group_id, -1)
-	if lane >= 0 and _occupied_lanes[ring].has(lane):
-		# Only release if this group owns the lane
-		if _occupied_lanes[ring][lane] == group_id:
-			_occupied_lanes[ring].erase(lane)
+	var slot: int = _group_lanes.get(group_id, -1)
+	if slot >= 0 and _occupied_slots[ring].has(slot):
+		# Only release if this group owns the slot
+		if _occupied_slots[ring][slot] == group_id:
+			_occupied_slots[ring].erase(slot)
 
 
-func _find_least_crowded_lane(_ring: int) -> int:
-	"""Find a lane to use when all lanes are occupied. Returns center-ish lane."""
-	# When overcrowded, prefer center lanes as they have more visual space
+func _find_least_crowded_slot(_ring: int) -> int:
+	"""Find a slot to use when all slots are occupied. Returns center-ish slot."""
+	# When overcrowded, prefer center slots as they have more visual space
 	@warning_ignore("integer_division")
-	var center: int = TOTAL_LANES / 2
-	# Try lanes outward from center
-	for offset: int in range(TOTAL_LANES):
-		var lane1: int = center + offset
-		var lane2: int = center - offset
-		if lane1 < TOTAL_LANES:
-			return lane1
-		if lane2 >= 0:
-			return lane2
+	var center: int = TOTAL_SLOTS / 2
+	# Try slots outward from center
+	for offset: int in range(TOTAL_SLOTS):
+		var slot1: int = center + offset
+		var slot2: int = center - offset
+		if slot1 < TOTAL_SLOTS:
+			return slot1
+		if slot2 >= 0:
+			return slot2
 	return center
 
 
 func get_groups_in_ring(ring: int) -> int:
 	"""Get the count of groups currently in a ring."""
-	if not _occupied_lanes.has(ring):
+	if not _occupied_slots.has(ring):
 		return 0
-	return _occupied_lanes[ring].size()
+	return _occupied_slots[ring].size()
 
 
 # ============== COLLISION DETECTION ==============
 
 func check_and_resolve_collisions(ring: int) -> void:
-	"""Check for collisions between stacks in a ring and apply offsets if needed."""
+	"""Check for collisions between stacks in a ring and apply offsets if needed.
+	V2: Uses horizontal X positions for collision detection."""
 	var stacks_in_ring: Array[String] = _get_stacks_in_ring(ring)
 	if stacks_in_ring.size() < 2:
 		return
 	
-	# Sort stacks by their lane (left to right)
+	# Sort stacks by their X position (left to right)
 	stacks_in_ring.sort_custom(func(a: String, b: String) -> bool:
-		var lane_a: int = _get_stack_lane(a)
-		var lane_b: int = _get_stack_lane(b)
-		return lane_a < lane_b
+		var pos_a: Vector2 = _stack_base_positions.get(a, Vector2.ZERO)
+		var pos_b: Vector2 = _stack_base_positions.get(b, Vector2.ZERO)
+		return pos_a.x < pos_b.x
 	)
 	
 	# Check adjacent stacks for overlap
@@ -628,7 +657,7 @@ func check_and_resolve_collisions(ring: int) -> void:
 			continue
 		
 		# Check if panels overlap horizontally (including buffer)
-		var right_edge_a: float = panel_a.position.x + panel_a.size.x + COLLISION_BUFFER
+		var right_edge_a: float = panel_a.position.x + panel_a.size.x * panel_a.scale.x + COLLISION_BUFFER
 		var left_edge_b: float = panel_b.position.x
 		
 		if right_edge_a > left_edge_b:
@@ -653,21 +682,26 @@ func _get_stacks_in_ring(ring: int) -> Array[String]:
 	return result
 
 
-func _get_stack_lane(stack_key: String) -> int:
-	"""Get the lane index for a stack."""
+func _get_stack_slot(stack_key: String) -> int:
+	"""Get the slot index for a stack."""
 	var group_id: String = _extract_group_id_from_stack_key(stack_key)
 	@warning_ignore("integer_division")
-	return _group_lanes.get(group_id, TOTAL_LANES / 2)
+	return _group_lanes.get(group_id, TOTAL_SLOTS / 2)
 
 
-func has_collision(ring: int, lane: int, exclude_group: String = "") -> bool:
-	"""Check if a lane in a ring would cause a collision."""
-	if not _occupied_lanes.has(ring):
+func _get_stack_lane(stack_key: String) -> int:
+	"""Alias for _get_stack_slot for backward compatibility."""
+	return _get_stack_slot(stack_key)
+
+
+func has_collision(ring: int, slot: int, exclude_group: String = "") -> bool:
+	"""Check if a slot in a ring would cause a collision."""
+	if not _occupied_slots.has(ring):
 		return false
 	
-	# Lane is occupied by another group
-	if _occupied_lanes[ring].has(lane):
-		var occupant: String = _occupied_lanes[ring][lane]
+	# Slot is occupied by another group
+	if _occupied_slots[ring].has(slot):
+		var occupant: String = _occupied_slots[ring][slot]
 		if occupant != exclude_group:
 			return true
 	
@@ -728,14 +762,21 @@ func _extract_group_id_from_stack_key(stack_key: String) -> String:
 	return stack_key  # Fallback to full key if no group_ found
 
 
-func set_group_angular_position(group_id: String, angle: float) -> void:
-	"""Set the angular position for a group. Persists across ring changes."""
-	_group_angular_positions[group_id] = angle
+func set_group_angular_position(group_id: String, _angle: float) -> void:
+	"""DEPRECATED: V2 uses horizontal slots. This converts angle to slot for compatibility."""
+	# Convert angle to slot: PI (left) = 0, 2*PI (right) = TOTAL_SLOTS-1
+	var normalized: float = (_angle - PI) / PI
+	var slot: int = clampi(roundi(normalized * float(TOTAL_SLOTS - 1)), 0, TOTAL_SLOTS - 1)
+	_group_slots[group_id] = slot
+	_group_lanes[group_id] = slot
 
 
 func get_group_angular_position(group_id: String) -> float:
-	"""Get the angular position for a group."""
-	return _group_angular_positions.get(group_id, PI * 1.5)
+	"""DEPRECATED: V2 uses horizontal slots. Returns a fake angle for compatibility."""
+	# Convert slot back to angle for legacy code
+	@warning_ignore("integer_division")
+	var slot: int = _group_slots.get(group_id, TOTAL_SLOTS / 2)
+	return PI + (float(slot) / float(TOTAL_SLOTS - 1)) * PI
 
 
 func _animate_stack_to_position(stack_key: String, panel: Panel, target_pos: Vector2) -> void:

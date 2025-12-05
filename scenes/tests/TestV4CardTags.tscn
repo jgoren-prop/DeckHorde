@@ -1,7 +1,0 @@
-[gd_scene load_steps=2 format=3 uid="uid://dv4cardtags"]
-
-[ext_resource type="Script" path="res://scripts/tests/TestV4CardTags.gd" id="1_test"]
-
-[node name="TestV4CardTags" type="Node"]
-script = ExtResource("1_test")
-

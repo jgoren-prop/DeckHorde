@@ -5,3 +5,5 @@
 [node name="TestV5Stats" type="Node"]
 script = ExtResource("1_test")
 
+
+

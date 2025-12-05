@@ -124,3 +124,5 @@ func test_tooltip_effects() -> void:
 	assert_not_null(reckless_blast, "Reckless Blast card exists for tooltip test")
 	assert_true(reckless_blast.self_damage > 0, "Reckless Blast has self_damage for tooltip: " + str(reckless_blast.self_damage))
 
+
+

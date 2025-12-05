@@ -193,3 +193,5 @@ func _test_sample_damage_calculations() -> void:
 	_assert(abs(kb_calc.crit_chance - 0.35) < 0.01, "Killing Blow: 35%% crit chance (got: %.2f)" % kb_calc.crit_chance)
 	_assert(abs(kb_calc.crit_mult - 2.5) < 0.01, "Killing Blow: 250%% crit damage (got: %.2f)" % kb_calc.crit_mult)
 
+
+

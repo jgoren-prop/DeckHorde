@@ -1,11 +1,13 @@
 extends Control
-## CombatLane - V3 Staging System
+## CombatLane - V3 Staging System with 2D-to-3D Weapon Morphing
 ## Players queue cards to this lane, then execute them all left-to-right
 ## Supports drag-to-reorder before execution
+## When staged, card artwork morphs from 2D to 3D weapon display
 
 @warning_ignore("unused_signal")
 signal card_clicked(card_def, tier: int, lane_index: int)
 signal execute_requested()
+signal weapon_fired(card_def, muzzle_position: Vector2, target_position: Vector2)
 
 const CardUIScene: PackedScene = preload("res://scenes/ui/CardUI.tscn")
 
@@ -32,6 +34,9 @@ var execute_button: Button = null
 
 # State tracking
 var staged_cards: Array[Dictionary] = []  # {card_def, tier, card_ui, applied_buffs}
+
+# Reference to battlefield for targeting
+var battlefield_arena: Control = null
 
 # Drag-to-reorder state
 var dragging_card_index: int = -1
@@ -187,7 +192,7 @@ func _on_execute_pressed() -> void:
 # =============================================================================
 
 func stage_card(card_def, tier: int, drop_position: Vector2 = Vector2.ZERO) -> void:
-	"""Add a card to the staging lane with animation."""
+	"""Add a card to the staging lane with animation and morph artwork to 3D."""
 	var card_ui: Control = _create_staged_card(card_def, tier)
 	if not card_ui:
 		return
@@ -215,6 +220,11 @@ func stage_card(card_def, tier: int, drop_position: Vector2 = Vector2.ZERO) -> v
 		_position_all_cards()
 		var tween: Tween = card_ui.create_tween()
 		tween.tween_property(card_ui, "modulate:a", 1.0, 0.2)
+	
+	# Morph the artwork to weapon sprite after card is positioned
+	await get_tree().create_timer(0.1).timeout
+	if is_instance_valid(card_ui) and card_ui.has_method("morph_artwork_to_3d"):
+		await card_ui.morph_artwork_to_3d()
 
 
 func _create_staged_card(card_def, tier: int) -> Control:
@@ -495,8 +505,8 @@ func _on_execution_started() -> void:
 func _on_execution_completed() -> void:
 	# Clear all card visuals
 	for staged: Dictionary in staged_cards:
-		if is_instance_valid(staged.card_ui):
-			_animate_card_discard(staged.card_ui)
+		var card_ui: Control = staged.get("card_ui")
+		_animate_card_discard(card_ui)
 	
 	staged_cards.clear()
 	_update_visibility()
@@ -508,32 +518,32 @@ func _on_execution_completed() -> void:
 
 
 func _animate_card_discard(card_ui: Control) -> void:
-	if not is_instance_valid(card_ui):
-		return
-	
-	var tween: Tween = card_ui.create_tween()
-	tween.set_parallel(true)
-	tween.tween_property(card_ui, "modulate:a", 0.0, 0.3)
-	tween.tween_property(card_ui, "position:y", card_ui.position.y + 50, 0.3)
-	tween.tween_callback(card_ui.queue_free)
+	if is_instance_valid(card_ui):
+		var tween: Tween = card_ui.create_tween()
+		tween.set_parallel(true)
+		tween.tween_property(card_ui, "modulate:a", 0.0, 0.3)
+		tween.tween_property(card_ui, "position:y", card_ui.position.y + 50, 0.3)
+		tween.tween_callback(card_ui.queue_free)
 
 
-func _on_card_executing(_card_def, _tier: int, lane_index: int) -> void:
+func _on_card_executing(card_def, _tier: int, lane_index: int) -> void:
 	if lane_index < 0 or lane_index >= staged_cards.size():
 		return
 	
-	var card_ui: Control = staged_cards[lane_index].card_ui
+	var staged: Dictionary = staged_cards[lane_index]
+	var card_ui: Control = staged.card_ui
+	
 	if not is_instance_valid(card_ui):
 		return
 	
-	# Pulse effect
+	# Pulse effect on the card (artwork is already in 3D mode from staging)
 	var tween: Tween = card_ui.create_tween()
 	tween.tween_property(card_ui, "scale", Vector2(card_scale * 1.2, card_scale * 1.2), EXECUTE_PULSE_DURATION * 0.4)
 	tween.parallel().tween_property(card_ui, "modulate", Color(1.5, 1.3, 0.8, 1.0), EXECUTE_PULSE_DURATION * 0.4)
 
 
 func _on_card_executed(card_def, _tier: int) -> void:
-	# Find the card and fade it
+	# Find the card and dim it after execution
 	for staged: Dictionary in staged_cards:
 		if staged.card_def == card_def:
 			var card_ui: Control = staged.card_ui
@@ -601,6 +611,68 @@ func get_card_center_position(index: int) -> Vector2:
 	
 	var scaled_size: Vector2 = Vector2(CARD_BASE_WIDTH, CARD_BASE_HEIGHT) * card_scale
 	return card_ui.global_position + scaled_size / 2.0
+
+
+func fire_weapon_at_target(index: int, target_position: Vector2) -> Vector2:
+	"""Fire the weapon at a target and return the muzzle position for projectile origin."""
+	if index < 0 or index >= staged_cards.size():
+		return Vector2.ZERO
+	
+	var staged: Dictionary = staged_cards[index]
+	var card_ui: Control = staged.card_ui
+	
+	if is_instance_valid(card_ui) and card_ui.has_method("fire_weapon"):
+		# Point weapon at target and fire
+		card_ui.fire_weapon(target_position)
+		
+		# Get muzzle position
+		var muzzle_pos: Vector2 = card_ui.get_muzzle_global_position()
+		
+		# Emit signal for projectile system
+		weapon_fired.emit(staged.card_def, muzzle_pos, target_position)
+		
+		return muzzle_pos
+	
+	# Fallback to card center
+	return get_card_center_position(index)
+
+
+func get_weapon_muzzle_position(index: int) -> Vector2:
+	"""Get the muzzle position of a staged weapon."""
+	if index < 0 or index >= staged_cards.size():
+		return Vector2.ZERO
+	
+	var staged: Dictionary = staged_cards[index]
+	var card_ui: Control = staged.card_ui
+	
+	if is_instance_valid(card_ui) and card_ui.has_method("get_muzzle_global_position"):
+		return card_ui.get_muzzle_global_position()
+	
+	return get_card_center_position(index)
+
+
+func set_weapon_target(index: int, target_position: Vector2) -> void:
+	"""Set the target for a weapon to face."""
+	if index < 0 or index >= staged_cards.size():
+		return
+	
+	var staged: Dictionary = staged_cards[index]
+	var card_ui: Control = staged.card_ui
+	
+	if is_instance_valid(card_ui) and card_ui.has_method("set_weapon_target"):
+		card_ui.set_weapon_target(target_position)
+
+
+func get_weapon_center_position(weapon_name: String) -> Vector2:
+	"""Get the center position of a weapon by name (for projectile origins)."""
+	for i: int in range(staged_cards.size()):
+		var staged: Dictionary = staged_cards[i]
+		if staged.card_def.card_name == weapon_name:
+			var card_ui: Control = staged.card_ui
+			if is_instance_valid(card_ui) and card_ui.has_method("get_muzzle_global_position"):
+				return card_ui.get_muzzle_global_position()
+			return get_card_center_position(i)
+	return Vector2.ZERO
 
 
 # Drop highlight for staging

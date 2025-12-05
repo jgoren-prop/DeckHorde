@@ -160,6 +160,35 @@ func get_random_enemy_in_rings(ring_mask: int):  # -> EnemyInstance or null
 	return candidates[randi() % candidates.size()]
 
 
+func get_closest_enemy():  # -> EnemyInstance or null
+	"""Get the closest enemy to the player (prioritizes Melee > Close > Mid > Far)."""
+	for ring_idx: int in range(4):
+		if not rings[ring_idx].is_empty():
+			# Return the first enemy in the closest occupied ring
+			return rings[ring_idx][0]
+	return null
+
+
+func get_farthest_enemy():  # -> EnemyInstance or null
+	"""Get the farthest enemy from the player (prioritizes Far > Mid > Close > Melee)."""
+	for ring_idx: int in range(3, -1, -1):
+		if not rings[ring_idx].is_empty():
+			# Return the first enemy in the farthest occupied ring
+			return rings[ring_idx][0]
+	return null
+
+
+func get_closest_enemy_in_rings(ring_mask: int):  # -> EnemyInstance or null
+	"""Get the closest enemy from rings specified by bitmask.
+	Prioritizes enemies in closer rings (Melee > Close > Mid > Far).
+	ring_mask: Bitmask where bit 0 = Melee, bit 1 = Close, bit 2 = Mid, bit 3 = Far"""
+	for ring_idx: int in range(4):
+		if ring_mask & (1 << ring_idx):
+			if not rings[ring_idx].is_empty():
+				return rings[ring_idx][0]
+	return null
+
+
 func get_enemies_in_rings(ring_mask: int) -> Array:  # Array[EnemyInstance]
 	"""Get all enemies from rings specified by bitmask.
 	ring_mask: Bitmask where bit 0 = Melee, bit 1 = Close, bit 2 = Mid, bit 3 = Far"""

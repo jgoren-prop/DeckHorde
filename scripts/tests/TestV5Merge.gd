@@ -143,3 +143,5 @@ func _test_tier_colors() -> void:
 	_assert(MergeManager.get_tier_name(1) == "T1", "Tier 1 name is T1")
 	_assert(MergeManager.get_tier_name(4) == "T4", "Tier 4 name is T4")
 
+
+

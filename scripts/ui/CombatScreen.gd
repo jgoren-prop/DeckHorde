@@ -35,6 +35,11 @@ const DebugStatPanelClass = preload("res://scripts/ui/DebugStatPanel.gd")
 @onready var mid_count: Label = $ThreatPreview/ThreatContent/RingBreakdown/MidCount
 @onready var far_count: Label = $ThreatPreview/ThreatContent/RingBreakdown/FarCount
 
+# UI References - Incoming wave preview
+@onready var incoming_wave_content: VBoxContainer = $ThreatPreview/ThreatContent/IncomingWaveContent
+@onready var no_spawns_label: Label = $ThreatPreview/ThreatContent/IncomingWaveContent/NoSpawnsLabel
+@onready var spawns_remaining_label: Label = $ThreatPreview/ThreatContent/SpawnsRemainingLabel
+
 # UI References - Battlefield
 @onready var battlefield_arena = $BattlefieldArena
 
@@ -93,6 +98,10 @@ var tag_tracker_content: VBoxContainer = null
 var tag_labels: Dictionary = {}  # tag_name -> Label
 
 var card_ui_scene: PackedScene = preload("res://scenes/ui/CardUI.tscn")
+var levelup_picker_scene: PackedScene = preload("res://scenes/ui/LevelUpPicker.tscn")
+var damage_tooltip_scene: PackedScene = preload("res://scenes/ui/DamageTooltip.tscn")
+var levelup_picker: Control = null
+var damage_tooltip: Control = null
 var pending_card_index: int = -1
 var pending_card_def = null  # CardDefinition
 
@@ -113,6 +122,8 @@ func _ready() -> void:
 	_setup_tag_tracker_panel()
 	_create_v2_debug_stat_panel()
 	_setup_animation_manager()
+	_setup_levelup_picker()
+	_setup_damage_tooltip()
 	_hide_settings_overlay()
 	# Defer combat start to ensure UI layout is computed first
 	call_deferred("_start_combat")
@@ -150,7 +161,7 @@ func _setup_dev_panel() -> void:
 
 
 func _setup_tag_tracker_panel() -> void:
-	"""Create the tag tracker panel on the right side of the screen."""
+	"""Create the tag tracker panel at bottom left, next to the energy/discard sidebar."""
 	# Create panel container
 	tag_tracker_panel = PanelContainer.new()
 	tag_tracker_panel.name = "TagTrackerPanel"
@@ -164,15 +175,15 @@ func _setup_tag_tracker_panel() -> void:
 	panel_style.set_content_margin_all(8)
 	tag_tracker_panel.add_theme_stylebox_override("panel", panel_style)
 	
-	# Position on right side, below intent bar
-	tag_tracker_panel.anchor_left = 1.0
-	tag_tracker_panel.anchor_right = 1.0
-	tag_tracker_panel.anchor_top = 0.0
-	tag_tracker_panel.anchor_bottom = 0.0
-	tag_tracker_panel.offset_left = -160
-	tag_tracker_panel.offset_right = -10
-	tag_tracker_panel.offset_top = 120
-	tag_tracker_panel.offset_bottom = 400
+	# Position at bottom left, to the right of LeftSidebar (which is ~120px wide with margins)
+	tag_tracker_panel.anchor_left = 0.0
+	tag_tracker_panel.anchor_right = 0.0
+	tag_tracker_panel.anchor_top = 1.0
+	tag_tracker_panel.anchor_bottom = 1.0
+	tag_tracker_panel.offset_left = 125  # Right of LeftSidebar
+	tag_tracker_panel.offset_right = 275  # 150px wide
+	tag_tracker_panel.offset_top = -290  # Aligned with BottomSection
+	tag_tracker_panel.offset_bottom = -10
 	tag_tracker_panel.custom_minimum_size = Vector2(150, 200)
 	
 	# Create content container
@@ -364,6 +375,26 @@ func _setup_animation_manager() -> void:
 	# Also set combat_lane reference on BattlefieldArena for weapon projectile origins
 	if battlefield_arena:
 		battlefield_arena.combat_lane = combat_lane
+
+
+func _setup_levelup_picker() -> void:
+	"""Create the Brotato-style level-up picker UI."""
+	levelup_picker = levelup_picker_scene.instantiate()
+	levelup_picker.name = "LevelUpPicker"
+	# Add as top layer so it appears above everything
+	add_child(levelup_picker)
+	# Move to end so it renders on top
+	move_child(levelup_picker, get_child_count() - 1)
+
+
+func _setup_damage_tooltip() -> void:
+	"""Create the damage calculation tooltip for cards."""
+	damage_tooltip = damage_tooltip_scene.instantiate()
+	damage_tooltip.name = "DamageTooltip"
+	# Add as top layer so it appears above everything
+	add_child(damage_tooltip)
+	# Move to end so it renders on top
+	move_child(damage_tooltip, get_child_count() - 1)
 
 
 func _setup_card_debug_overlay() -> void:
@@ -575,8 +606,17 @@ func _start_combat() -> void:
 	# Start the wave
 	RunManager.start_wave()
 	
-	# Create wave definition
-	var wave_def: WaveDefinition = WaveDefinition.create_basic_wave(RunManager.current_wave)
+	# Check for test encounter from Encounter Designer first
+	var wave_def: WaveDefinition = EncounterDesigner.load_test_wave()
+	
+	if wave_def:
+		print("[CombatScreen] Loading TEST ENCOUNTER: ", wave_def.wave_name)
+		# Clear the test file so subsequent plays don't use it
+		if FileAccess.file_exists("user://test_encounter.json"):
+			DirAccess.remove_absolute("user://test_encounter.json")
+	else:
+		# Create standard wave definition
+		wave_def = WaveDefinition.create_basic_wave(RunManager.current_wave)
 	
 	# Initialize combat
 	CombatManager.initialize_combat(wave_def)
@@ -589,6 +629,7 @@ func _update_ui() -> void:
 	_update_stats()
 	_update_threat_preview()
 	_update_intent_bar()
+	_update_incoming_wave_preview()
 	_update_hand()
 	_update_deck_info()
 
@@ -688,6 +729,84 @@ func _update_enemy_counter() -> void:
 	close_count.text = "Close: %d" % close
 	mid_count.text = "Mid: %d" % mid
 	far_count.text = "Far: %d" % far
+
+
+func _update_incoming_wave_preview() -> void:
+	"""Update the incoming wave preview showing what enemies spawn next turn."""
+	if not incoming_wave_content:
+		return
+	
+	# Clear existing spawn labels (keep NoSpawnsLabel as first child)
+	while incoming_wave_content.get_child_count() > 1:
+		var child: Node = incoming_wave_content.get_child(1)
+		incoming_wave_content.remove_child(child)
+		child.queue_free()
+	
+	# Get next turn's spawns
+	var next_spawns: Array[Dictionary] = CombatManager.get_spawns_for_next_turn()
+	var spawns_remaining: int = CombatManager.get_total_spawns_remaining()
+	
+	# Update remaining label
+	if spawns_remaining_label:
+		if spawns_remaining > 0:
+			spawns_remaining_label.text = "%d more incoming" % spawns_remaining
+			spawns_remaining_label.visible = true
+		else:
+			spawns_remaining_label.text = "No more spawns"
+			spawns_remaining_label.visible = true
+	
+	# Show/hide no spawns label
+	if no_spawns_label:
+		no_spawns_label.visible = next_spawns.is_empty()
+	
+	if next_spawns.is_empty():
+		return
+	
+	# Consolidate spawns by enemy type for cleaner display
+	var consolidated: Dictionary = {}  # enemy_id -> {name, count, ring}
+	for spawn: Dictionary in next_spawns:
+		var key: String = spawn.enemy_id
+		if not consolidated.has(key):
+			consolidated[key] = {
+				"name": spawn.enemy_name,
+				"count": 0,
+				"ring": spawn.ring
+			}
+		consolidated[key].count += spawn.count
+	
+	# Ring names for display
+	var ring_names: Array[String] = ["Melee", "Close", "Mid", "Far"]
+	
+	# Create labels for each spawn group
+	for enemy_id: String in consolidated.keys():
+		var data: Dictionary = consolidated[enemy_id]
+		var spawn_label: Label = Label.new()
+		
+		# Format: "3× Husk (Far)"
+		var ring_name: String = ring_names[data.ring] if data.ring >= 0 and data.ring < 4 else "?"
+		spawn_label.text = "%d× %s (%s)" % [data.count, data.name, ring_name]
+		spawn_label.add_theme_font_size_override("font_size", 11)
+		
+		# Color based on threat level
+		var enemy_def = EnemyDatabase.get_enemy(enemy_id)
+		if enemy_def:
+			match enemy_def.behavior_type:
+				EnemyDefinition.BehaviorType.BOMBER:
+					spawn_label.add_theme_color_override("font_color", Color(1.0, 0.5, 0.3))  # Orange
+				EnemyDefinition.BehaviorType.BUFFER:
+					spawn_label.add_theme_color_override("font_color", Color(1.0, 0.6, 1.0))  # Pink
+				EnemyDefinition.BehaviorType.SPAWNER:
+					spawn_label.add_theme_color_override("font_color", Color(0.4, 1.0, 1.0))  # Cyan
+				EnemyDefinition.BehaviorType.FAST:
+					spawn_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.3))  # Yellow
+				EnemyDefinition.BehaviorType.TANK:
+					spawn_label.add_theme_color_override("font_color", Color(0.6, 0.8, 1.0))  # Light blue
+				_:
+					spawn_label.add_theme_color_override("font_color", Color(0.8, 0.9, 0.8))  # Light green
+		else:
+			spawn_label.add_theme_color_override("font_color", Color(0.8, 0.9, 0.8))
+		
+		incoming_wave_content.add_child(spawn_label)
 
 
 func _update_hand() -> void:
@@ -1014,16 +1133,31 @@ func _on_card_hovered(card_def, tier: int, is_hovering: bool) -> void:  # card_d
 		# Show targeting hints on enemies that would be hit
 		if battlefield_arena and card_def:
 			battlefield_arena.show_card_targeting_hints(card_def, tier)
+		
+		# Show damage calculation tooltip
+		if damage_tooltip and card_def:
+			# Position tooltip near the card (offset to the right)
+			var mouse_pos: Vector2 = get_global_mouse_position()
+			var tooltip_pos: Vector2 = mouse_pos + Vector2(20, -100)
+			damage_tooltip.show_tooltip(card_def, tier, tooltip_pos)
 	else:
 		# Clear targeting hints when mouse leaves card
 		if battlefield_arena:
 			battlefield_arena.clear_card_targeting_hints()
+		
+		# Hide damage tooltip
+		if damage_tooltip:
+			damage_tooltip.hide_tooltip()
 
 
 func _on_card_drag_started(card_def, _tier: int, hand_index: int) -> void:  # card_def: CardDefinition
 	"""Called when player starts dragging a card."""
 	pending_card_index = hand_index
 	pending_card_def = card_def
+	
+	# Hide tooltip when dragging
+	if damage_tooltip:
+		damage_tooltip.hide_tooltip()
 	
 	# Track the card being dragged
 	dragging_card_def = card_def

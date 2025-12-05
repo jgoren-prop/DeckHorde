@@ -220,3 +220,5 @@ func _test_damage_type_helpers() -> void:
 	_assert(TagConstantsClass.get_damage_type_icon("thermal") == "🔥", "thermal damage icon")
 	_assert(TagConstantsClass.get_damage_type_icon("arcane") == "✨", "arcane damage icon")
 
+
+

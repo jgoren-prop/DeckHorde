@@ -100,291 +100,362 @@ func get_total_enemy_count() -> int:
 # =============================================================================
 
 static func _generate_wave_1(wave: WaveDefinition) -> void:
-	"""Wave 1 - Tutorial: 3× Weakling"""
+	"""Wave 1 - Tutorial: Test incoming wave preview (V6: 3x more enemies)"""
 	wave.wave_name = "Wave 1 - Tutorial"
 	wave.description = "Your first battle. Learn the basics!"
 	wave.turn_spawns = [
-		{"turn": 1, "enemy_id": "weakling", "count": 3, "ring": BattlefieldStateScript.Ring.FAR}
+		{"turn": 1, "enemy_id": "weakling", "count": 3, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 1, "enemy_id": "weakling", "count": 3, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 2, "enemy_id": "weakling", "count": 2, "ring": BattlefieldStateScript.Ring.MID},
+		{"turn": 2, "enemy_id": "weakling", "count": 2, "ring": BattlefieldStateScript.Ring.FAR}
 	]
 
 
 static func _generate_wave_2(wave: WaveDefinition) -> void:
-	"""Wave 2 - Introduction: Weaklings + Cultists"""
+	"""Wave 2 - Introduction: Weaklings + Cultists (V6: 3x more enemies)"""
 	wave.wave_name = "Wave 2 - Introduction"
 	wave.description = "Enemies attack from multiple angles."
 	wave.turn_spawns = [
-		{"turn": 1, "enemy_id": "weakling", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 1, "enemy_id": "weakling", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 2, "enemy_id": "cultist", "count": 2, "ring": BattlefieldStateScript.Ring.FAR}
+		{"turn": 1, "enemy_id": "weakling", "count": 4, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 1, "enemy_id": "weakling", "count": 4, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 2, "enemy_id": "weakling", "count": 3, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 2, "enemy_id": "cultist", "count": 3, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 3, "enemy_id": "cultist", "count": 2, "ring": BattlefieldStateScript.Ring.FAR}
 	]
 
 
 static func _generate_wave_3(wave: WaveDefinition) -> void:
-	"""Wave 3 - First Real Wave: Husks arrive"""
+	"""Wave 3 - First Real Wave: Husks arrive (V6: 3x more enemies)"""
 	wave.wave_name = "Wave 3 - First Real Wave"
 	wave.description = "Husks are tougher. Stay focused!"
 	wave.turn_spawns = [
-		{"turn": 1, "enemy_id": "husk", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 1, "enemy_id": "husk", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 1, "enemy_id": "husk", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 3, "enemy_id": "cultist", "count": 3, "ring": BattlefieldStateScript.Ring.FAR}
+		{"turn": 1, "enemy_id": "husk", "count": 3, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 1, "enemy_id": "husk", "count": 3, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 1, "enemy_id": "weakling", "count": 4, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 2, "enemy_id": "husk", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 2, "enemy_id": "weakling", "count": 3, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 3, "enemy_id": "cultist", "count": 4, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 3, "enemy_id": "cultist", "count": 4, "ring": BattlefieldStateScript.Ring.FAR}
 	]
 
 
 static func _generate_wave_4(wave: WaveDefinition) -> void:
-	"""Wave 4 - Speed Pressure: Spinecrawlers introduced"""
+	"""Wave 4 - Speed Pressure: Spinecrawlers introduced (V6: 3x more enemies)"""
 	wave.wave_name = "Wave 4 - Speed Pressure"
 	wave.description = "Spinecrawlers move fast! Kill them quick!"
 	wave.turn_spawns = [
-		{"turn": 1, "enemy_id": "husk", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 1, "enemy_id": "husk", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 2, "enemy_id": "spinecrawler", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 2, "enemy_id": "spinecrawler", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 4, "enemy_id": "husk", "count": 2, "ring": BattlefieldStateScript.Ring.FAR}
+		{"turn": 1, "enemy_id": "husk", "count": 4, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 1, "enemy_id": "husk", "count": 4, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 1, "enemy_id": "weakling", "count": 5, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 2, "enemy_id": "spinecrawler", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 2, "enemy_id": "spinecrawler", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 3, "enemy_id": "weakling", "count": 4, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 4, "enemy_id": "husk", "count": 3, "ring": BattlefieldStateScript.Ring.FAR}
 	]
 
 
 static func _generate_wave_5(wave: WaveDefinition) -> void:
-	"""Wave 5 - Ranged Introduction: Spitters stay at distance"""
+	"""Wave 5 - Ranged Introduction: Spitters stay at distance (V6: 3x more enemies)"""
 	wave.wave_name = "Wave 5 - Ranged Introduction"
 	wave.description = "Spitters attack from Mid ring. Close the gap!"
 	wave.turn_spawns = [
 		{"turn": 1, "enemy_id": "spitter", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
 		{"turn": 1, "enemy_id": "spitter", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 2, "enemy_id": "husk", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 2, "enemy_id": "husk", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 4, "enemy_id": "cultist", "count": 3, "ring": BattlefieldStateScript.Ring.FAR}
+		{"turn": 1, "enemy_id": "weakling", "count": 6, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 2, "enemy_id": "husk", "count": 4, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 2, "enemy_id": "husk", "count": 4, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 3, "enemy_id": "cultist", "count": 5, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 4, "enemy_id": "cultist", "count": 4, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 4, "enemy_id": "weakling", "count": 4, "ring": BattlefieldStateScript.Ring.FAR}
 	]
 
 
 static func _generate_wave_6(wave: WaveDefinition) -> void:
-	"""Wave 6 - Pincer: Enemies from all sides"""
+	"""Wave 6 - Pincer: Enemies from all sides (V6: 4x more enemies)"""
 	wave.wave_name = "Wave 6 - Pincer"
 	wave.description = "Surrounded! Manage multiple threats."
 	wave.turn_spawns = [
-		{"turn": 1, "enemy_id": "husk", "count": 3, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 1, "enemy_id": "husk", "count": 3, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 2, "enemy_id": "spinecrawler", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 4, "enemy_id": "spitter", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 4, "enemy_id": "spitter", "count": 1, "ring": BattlefieldStateScript.Ring.FAR}
+		{"turn": 1, "enemy_id": "husk", "count": 5, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 1, "enemy_id": "husk", "count": 5, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 1, "enemy_id": "weakling", "count": 6, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 2, "enemy_id": "spinecrawler", "count": 3, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 2, "enemy_id": "weakling", "count": 5, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 3, "enemy_id": "cultist", "count": 6, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 4, "enemy_id": "spitter", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 4, "enemy_id": "spitter", "count": 2, "ring": BattlefieldStateScript.Ring.FAR}
 	]
 
 
 static func _generate_wave_7(wave: WaveDefinition) -> void:
-	"""Wave 7 - Bomber Introduction: Explode on death!"""
+	"""Wave 7 - Bomber Introduction: Explode on death! (V6: 4x more enemies)"""
 	wave.wave_name = "Wave 7 - Bomber Introduction"
 	wave.description = "Bombers explode! Kill them at range."
 	wave.turn_spawns = [
-		{"turn": 1, "enemy_id": "husk", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 1, "enemy_id": "husk", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 1, "enemy_id": "husk", "count": 4, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 1, "enemy_id": "husk", "count": 4, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 1, "enemy_id": "weakling", "count": 6, "ring": BattlefieldStateScript.Ring.FAR},
 		{"turn": 1, "enemy_id": "bomber", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 3, "enemy_id": "cultist", "count": 3, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 3, "enemy_id": "cultist", "count": 3, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 5, "enemy_id": "bomber", "count": 1, "ring": BattlefieldStateScript.Ring.FAR}
+		{"turn": 2, "enemy_id": "cultist", "count": 5, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 3, "enemy_id": "cultist", "count": 5, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 3, "enemy_id": "cultist", "count": 5, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 4, "enemy_id": "weakling", "count": 6, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 5, "enemy_id": "bomber", "count": 2, "ring": BattlefieldStateScript.Ring.FAR}
 	]
 
 
 static func _generate_wave_8(wave: WaveDefinition) -> void:
-	"""Wave 8 - Buffer Introduction: Torchbearer buffs allies"""
+	"""Wave 8 - Buffer Introduction: Torchbearer buffs allies (V6: 4x more enemies)"""
 	wave.wave_name = "Wave 8 - Buffer Introduction"
 	wave.is_elite_wave = true
 	wave.description = "Torchbearer gives +2 damage to nearby enemies!"
 	wave.turn_spawns = [
-		{"turn": 1, "enemy_id": "husk", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 1, "enemy_id": "husk", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 1, "enemy_id": "husk", "count": 5, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 1, "enemy_id": "husk", "count": 5, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 1, "enemy_id": "weakling", "count": 8, "ring": BattlefieldStateScript.Ring.FAR},
 		{"turn": 1, "enemy_id": "torchbearer", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 3, "enemy_id": "spinecrawler", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 3, "enemy_id": "spinecrawler", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 5, "enemy_id": "husk", "count": 2, "ring": BattlefieldStateScript.Ring.FAR}
+		{"turn": 2, "enemy_id": "cultist", "count": 6, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 3, "enemy_id": "spinecrawler", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 3, "enemy_id": "spinecrawler", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 4, "enemy_id": "weakling", "count": 6, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 5, "enemy_id": "husk", "count": 4, "ring": BattlefieldStateScript.Ring.FAR}
 	]
 
 
 static func _generate_wave_9(wave: WaveDefinition) -> void:
-	"""Wave 9 - Stress Test: Multiple threats at once"""
+	"""Wave 9 - Stress Test: Multiple threats at once (V6: 4x more enemies)"""
 	wave.wave_name = "Wave 9 - Stress Test"
 	wave.is_elite_wave = true
 	wave.description = "Everything at once. Prioritize targets!"
 	wave.turn_spawns = [
-		{"turn": 1, "enemy_id": "spitter", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 1, "enemy_id": "spitter", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 1, "enemy_id": "spitter", "count": 3, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 1, "enemy_id": "spitter", "count": 3, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 1, "enemy_id": "weakling", "count": 8, "ring": BattlefieldStateScript.Ring.FAR},
 		{"turn": 1, "enemy_id": "bomber", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 2, "enemy_id": "husk", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 2, "enemy_id": "husk", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 2, "enemy_id": "husk", "count": 5, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 2, "enemy_id": "husk", "count": 5, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 2, "enemy_id": "cultist", "count": 6, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 3, "enemy_id": "weakling", "count": 8, "ring": BattlefieldStateScript.Ring.FAR},
 		{"turn": 4, "enemy_id": "torchbearer", "count": 1, "ring": BattlefieldStateScript.Ring.FAR}
 	]
 
 
 static func _generate_wave_10(wave: WaveDefinition) -> void:
-	"""Wave 10 - Spawner Introduction (HORDE): Channeler spawns Cultists"""
+	"""Wave 10 - Spawner Introduction (HORDE): Channeler spawns Cultists (V6: 4x more enemies)"""
 	wave.wave_name = "Wave 10 - Spawner Introduction"
 	wave.is_elite_wave = true
 	wave.is_horde_wave = true
 	wave.description = "HORDE! Channeler spawns Cultists each turn!"
 	wave.turn_spawns = [
-		{"turn": 1, "enemy_id": "husk", "count": 3, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 1, "enemy_id": "husk", "count": 3, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 1, "enemy_id": "husk", "count": 3, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 1, "enemy_id": "husk", "count": 5, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 1, "enemy_id": "husk", "count": 5, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 1, "enemy_id": "weakling", "count": 10, "ring": BattlefieldStateScript.Ring.FAR},
 		{"turn": 1, "enemy_id": "channeler", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 3, "enemy_id": "cultist", "count": 3, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 3, "enemy_id": "cultist", "count": 3, "ring": BattlefieldStateScript.Ring.FAR}
+		{"turn": 2, "enemy_id": "cultist", "count": 6, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 2, "enemy_id": "cultist", "count": 6, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 3, "enemy_id": "cultist", "count": 5, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 3, "enemy_id": "cultist", "count": 5, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 4, "enemy_id": "weakling", "count": 8, "ring": BattlefieldStateScript.Ring.FAR}
 	]
 
 
 static func _generate_wave_11(wave: WaveDefinition) -> void:
-	"""Wave 11 - Tank Introduction: Shell Titan has armor"""
+	"""Wave 11 - Tank Introduction: Shell Titan has armor (V6: 4x more enemies)"""
 	wave.wave_name = "Wave 11 - Tank Introduction"
 	wave.is_elite_wave = true
 	wave.description = "Shell Titan has 5 ARMOR. Multi-hit weapons strip it!"
 	wave.turn_spawns = [
 		{"turn": 1, "enemy_id": "shell_titan", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 1, "enemy_id": "husk", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 1, "enemy_id": "husk", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 3, "enemy_id": "spitter", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 3, "enemy_id": "spitter", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 5, "enemy_id": "husk", "count": 2, "ring": BattlefieldStateScript.Ring.FAR}
+		{"turn": 1, "enemy_id": "husk", "count": 5, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 1, "enemy_id": "husk", "count": 5, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 1, "enemy_id": "weakling", "count": 10, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 2, "enemy_id": "cultist", "count": 6, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 3, "enemy_id": "spitter", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 3, "enemy_id": "spitter", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 4, "enemy_id": "weakling", "count": 8, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 5, "enemy_id": "husk", "count": 4, "ring": BattlefieldStateScript.Ring.FAR}
 	]
 
 
 static func _generate_wave_12(wave: WaveDefinition) -> void:
-	"""Wave 12 - Ambush Wave: Stalkers spawn in Close!"""
+	"""Wave 12 - Ambush Wave: Stalkers spawn in Close! (V6: 4x more enemies)"""
 	wave.wave_name = "Wave 12 - Ambush Wave"
 	wave.is_elite_wave = true
 	wave.description = "Stalkers spawn in CLOSE ring! Immediate threat!"
 	wave.turn_spawns = [
-		{"turn": 1, "enemy_id": "husk", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 1, "enemy_id": "husk", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 2, "enemy_id": "stalker", "count": 1, "ring": BattlefieldStateScript.Ring.CLOSE},
-		{"turn": 2, "enemy_id": "stalker", "count": 1, "ring": BattlefieldStateScript.Ring.CLOSE},
-		{"turn": 4, "enemy_id": "spinecrawler", "count": 2, "ring": BattlefieldStateScript.Ring.FAR}
+		{"turn": 1, "enemy_id": "husk", "count": 5, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 1, "enemy_id": "husk", "count": 5, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 1, "enemy_id": "weakling", "count": 10, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 2, "enemy_id": "stalker", "count": 2, "ring": BattlefieldStateScript.Ring.CLOSE},
+		{"turn": 2, "enemy_id": "stalker", "count": 2, "ring": BattlefieldStateScript.Ring.CLOSE},
+		{"turn": 2, "enemy_id": "cultist", "count": 6, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 3, "enemy_id": "weakling", "count": 8, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 4, "enemy_id": "spinecrawler", "count": 3, "ring": BattlefieldStateScript.Ring.FAR}
 	]
 
 
 static func _generate_wave_13(wave: WaveDefinition) -> void:
-	"""Wave 13 - Elite Mix: Multiple elite types"""
+	"""Wave 13 - Elite Mix: Multiple elite types (V6: 5x more enemies)"""
 	wave.wave_name = "Wave 13 - Elite Mix"
 	wave.is_elite_wave = true
+	wave.is_horde_wave = true
 	wave.description = "Multiple elites. Kill support enemies first!"
 	wave.turn_spawns = [
 		{"turn": 1, "enemy_id": "torchbearer", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
 		{"turn": 1, "enemy_id": "channeler", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 1, "enemy_id": "husk", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 2, "enemy_id": "spinecrawler", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 2, "enemy_id": "spinecrawler", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 4, "enemy_id": "bomber", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 4, "enemy_id": "bomber", "count": 1, "ring": BattlefieldStateScript.Ring.FAR}
+		{"turn": 1, "enemy_id": "husk", "count": 6, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 1, "enemy_id": "weakling", "count": 12, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 2, "enemy_id": "spinecrawler", "count": 3, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 2, "enemy_id": "spinecrawler", "count": 3, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 2, "enemy_id": "cultist", "count": 8, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 3, "enemy_id": "weakling", "count": 10, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 4, "enemy_id": "bomber", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 4, "enemy_id": "bomber", "count": 2, "ring": BattlefieldStateScript.Ring.FAR}
 	]
 
 
 static func _generate_wave_14(wave: WaveDefinition) -> void:
-	"""Wave 14 - Fortress Breaker: Armor Reavers shred your armor"""
+	"""Wave 14 - Fortress Breaker: Armor Reavers shred your armor (V6: 5x more enemies)"""
 	wave.wave_name = "Wave 14 - Fortress Breaker"
 	wave.is_elite_wave = true
+	wave.is_horde_wave = true
 	wave.description = "Armor Reavers shred YOUR armor! Heal or kill fast!"
 	wave.turn_spawns = [
 		{"turn": 1, "enemy_id": "armor_reaver", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 1, "enemy_id": "husk", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 1, "enemy_id": "husk", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 3, "enemy_id": "spinecrawler", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 3, "enemy_id": "spinecrawler", "count": 2, "ring": BattlefieldStateScript.Ring.FAR}
+		{"turn": 1, "enemy_id": "husk", "count": 6, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 1, "enemy_id": "husk", "count": 6, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 1, "enemy_id": "weakling", "count": 12, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 2, "enemy_id": "cultist", "count": 8, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 3, "enemy_id": "spinecrawler", "count": 4, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 3, "enemy_id": "spinecrawler", "count": 4, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 4, "enemy_id": "weakling", "count": 10, "ring": BattlefieldStateScript.Ring.FAR}
 	]
 
 
 static func _generate_wave_15(wave: WaveDefinition) -> void:
-	"""Wave 15 - Heavy Assault: Double Shell Titans"""
+	"""Wave 15 - Heavy Assault: Double Shell Titans (V6: 5x more enemies - GODLIKE!)"""
 	wave.wave_name = "Wave 15 - Heavy Assault"
 	wave.is_elite_wave = true
-	wave.description = "Two Shell Titans! Need sustained damage."
+	wave.is_horde_wave = true
+	wave.description = "Two Shell Titans! Need sustained damage. GODLIKE BUILD TIME!"
 	wave.turn_spawns = [
 		{"turn": 1, "enemy_id": "shell_titan", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
 		{"turn": 1, "enemy_id": "shell_titan", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
 		{"turn": 1, "enemy_id": "torchbearer", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 2, "enemy_id": "husk", "count": 3, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 2, "enemy_id": "husk", "count": 3, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 4, "enemy_id": "cultist", "count": 3, "ring": BattlefieldStateScript.Ring.FAR}
+		{"turn": 1, "enemy_id": "weakling", "count": 15, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 2, "enemy_id": "husk", "count": 6, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 2, "enemy_id": "husk", "count": 6, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 2, "enemy_id": "cultist", "count": 8, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 3, "enemy_id": "weakling", "count": 12, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 4, "enemy_id": "cultist", "count": 6, "ring": BattlefieldStateScript.Ring.FAR}
 	]
 
 
 static func _generate_wave_16(wave: WaveDefinition) -> void:
-	"""Wave 16 - Cultist Horde (HORDE): Mass of weak enemies"""
+	"""Wave 16 - Cultist Horde (MASSIVE HORDE): Mass of weak enemies (V6: 5x more)"""
 	wave.wave_name = "Wave 16 - Cultist Horde"
 	wave.is_horde_wave = true
-	wave.description = "HORDE! Overwhelming numbers! AOE shines here."
+	wave.description = "MASSIVE HORDE! Overwhelming numbers! AOE shines here."
 	wave.turn_spawns = [
-		{"turn": 1, "enemy_id": "cultist", "count": 4, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 1, "enemy_id": "cultist", "count": 4, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 1, "enemy_id": "cultist", "count": 4, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 2, "enemy_id": "bomber", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 2, "enemy_id": "bomber", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 3, "enemy_id": "channeler", "count": 1, "ring": BattlefieldStateScript.Ring.FAR}
+		{"turn": 1, "enemy_id": "cultist", "count": 8, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 1, "enemy_id": "cultist", "count": 8, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 1, "enemy_id": "weakling", "count": 15, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 2, "enemy_id": "cultist", "count": 6, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 2, "enemy_id": "weakling", "count": 12, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 2, "enemy_id": "bomber", "count": 3, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 3, "enemy_id": "cultist", "count": 8, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 3, "enemy_id": "bomber", "count": 3, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 3, "enemy_id": "channeler", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 4, "enemy_id": "weakling", "count": 15, "ring": BattlefieldStateScript.Ring.FAR}
 	]
 
 
 static func _generate_wave_17(wave: WaveDefinition) -> void:
-	"""Wave 17 - Double Tank: Two buffed Shell Titans"""
+	"""Wave 17 - Double Tank: Two buffed Shell Titans (V6: 5x more enemies)"""
 	wave.wave_name = "Wave 17 - Double Tank"
 	wave.is_elite_wave = true
+	wave.is_horde_wave = true
 	wave.description = "Titans with support. Disable the Torchbearer!"
 	wave.turn_spawns = [
 		{"turn": 1, "enemy_id": "shell_titan", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
 		{"turn": 1, "enemy_id": "shell_titan", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
 		{"turn": 1, "enemy_id": "torchbearer", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 3, "enemy_id": "spinecrawler", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 1, "enemy_id": "weakling", "count": 15, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 2, "enemy_id": "husk", "count": 8, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 2, "enemy_id": "cultist", "count": 10, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 3, "enemy_id": "spinecrawler", "count": 4, "ring": BattlefieldStateScript.Ring.FAR},
 		{"turn": 3, "enemy_id": "armor_reaver", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 5, "enemy_id": "stalker", "count": 2, "ring": BattlefieldStateScript.Ring.CLOSE}
+		{"turn": 4, "enemy_id": "weakling", "count": 12, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 5, "enemy_id": "stalker", "count": 3, "ring": BattlefieldStateScript.Ring.CLOSE}
 	]
 
 
 static func _generate_wave_18(wave: WaveDefinition) -> void:
-	"""Wave 18 - Gauntlet (HORDE): Everything thrown at you"""
+	"""Wave 18 - Gauntlet (MASSIVE HORDE): Everything thrown at you (V6: 5x more enemies)"""
 	wave.wave_name = "Wave 18 - Gauntlet"
 	wave.is_elite_wave = true
 	wave.is_horde_wave = true
-	wave.description = "GAUNTLET! Survive the onslaught!"
+	wave.description = "GAUNTLET! Survive the onslaught! HORDE DOMINATION!"
 	wave.turn_spawns = [
-		{"turn": 1, "enemy_id": "husk", "count": 3, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 1, "enemy_id": "husk", "count": 3, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 1, "enemy_id": "husk", "count": 3, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 2, "enemy_id": "spitter", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 2, "enemy_id": "bomber", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 1, "enemy_id": "husk", "count": 6, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 1, "enemy_id": "husk", "count": 6, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 1, "enemy_id": "weakling", "count": 20, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 2, "enemy_id": "spitter", "count": 4, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 2, "enemy_id": "bomber", "count": 3, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 2, "enemy_id": "cultist", "count": 10, "ring": BattlefieldStateScript.Ring.FAR},
 		{"turn": 3, "enemy_id": "shell_titan", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 3, "enemy_id": "weakling", "count": 15, "ring": BattlefieldStateScript.Ring.FAR},
 		{"turn": 4, "enemy_id": "torchbearer", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
 		{"turn": 4, "enemy_id": "torchbearer", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 5, "enemy_id": "stalker", "count": 2, "ring": BattlefieldStateScript.Ring.CLOSE}
+		{"turn": 4, "enemy_id": "cultist", "count": 8, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 5, "enemy_id": "stalker", "count": 3, "ring": BattlefieldStateScript.Ring.CLOSE}
 	]
 
 
 static func _generate_wave_19(wave: WaveDefinition) -> void:
-	"""Wave 19 - Pre-Boss: Final test before the boss"""
+	"""Wave 19 - Pre-Boss: Final test before the boss (V6: 5x more enemies)"""
 	wave.wave_name = "Wave 19 - Pre-Boss"
 	wave.is_elite_wave = true
+	wave.is_horde_wave = true
 	wave.description = "The calm before the storm. Final preparations!"
 	wave.turn_spawns = [
 		{"turn": 1, "enemy_id": "shell_titan", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 1, "enemy_id": "bomber", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 1, "enemy_id": "bomber", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 2, "enemy_id": "spinecrawler", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 2, "enemy_id": "spinecrawler", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 1, "enemy_id": "bomber", "count": 3, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 1, "enemy_id": "bomber", "count": 3, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 1, "enemy_id": "weakling", "count": 20, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 2, "enemy_id": "spinecrawler", "count": 4, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 2, "enemy_id": "spinecrawler", "count": 4, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 2, "enemy_id": "cultist", "count": 10, "ring": BattlefieldStateScript.Ring.FAR},
 		{"turn": 3, "enemy_id": "channeler", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
 		{"turn": 3, "enemy_id": "torchbearer", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 5, "enemy_id": "armor_reaver", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 5, "enemy_id": "armor_reaver", "count": 1, "ring": BattlefieldStateScript.Ring.FAR}
+		{"turn": 3, "enemy_id": "weakling", "count": 15, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 4, "enemy_id": "husk", "count": 8, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 5, "enemy_id": "armor_reaver", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 5, "enemy_id": "armor_reaver", "count": 2, "ring": BattlefieldStateScript.Ring.FAR}
 	]
 
 
 static func _generate_wave_20(wave: WaveDefinition) -> void:
-	"""Wave 20 - BOSS: Ember Saint - Final battle!"""
+	"""Wave 20 - BOSS: Ember Saint - Final battle! (V6: ULTIMATE HORDE)"""
 	wave.wave_name = "Wave 20 - BOSS: Ember Saint"
 	wave.is_boss_wave = true
-	wave.description = "FINAL BOSS! Ember Saint spawns Bombers. Survive!"
+	wave.is_horde_wave = true
+	wave.description = "FINAL BOSS! Ember Saint + ENDLESS HORDE. TOTAL DOMINATION!"
 	wave.turn_limit = 8  # Longer boss fight
 	wave.turn_spawns = [
 		{"turn": 1, "enemy_id": "ember_saint", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 1, "enemy_id": "husk", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 1, "enemy_id": "husk", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 3, "enemy_id": "bomber", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 3, "enemy_id": "cultist", "count": 4, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 5, "enemy_id": "bomber", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 5, "enemy_id": "stalker", "count": 1, "ring": BattlefieldStateScript.Ring.CLOSE}
+		{"turn": 1, "enemy_id": "husk", "count": 6, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 1, "enemy_id": "husk", "count": 6, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 1, "enemy_id": "weakling", "count": 20, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 2, "enemy_id": "cultist", "count": 10, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 2, "enemy_id": "weakling", "count": 15, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 3, "enemy_id": "bomber", "count": 4, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 3, "enemy_id": "cultist", "count": 8, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 4, "enemy_id": "weakling", "count": 15, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 4, "enemy_id": "husk", "count": 6, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 5, "enemy_id": "bomber", "count": 3, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 5, "enemy_id": "stalker", "count": 2, "ring": BattlefieldStateScript.Ring.CLOSE},
+		{"turn": 6, "enemy_id": "weakling", "count": 20, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 7, "enemy_id": "cultist", "count": 10, "ring": BattlefieldStateScript.Ring.FAR}
 	]
 
 

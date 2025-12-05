@@ -5,3 +5,5 @@
 [node name="TestV5Tooltip" type="Node"]
 script = ExtResource("1_tooltip_test")
 
+
+

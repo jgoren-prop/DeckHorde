@@ -292,3 +292,5 @@ func assert_not_null(value, message: String) -> void:
 		tests_failed += 1
 		print("  ✗ ", current_test, ": ", message, " (was null)")
 
+
+

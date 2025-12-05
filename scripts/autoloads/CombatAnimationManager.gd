@@ -510,38 +510,69 @@ func _create_projectile(projectile_type: String) -> Control:
 
 ## ============== WEAPON TRIGGER EFFECTS ==============
 
-func show_weapon_trigger(card_def, tier: int, target_enemy = null) -> void:
-	"""Show a persistent weapon triggering - projectile from weapon card in combat lane to target."""
+func show_weapon_trigger(card_def, tier: int, target_enemy = null, lane_index: int = -1) -> void:
+	"""Show a weapon triggering - projectile from weapon's muzzle to target.
+	Uses 3D weapon muzzle position when available."""
 	if not battlefield_arena:
 		return
 	
 	var _damage: int = card_def.get_scaled_value("damage", tier)
 	var weapon_name: String = card_def.card_name
 	
-	# Get the position of the weapon card in the combat lane
-	# Falls back to battlefield center if combat lane isn't available
-	var from_pos: Vector2
-	if combat_lane and combat_lane.has_method("get_weapon_center_position"):
-		from_pos = combat_lane.get_weapon_center_position(weapon_name)
-		if from_pos == Vector2.ZERO:
-			# Fallback to battlefield center if weapon not found
-			from_pos = battlefield_arena.center + battlefield_arena.global_position
-	else:
-		# Fallback to battlefield center (warden position)
+	# Get target position first (needed for weapon aiming)
+	var target_pos: Vector2 = Vector2.ZERO
+	if target_enemy:
+		target_pos = _get_enemy_global_position(target_enemy)
+	
+	# Get the position of the weapon's muzzle
+	var from_pos: Vector2 = Vector2.ZERO
+	
+	# Try to get muzzle position from combat lane's 3D weapon
+	if combat_lane:
+		# Set weapon to face target before getting muzzle position
+		if lane_index >= 0 and target_pos != Vector2.ZERO:
+			combat_lane.set_weapon_target(lane_index, target_pos)
+		
+		# Get muzzle position (will be from 3D weapon if in 3D mode)
+		if lane_index >= 0:
+			from_pos = combat_lane.get_weapon_muzzle_position(lane_index)
+		elif combat_lane.has_method("get_weapon_center_position"):
+			from_pos = combat_lane.get_weapon_center_position(weapon_name)
+	
+	# Fallback to battlefield center if no valid position
+	if from_pos == Vector2.ZERO:
 		from_pos = battlefield_arena.center + battlefield_arena.global_position
 	
-	# Show weapon name above the weapon card
+	# Show weapon name above the weapon
 	_show_weapon_fire_label(weapon_name, from_pos)
 	
 	await get_tree().create_timer(0.1).timeout
 	
-	# If we have a target, show projectile from the weapon card
-	if target_enemy:
-		var target_pos: Vector2 = _get_enemy_global_position(target_enemy)
-		await show_projectile(from_pos, target_pos, "bullet")
+	# Fire the weapon's animation (muzzle flash, recoil)
+	if combat_lane and lane_index >= 0:
+		from_pos = combat_lane.fire_weapon_at_target(lane_index, target_pos)
+	
+	# If we have a target, show projectile from the weapon
+	if target_enemy and target_pos != Vector2.ZERO:
+		# Determine projectile type based on damage type
+		var projectile_type: String = _get_projectile_type(card_def.damage_type)
+		await show_projectile(from_pos, target_pos, projectile_type)
 		
 		# Flash the weapon icon in the UI
 		_pulse_weapon_icon(weapon_name)
+
+
+func _get_projectile_type(damage_type: String) -> String:
+	"""Get projectile visual type based on damage type."""
+	match damage_type:
+		"kinetic":
+			return "bullet"
+		"thermal":
+			return "fire"
+		"arcane":
+			return "hex"
+		_:
+			return "bullet"
 
 
 func _show_weapon_fire_label(weapon_name: String, pos: Vector2) -> void:

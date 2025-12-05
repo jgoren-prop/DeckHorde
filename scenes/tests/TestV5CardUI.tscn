@@ -5,3 +5,5 @@
 [node name="TestV5CardUI" type="Node"]
 script = ExtResource("1_cardui")
 
+
+

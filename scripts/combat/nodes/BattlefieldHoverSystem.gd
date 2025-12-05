@@ -137,6 +137,11 @@ func _show_info_card(enemy, global_pos: Vector2, anchor_rect: Rect2 = Rect2()) -
 
 func _schedule_hide_info_card(delay: float = 0.1) -> void:
 	"""Schedule hiding the info card after a delay."""
+	# Safety check: if we're no longer in the tree (scene changing), hide immediately
+	if not is_inside_tree():
+		_hide_info_card()
+		return
+	
 	_pending_info_timer = get_tree().create_timer(delay)
 	_pending_info_timer.timeout.connect(func():
 		if _current_hover_enemy == null:
@@ -157,6 +162,11 @@ func _hide_info_card() -> void:
 		var card_to_free: Control = _info_card
 		_info_card = null
 		
+		# If we're not in the tree (scene changing), just free immediately without animation
+		if not is_inside_tree():
+			card_to_free.queue_free()
+			return
+		
 		# Fade out before freeing - use a separate local tween so it doesn't get killed
 		var fade_out_tween: Tween = create_tween()
 		fade_out_tween.tween_property(card_to_free, "modulate:a", 0.0, 0.15)
@@ -167,6 +177,10 @@ func _hide_info_card() -> void:
 func _begin_info_card_timer(enemy, global_pos: Vector2, stack_key: String = "", delay: float = info_card_delay, anchor_rect: Rect2 = Rect2()) -> void:
 	"""Start the timer that spawns an info card for the provided enemy."""
 	if enemy == null:
+		return
+	
+	# Safety check: if we're no longer in the tree (scene changing), abort
+	if not is_inside_tree():
 		return
 	
 	if _pending_info_timer:

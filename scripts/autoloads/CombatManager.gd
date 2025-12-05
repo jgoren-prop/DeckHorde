@@ -74,6 +74,10 @@ var max_energy: int = 3
 var turn_limit: int = 5
 var kills_this_turn: int = 0
 
+# Breach Penalty System: Track enemies that reach melee and attack
+var breaches_this_wave: int = 0  # Each melee attack = 1 breach
+signal breach_occurred(breach_count: int, total_breaches: int)
+
 # V3 Staging System
 var staged_cards: Array[Dictionary] = []  # {card_def, tier, hand_index, lane_buffs: Dictionary}
 var lane_buffs: Dictionary = {}  # Active buffs applied to staged cards: {buff_type: value}
@@ -85,6 +89,9 @@ var execution_context: Dictionary = {
 	"damage_dealt": 0,
 	"last_damaged_enemy": null
 }
+
+# Current executing card lane index (for weapon visual targeting)
+var current_executing_lane_index: int = -1
 
 # Tag tracking for Tag Tracker UI
 var tags_played_this_combat: Dictionary = {}  # tag_name -> count
@@ -109,6 +116,7 @@ func initialize_combat(wave_def) -> void:
 	turn_limit = 5 if not wave_def else wave_def.turn_limit
 	max_energy = RunManager.base_energy
 	kills_this_turn = 0
+	breaches_this_wave = 0  # Reset breach counter for new wave
 	_spawn_batch_counter = 0
 	
 	# Reset staging system
@@ -463,6 +471,9 @@ func execute_staged_cards() -> void:
 		var card_def = staged_entry.card_def
 		var tier: int = staged_entry.tier
 		
+		# Track current executing lane for weapon visual targeting
+		current_executing_lane_index = i
+		
 		card_executing.emit(card_def, tier, i)
 		print("[CombatManager] Executing card ", i, ": ", card_def.card_name)
 		
@@ -478,6 +489,9 @@ func execute_staged_cards() -> void:
 			execution_context.guns_fired += 1
 		
 		card_executed.emit(card_def, tier)
+		
+		# Reset lane index after execution
+		current_executing_lane_index = -1
 		
 		# Delay between card executions for visual clarity
 		await get_tree().create_timer(0.4).timeout
@@ -631,6 +645,7 @@ func _process_ring_phase(ring: int, buff_amount: int) -> void:
 func _process_melee_attacks(melee_enemies: Array, buff_amount: int) -> void:
 	var total_damage: int = 0
 	var total_armor_shred: int = 0
+	var attacks_this_round: int = 0  # Track breaches
 	
 	for enemy in melee_enemies:
 		var enemy_def = EnemyDatabase.get_enemy(enemy.enemy_id)
@@ -642,10 +657,17 @@ func _process_melee_attacks(melee_enemies: Array, buff_amount: int) -> void:
 			await get_tree().create_timer(0.15).timeout
 			
 			total_damage += final_dmg
+			attacks_this_round += 1  # Each melee attack = 1 breach
 			
 			if enemy_def.armor_shred > 0:
 				total_armor_shred += enemy_def.armor_shred
 				enemy_ability_triggered.emit(enemy, "armor_shred", enemy_def.armor_shred)
+	
+	# Track breaches (enemies that reached melee and attacked)
+	if attacks_this_round > 0:
+		breaches_this_wave += attacks_this_round
+		breach_occurred.emit(attacks_this_round, breaches_this_wave)
+		print("[CombatManager] Breaches: +%d (total: %d)" % [attacks_this_round, breaches_this_wave])
 	
 	if total_damage > 0:
 		await get_tree().create_timer(0.1).timeout
@@ -891,6 +913,9 @@ func _handle_enemy_death(enemy, hex_was_triggered: bool = false) -> void:
 	if hex_was_triggered and _has_warden_passive("hex_lifesteal"):
 		RunManager.heal(1)
 	
+	# Store ring before removing enemy for overkill bonus check
+	var death_ring: int = enemy.ring
+	
 	battlefield.remove_enemy(enemy)
 	enemy_killed.emit(enemy)
 	AudioManager.play_enemy_death()
@@ -901,6 +926,12 @@ func _handle_enemy_death(enemy, hex_was_triggered: bool = false) -> void:
 	
 	var scrap_reward: int = 2 if not enemy_def else enemy_def.scrap_value
 	scrap_reward += kill_effects.bonus_scrap
+	
+	# OVERKILL BONUS: +1 scrap for kills in Mid (ring 2) or Far (ring 3)
+	# Rewards players for killing enemies at range before they breach
+	if death_ring >= 2:
+		scrap_reward += 1
+	
 	RunManager.add_scrap(scrap_reward)
 	
 	var xp_reward: int = 1 if not enemy_def else enemy_def.xp_value
@@ -999,15 +1030,12 @@ func deal_damage_to_ring(ring: int, damage: int) -> void:
 	damage_dealt_to_enemies.emit(damage, ring)
 
 
-func deal_damage_to_random_enemy(ring_mask: int, damage: int, show_targeting: bool = true) -> void:
-	var candidates: Array = []
-	for ring in range(4):
-		if ring_mask & (1 << ring):
-			candidates.append_array(battlefield.get_enemies_in_ring(ring))
+func deal_damage_to_closest_enemy(ring_mask: int, damage: int, show_targeting: bool = true) -> void:
+	"""Deal damage to the closest enemy in the specified rings.
+	Prioritizes enemies in closer rings (Melee > Close > Mid > Far)."""
+	var target = battlefield.get_closest_enemy_in_rings(ring_mask)
 	
-	if candidates.size() > 0:
-		var target = candidates[randi() % candidates.size()]
-		
+	if target:
 		if show_targeting:
 			enemy_targeted.emit(target)
 			await get_tree().create_timer(0.4).timeout
@@ -1025,12 +1053,17 @@ func deal_damage_to_random_enemy(ring_mask: int, damage: int, show_targeting: bo
 			_handle_enemy_death(target, result.hex_triggered)
 
 
+func deal_damage_to_random_enemy(ring_mask: int, damage: int, show_targeting: bool = true) -> void:
+	"""Deal damage to a random enemy in the specified rings (legacy - use deal_damage_to_closest_enemy)."""
+	deal_damage_to_closest_enemy(ring_mask, damage, show_targeting)
+
+
 func deal_damage_to_last_damaged(damage: int) -> void:
 	"""Deal damage to the last damaged enemy (for reactive cards like Armored Tank)."""
 	var target = execution_context.last_damaged_enemy
 	if not target or not is_instance_valid(target):
-		# Fall back to random enemy
-		deal_damage_to_random_enemy(0b1111, damage, true)
+		# Fall back to closest enemy
+		deal_damage_to_closest_enemy(0b1111, damage, true)
 		return
 	
 	enemy_targeted.emit(target)
@@ -1092,6 +1125,47 @@ func get_enemies_moving_to_melee() -> int:
 	return count
 
 
+func get_spawns_for_next_turn() -> Array[Dictionary]:
+	"""Get all enemy spawns scheduled for the next turn.
+	Returns an array of {enemy_id: String, count: int, ring: int, enemy_name: String}"""
+	var result: Array[Dictionary] = []
+	
+	if not current_wave_def:
+		return result
+	
+	var next_turn: int = current_turn + 1
+	
+	# Get spawns from turn_spawns
+	for spawn: Dictionary in current_wave_def.turn_spawns:
+		if spawn.get("turn", 1) == next_turn:
+			var enemy_def = EnemyDatabase.get_enemy(spawn.enemy_id)
+			var enemy_name: String = spawn.enemy_id.capitalize()
+			if enemy_def:
+				enemy_name = enemy_def.enemy_name
+			
+			result.append({
+				"enemy_id": spawn.enemy_id,
+				"count": spawn.get("count", 1),
+				"ring": spawn.get("ring", 3),
+				"enemy_name": enemy_name
+			})
+	
+	return result
+
+
+func get_total_spawns_remaining() -> int:
+	"""Get total number of enemies still to spawn in remaining turns."""
+	if not current_wave_def:
+		return 0
+	
+	var total: int = 0
+	for spawn: Dictionary in current_wave_def.turn_spawns:
+		if spawn.get("turn", 1) > current_turn:
+			total += spawn.get("count", 1)
+	
+	return total
+
+
 func cleanup_combat() -> void:
 	battlefield = null
 	deck_manager = null
@@ -1112,7 +1186,7 @@ func deal_self_damage(amount: int, source: String = "card") -> void:
 	})
 	
 	if effects.has("reflect_damage") and effects.reflect_damage > 0:
-		deal_damage_to_random_enemy(0b0011, effects.reflect_damage, false)
+		deal_damage_to_closest_enemy(0b0011, effects.reflect_damage, false)
 
 
 func record_overkill(damage: int, overkill_amount: int, target) -> void:
@@ -1122,3 +1196,17 @@ func record_overkill(damage: int, overkill_amount: int, target) -> void:
 		"overkill": overkill_amount,
 		"target_ring": target.ring if target else -1
 	})
+
+
+func get_breaches_this_wave() -> int:
+	"""Get the number of breaches (melee attacks on player) this wave."""
+	return breaches_this_wave
+
+
+func get_breach_penalty_percent() -> float:
+	"""Get the wave bonus penalty from breaches.
+	Each breach reduces bonus by 5%, capped at 50% loss.
+	Returns a multiplier (1.0 = no penalty, 0.5 = 50% penalty)."""
+	var penalty_percent: float = float(breaches_this_wave) * 5.0
+	penalty_percent = minf(penalty_percent, 50.0)  # Cap at 50% loss
+	return 1.0 - (penalty_percent / 100.0)

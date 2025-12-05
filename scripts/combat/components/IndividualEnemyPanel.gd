@@ -211,3 +211,5 @@ static func create(enemy, color: Color, visual_size: Vector2) -> IndividualEnemy
 	return instance
 
 
+
+

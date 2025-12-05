@@ -328,3 +328,5 @@ func test_artifact_triggers() -> void:
 	
 	ArtifactManager.reset_artifacts()
 
+
+

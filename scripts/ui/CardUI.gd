@@ -21,7 +21,20 @@ signal card_drag_ended(card_def, tier: int, hand_index: int, drop_position: Vect
 @onready var damage_number: Label = $CardBackground/VBox/TopRow/TypeDamageVBox/DamageNumber
 @onready var name_label: Label = $CardBackground/VBox/NameLabel
 @onready var art_area: Panel = $CardBackground/VBox/ArtArea
+@onready var art_placeholder: Label = $CardBackground/VBox/ArtArea/ArtPlaceholder
 @onready var description: RichTextLabel = $CardBackground/VBox/Description
+
+# Weapon sprite display (uses Weapon2DDisplay which can rotate to face targets)
+var _weapon_3d: Control = null  # Weapon2DDisplay instance (kept name for API compatibility)
+var _is_morphed_to_3d: bool = false  # True when staged in combat lane (weapon mode active)
+var _morph_in_progress: bool = false
+
+# Morph signals
+signal artwork_morph_started()
+signal artwork_morph_completed()
+signal weapon_fire_started()
+signal weapon_fire_completed()
+
 @onready var target_label: Label = $CardBackground/VBox/TargetRow/TargetLabel
 @onready var ring_indicator: Control = $CardBackground/VBox/TargetRow/RingIndicator
 @onready var category_label: Label = $CardBackground/VBox/Footer/FooterHBox/CategoryLabel
@@ -142,6 +155,9 @@ func _ready() -> void:
 	
 	# Set pivot to bottom center for better hover animation
 	pivot_offset = Vector2(size.x / 2, size.y)
+	
+	# Setup card artwork in art area
+	_setup_card_artwork()
 
 
 func setup(card, card_tier: int, index: int) -> void:  # card: CardDefinition
@@ -151,7 +167,39 @@ func setup(card, card_tier: int, index: int) -> void:  # card: CardDefinition
 	
 	if not is_node_ready():
 		await ready
+	
+	# Setup both 2D and 3D artwork
+	if _weapon_3d and card_def:
+		_weapon_3d.setup(card_def)
+	
 	_update_display()
+
+
+func _setup_card_artwork() -> void:
+	"""Setup the CardArtwork and Weapon2DDisplay components in the art area."""
+	if not art_area:
+		return
+	
+	# Hide the placeholder text
+	if art_placeholder:
+		art_placeholder.visible = false
+	
+	# Load and create 2D weapon sprite display (visible from start - shows weapon sprite)
+	# Weapon2DDisplay supports rotation for targeting enemies
+	var Weapon2DDisplayClass = load("res://scripts/ui/Weapon2DDisplay.gd")
+	if Weapon2DDisplayClass:
+		_weapon_3d = Weapon2DDisplayClass.new()
+		_weapon_3d.name = "Weapon2DInstance"
+		_weapon_3d.set_anchors_preset(Control.PRESET_FULL_RECT)
+		_weapon_3d.modulate.a = 1.0  # Visible from start
+		_weapon_3d.fire_started.connect(_on_weapon_fire_started)
+		_weapon_3d.fire_completed.connect(_on_weapon_fire_completed)
+		art_area.add_child(_weapon_3d)
+	
+	# Setup if we already have card data
+	if card_def:
+		if _weapon_3d:
+			_weapon_3d.setup(card_def)
 
 
 func _update_display() -> void:
@@ -340,10 +388,11 @@ func _update_target_row() -> void:
 			scope_text = "Self"
 			show_ring_indicator = false
 		"random_enemy":
+			# Note: Despite the name, combat actually targets closest enemy
 			if target_count == 1:
-				scope_text = "Random"
+				scope_text = "Closest"
 			else:
-				scope_text = str(target_count) + " Random"
+				scope_text = str(target_count) + " Closest"
 		"ring":
 			if requires_target:
 				scope_text = "Choose Ring"
@@ -394,17 +443,14 @@ func _update_footer() -> void:
 		var cat_color: Color = CATEGORY_COLORS.get(primary_cat, Color(0.6, 0.6, 0.65))
 		category_label.add_theme_color_override("font_color", cat_color)
 	
-	# Tier badge
+	# Tier badge - always show for all tiers (T1-T4)
 	var tier_idx: int = mini(tier - 1, 3)
 	var tier_color: Color = TIER_COLORS[tier_idx]
 	var tier_icon: String = TIER_BADGE_ICONS[tier_idx]
 	
-	if tier > 1:
-		tier_badge.text = "T" + str(tier) + " " + tier_icon
-		tier_badge.add_theme_color_override("font_color", tier_color)
-		tier_badge.visible = true
-	else:
-		tier_badge.visible = false
+	tier_badge.text = "T" + str(tier) + " " + tier_icon
+	tier_badge.add_theme_color_override("font_color", tier_color)
+	tier_badge.visible = true
 
 
 func _apply_style() -> void:
@@ -764,3 +810,96 @@ func get_total_damage_with_buffs() -> int:
 func has_buffs() -> bool:
 	"""Check if this card has any buffs applied."""
 	return not applied_buffs.is_empty()
+
+
+# =============================================================================
+# ARTWORK 2D-TO-3D MORPH SYSTEM
+# =============================================================================
+
+func morph_artwork_to_3d() -> void:
+	"""Activate weapon mode - play a subtle pulse animation when card is staged."""
+	if _is_morphed_to_3d or _morph_in_progress:
+		return
+	if not _weapon_3d:
+		return
+	
+	_morph_in_progress = true
+	artwork_morph_started.emit()
+	
+	# Simple scale pulse to indicate card is staged and ready
+	if art_area:
+		var tween: Tween = create_tween()
+		tween.set_ease(Tween.EASE_OUT)
+		tween.set_trans(Tween.TRANS_BACK)
+		tween.tween_property(art_area, "scale", Vector2(1.08, 1.08), 0.15)
+		tween.tween_property(art_area, "scale", Vector2.ONE, 0.2)
+		await tween.finished
+	
+	_is_morphed_to_3d = true
+	_morph_in_progress = false
+	
+	# Start idle animation
+	if _weapon_3d.has_method("play_idle_animation"):
+		_weapon_3d.play_idle_animation()
+	
+	artwork_morph_completed.emit()
+
+
+func morph_artwork_to_2d() -> void:
+	"""Deactivate weapon mode - called when card returns to hand (not typically used)."""
+	if not _is_morphed_to_3d or _morph_in_progress:
+		return
+	if not _weapon_3d:
+		return
+	
+	_morph_in_progress = true
+	artwork_morph_started.emit()
+	
+	# Stop idle animation
+	if _weapon_3d.has_method("stop_idle_animation"):
+		_weapon_3d.stop_idle_animation()
+	
+	_is_morphed_to_3d = false
+	_morph_in_progress = false
+	artwork_morph_completed.emit()
+
+
+func is_artwork_3d() -> bool:
+	"""Check if card is in 'weapon mode' (staged in combat lane)."""
+	return _is_morphed_to_3d
+
+
+func set_weapon_target(target_pos: Vector2) -> void:
+	"""Set the target position for the weapon to face."""
+	# Always rotate the weapon sprite if available (works regardless of morph state)
+	if _weapon_3d:
+		_weapon_3d.set_target_direction(target_pos)
+
+
+func fire_weapon(target_pos: Vector2) -> void:
+	"""Fire the weapon at a target position with animation."""
+	set_weapon_target(target_pos)
+	
+	# Fire animation works regardless of morph state
+	if _weapon_3d:
+		_weapon_3d.play_fire_animation()
+
+
+func get_muzzle_global_position() -> Vector2:
+	"""Get the global position of the weapon's muzzle (for projectile origin)."""
+	# Get muzzle position from weapon sprite if available
+	if _weapon_3d:
+		return _weapon_3d.get_muzzle_global_position()
+	
+	# Fallback to center of art area
+	if art_area:
+		return art_area.global_position + art_area.size / 2.0
+	return global_position + size / 2.0
+
+
+func _on_weapon_fire_started() -> void:
+	weapon_fire_started.emit()
+
+
+func _on_weapon_fire_completed() -> void:
+	weapon_fire_completed.emit()

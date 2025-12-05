@@ -25,99 +25,139 @@ func _create_v5_enemies() -> void:
 
 
 func _create_grunt_enemies() -> void:
-	# === V5 GRUNT ENEMIES ===
+	# === V6 GRUNT ENEMIES (Horde Rebalance: -40% HP for more killable fodder) ===
 	
-	# Weakling (Swarm archetype) - HP: 3, Dmg: 2, Speed: 1
+	# Mite (Fodder archetype) - HP: 1, Dmg: 1, Speed: 1
+	# NEW: Ultra-weak fodder for horde feel
+	var mite := EnemyDef.new()
+	mite.enemy_id = "mite"
+	mite.enemy_name = "Mite"
+	mite.description = "Fodder. Extremely weak. Dies to almost anything."
+	mite.enemy_type = "grunt"
+	mite.behavior_type = EnemyDef.BehaviorType.RUSHER
+	mite.base_hp = 1
+	mite.base_damage = 1
+	mite.armor = 0
+	mite.movement_speed = 1
+	mite.target_ring = 0
+	mite.attack_type = "melee"
+	mite.scrap_value = 3
+	mite.xp_value = 1
+	mite.icon_color = Color(0.4, 0.35, 0.3)
+	mite.display_icon = "🐜"
+	_register_enemy(mite, "fodder")
+	
+	# Swarmling (Fodder archetype) - HP: 2, Dmg: 1, Speed: 1
+	# NEW: Slightly tougher fodder
+	var swarmling := EnemyDef.new()
+	swarmling.enemy_id = "swarmling"
+	swarmling.enemy_name = "Swarmling"
+	swarmling.description = "Fodder. Weak swarm creature. Spawns in masses."
+	swarmling.enemy_type = "grunt"
+	swarmling.behavior_type = EnemyDef.BehaviorType.RUSHER
+	swarmling.base_hp = 2
+	swarmling.base_damage = 1
+	swarmling.armor = 0
+	swarmling.movement_speed = 1
+	swarmling.target_ring = 0
+	swarmling.attack_type = "melee"
+	swarmling.scrap_value = 4
+	swarmling.xp_value = 1
+	swarmling.icon_color = Color(0.5, 0.4, 0.35)
+	swarmling.display_icon = "🪲"
+	_register_enemy(swarmling, "fodder")
+	
+	# Weakling (Swarm archetype) - HP: 2 (was 3), Dmg: 2, Speed: 1
 	var weakling := EnemyDef.new()
 	weakling.enemy_id = "weakling"
 	weakling.enemy_name = "Weakling"
 	weakling.description = "Swarm. Weak but numerous. Perfect target for AOE."
 	weakling.enemy_type = "grunt"
 	weakling.behavior_type = EnemyDef.BehaviorType.RUSHER
-	weakling.base_hp = 3
+	weakling.base_hp = 2  # V6: Reduced from 3
 	weakling.base_damage = 2
 	weakling.armor = 0
 	weakling.movement_speed = 1
 	weakling.target_ring = 0
 	weakling.attack_type = "melee"
-	weakling.scrap_value = 3
+	weakling.scrap_value = 5
 	weakling.xp_value = 1
 	weakling.icon_color = Color(0.5, 0.5, 0.4)
 	weakling.display_icon = "🐀"
 	_register_enemy(weakling, "swarm")
 	
-	# Husk (Rusher archetype) - HP: 8, Dmg: 4, Speed: 1
+	# Husk (Rusher archetype) - HP: 5 (was 8), Dmg: 3, Speed: 1
 	var husk := EnemyDef.new()
 	husk.enemy_id = "husk"
 	husk.enemy_name = "Husk"
 	husk.description = "Rusher. Basic melee enemy. Advances every turn."
 	husk.enemy_type = "grunt"
 	husk.behavior_type = EnemyDef.BehaviorType.RUSHER
-	husk.base_hp = 8
-	husk.base_damage = 4
+	husk.base_hp = 5  # V6: Reduced from 8
+	husk.base_damage = 3  # V6: Reduced from 4
 	husk.armor = 0
 	husk.movement_speed = 1
 	husk.target_ring = 0
 	husk.attack_type = "melee"
-	husk.scrap_value = 4
+	husk.scrap_value = 7
 	husk.xp_value = 2
 	husk.icon_color = Color(0.8, 0.3, 0.3)
 	husk.display_icon = "💀"
 	_register_enemy(husk, "rusher")
 	
-	# Cultist (Swarm archetype) - HP: 4, Dmg: 2, Speed: 1
+	# Cultist (Swarm archetype) - HP: 3 (was 4), Dmg: 2, Speed: 1
 	var cultist := EnemyDef.new()
 	cultist.enemy_id = "cultist"
 	cultist.enemy_name = "Cultist"
 	cultist.description = "Swarm. Weak melee enemy. Spawns in large groups."
 	cultist.enemy_type = "grunt"
 	cultist.behavior_type = EnemyDef.BehaviorType.RUSHER
-	cultist.base_hp = 4
+	cultist.base_hp = 3  # V6: Reduced from 4
 	cultist.base_damage = 2
 	cultist.armor = 0
 	cultist.movement_speed = 1
 	cultist.target_ring = 0
 	cultist.attack_type = "melee"
-	cultist.scrap_value = 2
+	cultist.scrap_value = 4
 	cultist.xp_value = 1
 	cultist.icon_color = Color(0.4, 0.3, 0.5)
 	cultist.display_icon = "👤"
 	_register_enemy(cultist, "swarm")
 	
-	# Spinecrawler (Fast archetype) - HP: 6, Dmg: 3, Speed: 2
+	# Spinecrawler (Fast archetype) - HP: 4 (was 6), Dmg: 3, Speed: 2
 	var spinecrawler := EnemyDef.new()
 	spinecrawler.enemy_id = "spinecrawler"
 	spinecrawler.enemy_name = "Spinecrawler"
 	spinecrawler.description = "Fast. Moves 2 rings per turn. Kill it before it reaches you."
 	spinecrawler.enemy_type = "grunt"
 	spinecrawler.behavior_type = EnemyDef.BehaviorType.FAST
-	spinecrawler.base_hp = 6
+	spinecrawler.base_hp = 4  # V6: Reduced from 6
 	spinecrawler.base_damage = 3
 	spinecrawler.armor = 0
 	spinecrawler.movement_speed = 2
 	spinecrawler.target_ring = 0
 	spinecrawler.attack_type = "melee"
-	spinecrawler.scrap_value = 5
+	spinecrawler.scrap_value = 8
 	spinecrawler.xp_value = 2
 	spinecrawler.icon_color = Color(0.6, 0.2, 0.6)
 	spinecrawler.display_icon = "🕷️"
 	_register_enemy(spinecrawler, "fast")
 	
-	# Spitter (Ranged archetype) - HP: 7, Dmg: 3, Speed: 1
+	# Spitter (Ranged archetype) - HP: 4 (was 7), Dmg: 2, Speed: 1
 	var spitter := EnemyDef.new()
 	spitter.enemy_id = "spitter"
 	spitter.enemy_name = "Spitter"
 	spitter.description = "Ranged. Stops at Mid ring and attacks from there."
 	spitter.enemy_type = "grunt"
 	spitter.behavior_type = EnemyDef.BehaviorType.RANGED
-	spitter.base_hp = 7
-	spitter.base_damage = 3
+	spitter.base_hp = 4  # V6: Reduced from 7
+	spitter.base_damage = 2  # V6: Reduced from 3
 	spitter.armor = 0
 	spitter.movement_speed = 1
 	spitter.target_ring = 2  # Stops at Mid
 	spitter.attack_type = "ranged"
 	spitter.attack_range = 2
-	spitter.scrap_value = 4
+	spitter.scrap_value = 7
 	spitter.xp_value = 2
 	spitter.icon_color = Color(0.4, 0.7, 0.3)
 	spitter.display_icon = "🦎"
@@ -125,51 +165,71 @@ func _create_grunt_enemies() -> void:
 
 
 func _create_elite_enemies() -> void:
-	# === V5 ELITE ENEMIES ===
+	# === V6 ELITE ENEMIES (Horde Rebalance: -30% HP) ===
 	
-	# Shell Titan (Tank archetype) - HP: 20, Dmg: 6, Armor: 5
+	# Drone (Fast Fodder archetype) - HP: 3, Dmg: 2, Speed: 2
+	# NEW: Fast fodder for horde variety
+	var drone := EnemyDef.new()
+	drone.enemy_id = "drone"
+	drone.enemy_name = "Drone"
+	drone.description = "Fast fodder. Moves quickly but dies easily."
+	drone.enemy_type = "grunt"
+	drone.behavior_type = EnemyDef.BehaviorType.FAST
+	drone.base_hp = 3
+	drone.base_damage = 2
+	drone.armor = 0
+	drone.movement_speed = 2
+	drone.target_ring = 0
+	drone.attack_type = "melee"
+	drone.scrap_value = 5
+	drone.xp_value = 1
+	drone.icon_color = Color(0.4, 0.4, 0.45)
+	drone.display_icon = "🦟"
+	_register_enemy(drone, "fast")
+	
+	# Shell Titan (Tank archetype) - HP: 14 (was 20), Dmg: 5, Armor: 4
 	var titan := EnemyDef.new()
 	titan.enemy_id = "shell_titan"
 	titan.enemy_name = "Shell Titan"
-	titan.description = "Tank. 5 armor (each hit removes 1). Use multi-hit weapons!"
+	titan.description = "Tank. 4 armor (each hit removes 1). Use multi-hit weapons!"
 	titan.enemy_type = "elite"
 	titan.behavior_type = EnemyDef.BehaviorType.TANK
 	titan.is_elite = true
-	titan.base_hp = 20
-	titan.base_damage = 6
-	titan.armor = 5  # V5: Takes 5 hits to strip armor
+	titan.base_hp = 14  # V6: Reduced from 20
+	titan.base_damage = 5  # V6: Reduced from 6
+	titan.armor = 4  # V6: Reduced from 5
 	titan.movement_speed = 1
 	titan.target_ring = 0
 	titan.attack_type = "melee"
-	titan.scrap_value = 10
-	titan.xp_value = 8
+	titan.scrap_value = 15
+	titan.xp_value = 6
 	titan.icon_color = Color(0.5, 0.5, 0.6)
 	titan.display_icon = "🛡️"
 	_register_enemy(titan, "tank")
 	
-	# Bomber (Bomber archetype) - HP: 9, Dmg: 6 (explode), Speed: 1
+	# Bomber (Bomber archetype) - HP: 6 (was 9), Dmg: 5 (explode), Speed: 1
 	var bomber := EnemyDef.new()
 	bomber.enemy_id = "bomber"
 	bomber.enemy_name = "Bomber"
-	bomber.description = "Bomber. Explodes on death: 6 dmg to player, 4 dmg to ring enemies."
+	bomber.description = "Bomber. Explodes on death: 5 dmg to player, 3 dmg to ring enemies."
 	bomber.enemy_type = "grunt"  # Listed as grunt for spawn purposes
 	bomber.behavior_type = EnemyDef.BehaviorType.BOMBER
-	bomber.base_hp = 9
+	bomber.base_hp = 6  # V6: Reduced from 9
 	bomber.base_damage = 0  # No regular attack
 	bomber.armor = 0
 	bomber.movement_speed = 1
 	bomber.target_ring = 0
 	bomber.attack_type = "suicide"
 	bomber.special_ability = "explode_on_death"
-	bomber.buff_amount = 6  # Explosion damage to player
-	bomber.aoe_damage = 4   # Explosion damage to other enemies
-	bomber.scrap_value = 5
-	bomber.xp_value = 3
+	bomber.buff_amount = 5  # V6: Reduced from 6
+	bomber.aoe_damage = 3   # V6: Reduced from 4
+	bomber.scrap_value = 8
+	bomber.xp_value = 2
 	bomber.icon_color = Color(0.9, 0.5, 0.1)
 	bomber.display_icon = "💣"
 	_register_enemy(bomber, "bomber")
 	
-	# Torchbearer (Buffer archetype) - HP: 10, Dmg: 2
+	# Torchbearer (Buffer archetype) - HP: 7 (was 10), Dmg: 2
 	var torchbearer := EnemyDef.new()
 	torchbearer.enemy_id = "torchbearer"
 	torchbearer.enemy_name = "Torchbearer"
@@ -177,7 +237,7 @@ func _create_elite_enemies() -> void:
 	torchbearer.enemy_type = "elite"
 	torchbearer.behavior_type = EnemyDef.BehaviorType.BUFFER
 	torchbearer.is_elite = true
-	torchbearer.base_hp = 10
+	torchbearer.base_hp = 7  # V6: Reduced from 10
 	torchbearer.base_damage = 2
 	torchbearer.armor = 0
 	torchbearer.movement_speed = 1
@@ -185,36 +245,36 @@ func _create_elite_enemies() -> void:
 	torchbearer.attack_type = "melee"
 	torchbearer.special_ability = "buff_allies"
 	torchbearer.buff_amount = 2
-	torchbearer.scrap_value = 8
-	torchbearer.xp_value = 6
+	torchbearer.scrap_value = 12
+	torchbearer.xp_value = 5
 	torchbearer.icon_color = Color(0.9, 0.7, 0.2)
 	torchbearer.display_icon = "🔥"
 	_register_enemy(torchbearer, "buffer")
 	
-	# Channeler (Spawner archetype) - HP: 12, Dmg: 2
+	# Channeler (Spawner archetype) - HP: 8 (was 12), Dmg: 2
 	var channeler := EnemyDef.new()
 	channeler.enemy_id = "channeler"
 	channeler.enemy_name = "Channeler"
-	channeler.description = "Spawner. Spawns 1 Cultist each turn. Kill it fast!"
+	channeler.description = "Spawner. Spawns 2 Mites each turn. Kill it fast!"
 	channeler.enemy_type = "elite"
 	channeler.behavior_type = EnemyDef.BehaviorType.SPAWNER
 	channeler.is_elite = true
-	channeler.base_hp = 12
+	channeler.base_hp = 8  # V6: Reduced from 12
 	channeler.base_damage = 2
 	channeler.armor = 0
 	channeler.movement_speed = 1
 	channeler.target_ring = 1  # Stays at Close
 	channeler.attack_type = "ranged"
 	channeler.special_ability = "spawn_minions"
-	channeler.spawn_enemy_id = "cultist"
-	channeler.spawn_count = 1
-	channeler.scrap_value = 10
-	channeler.xp_value = 8
+	channeler.spawn_enemy_id = "mite"  # V6: Spawns weaker fodder
+	channeler.spawn_count = 2  # V6: Spawns more at once
+	channeler.scrap_value = 15
+	channeler.xp_value = 6
 	channeler.icon_color = Color(0.3, 0.3, 0.8)
 	channeler.display_icon = "🧙"
 	_register_enemy(channeler, "spawner")
 	
-	# Stalker (Ambusher archetype) - HP: 9, Dmg: 5, spawns at Close
+	# Stalker (Ambusher archetype) - HP: 6 (was 9), Dmg: 4, spawns at Close
 	var stalker := EnemyDef.new()
 	stalker.enemy_id = "stalker"
 	stalker.enemy_name = "Stalker"
@@ -222,64 +282,64 @@ func _create_elite_enemies() -> void:
 	stalker.enemy_type = "elite"
 	stalker.behavior_type = EnemyDef.BehaviorType.AMBUSH
 	stalker.is_elite = true
-	stalker.base_hp = 9
-	stalker.base_damage = 5
+	stalker.base_hp = 6  # V6: Reduced from 9
+	stalker.base_damage = 4  # V6: Reduced from 5
 	stalker.armor = 0
 	stalker.movement_speed = 1
 	stalker.target_ring = 0
 	stalker.attack_type = "melee"
-	stalker.scrap_value = 7
-	stalker.xp_value = 5
+	stalker.scrap_value = 10
+	stalker.xp_value = 4
 	stalker.icon_color = Color(0.2, 0.2, 0.3)
 	stalker.display_icon = "👁️"
 	_register_enemy(stalker, "ambusher")
 	
-	# Armor Reaver (Armor Reaver archetype) - HP: 10, Dmg: 3, shreds 3 player armor
+	# Armor Reaver (Armor Reaver archetype) - HP: 7 (was 10), Dmg: 3, shreds 2 player armor
 	var reaver := EnemyDef.new()
 	reaver.enemy_id = "armor_reaver"
 	reaver.enemy_name = "Armor Reaver"
-	reaver.description = "Armor Reaver. On hit: 3 dmg + removes 3 of YOUR armor."
+	reaver.description = "Armor Reaver. On hit: 3 dmg + removes 2 of YOUR armor."
 	reaver.enemy_type = "elite"
 	reaver.behavior_type = EnemyDef.BehaviorType.SHREDDER
 	reaver.is_elite = true
-	reaver.base_hp = 10
+	reaver.base_hp = 7  # V6: Reduced from 10
 	reaver.base_damage = 3
-	reaver.armor_shred = 3  # Removes player armor
+	reaver.armor_shred = 2  # V6: Reduced from 3
 	reaver.armor = 0
 	reaver.movement_speed = 1
 	reaver.target_ring = 0
 	reaver.attack_type = "melee"
 	reaver.special_ability = "armor_shred"
-	reaver.scrap_value = 8
-	reaver.xp_value = 6
+	reaver.scrap_value = 12
+	reaver.xp_value = 5
 	reaver.icon_color = Color(0.7, 0.2, 0.2)
 	reaver.display_icon = "🪓"
 	_register_enemy(reaver, "armor_reaver")
 
 
 func _create_boss_enemies() -> void:
-	# === V5 BOSS ENEMIES ===
+	# === V6 BOSS ENEMIES (HP adjusted for longer fights but more minion pressure) ===
 	
 	# Ember Saint - Wave 20 final boss
 	var ember_saint := EnemyDef.new()
 	ember_saint.enemy_id = "ember_saint"
 	ember_saint.enemy_name = "Ember Saint"
-	ember_saint.description = "BOSS. Stays at Far. AoE attacks all rings. Spawns Bombers."
+	ember_saint.description = "BOSS. Stays at Far. AoE attacks. Spawns swarms of Mites."
 	ember_saint.enemy_type = "boss"
 	ember_saint.behavior_type = EnemyDef.BehaviorType.BOSS
 	ember_saint.is_boss = true
-	ember_saint.base_hp = 100
-	ember_saint.base_damage = 10
-	ember_saint.armor = 5
+	ember_saint.base_hp = 80  # V6: Reduced from 100
+	ember_saint.base_damage = 8  # V6: Reduced from 10
+	ember_saint.armor = 4  # V6: Reduced from 5
 	ember_saint.movement_speed = 0  # Doesn't move
 	ember_saint.target_ring = 3  # Stays at Far
 	ember_saint.attack_type = "ranged"
 	ember_saint.attack_range = 3
 	ember_saint.special_ability = "spawn_minions"
-	ember_saint.spawn_enemy_id = "bomber"
-	ember_saint.spawn_count = 1
-	ember_saint.scrap_value = 100
-	ember_saint.xp_value = 50
+	ember_saint.spawn_enemy_id = "swarmling"  # V6: Spawns weaker but more numerous minions
+	ember_saint.spawn_count = 3  # V6: Spawns 3 at once for horde feel
+	ember_saint.scrap_value = 150
+	ember_saint.xp_value = 40
 	ember_saint.icon_color = Color(1.0, 0.3, 0.1)
 	ember_saint.display_icon = "👹"
 	_register_enemy(ember_saint, "boss")

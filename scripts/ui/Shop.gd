@@ -8,8 +8,8 @@ extends Control
 @onready var scrap_label: Label = $MarginContainer/VBox/Header/ScrapContainer/ScrapLabel
 @onready var card_slots: HBoxContainer = $MarginContainer/VBox/CardsSection/CardSlots
 @onready var artifact_slots: HBoxContainer = $MarginContainer/VBox/ArtifactsSection/ArtifactSlots
-@onready var merge_section: Control = $MarginContainer/VBox/MergeSection
-@onready var merge_slots: HBoxContainer = $MarginContainer/VBox/MergeSection/MergeSlots
+@onready var merge_section: Control = $RightPanel/MergeSection
+@onready var merge_slots: VBoxContainer = $RightPanel/MergeSection/MergeSlots
 @onready var remove_cost_label: Label = $RightPanel/ServicesSection/ServiceButtons/RemoveCard/Cost
 @onready var reroll_cost_label: Label = $RightPanel/ServicesSection/ServiceButtons/Reroll/Cost
 @onready var deck_view_panel: PanelContainer = $DeckViewPanel
@@ -158,8 +158,13 @@ func _setup_artifact_tooltip() -> void:
 
 
 func _apply_wave_rewards() -> void:
-	"""Apply interest and show XP/level-up info when entering shop."""
-	# Apply interest
+	"""Apply wave completion bonus, interest, and show XP/level-up info when entering shop."""
+	# Apply wave completion bonus (guaranteed scrap for beating the wave)
+	var wave_bonus: int = RunManager.award_wave_completion_bonus()
+	if wave_bonus > 0:
+		_show_wave_bonus_popup(wave_bonus)
+	
+	# Apply interest AFTER wave bonus (so bonus is included in interest calculation)
 	var interest_data: Dictionary = RunManager.get_interest_preview()
 	var interest_amount: int = RunManager.apply_interest()
 	
@@ -172,6 +177,24 @@ func _apply_wave_rewards() -> void:
 		_show_xp_popup(xp_info)
 
 
+func _show_wave_bonus_popup(bonus: int) -> void:
+	"""Show wave completion bonus popup."""
+	var popup: Label = Label.new()
+	popup.text = "✅ Wave %d Complete! +%d Scrap" % [RunManager.current_wave, bonus]
+	popup.add_theme_font_size_override("font_size", 22)
+	popup.add_theme_color_override("font_color", Color(0.3, 1.0, 0.5))
+	popup.add_theme_color_override("font_outline_color", Color(0, 0, 0))
+	popup.add_theme_constant_override("outline_size", 3)
+	popup.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	popup.position = Vector2(get_viewport_rect().size.x / 2 - 180, 50)
+	add_child(popup)
+	
+	var tween: Tween = create_tween()
+	tween.tween_interval(2.5)
+	tween.tween_property(popup, "modulate:a", 0.0, 0.5)
+	tween.tween_callback(popup.queue_free)
+
+
 func _show_interest_popup(data: Dictionary, earned: int) -> void:
 	"""Show a brief interest popup."""
 	var popup: Label = Label.new()
@@ -181,7 +204,7 @@ func _show_interest_popup(data: Dictionary, earned: int) -> void:
 	popup.add_theme_color_override("font_outline_color", Color(0, 0, 0))
 	popup.add_theme_constant_override("outline_size", 3)
 	popup.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	popup.position = Vector2(get_viewport_rect().size.x / 2 - 180, 80)
+	popup.position = Vector2(get_viewport_rect().size.x / 2 - 180, 85)
 	add_child(popup)
 	
 	var tween: Tween = create_tween()
@@ -413,6 +436,9 @@ func _check_merges() -> void:
 	if not merge_section or not merge_slots:
 		return
 	
+	# Always show merge section
+	merge_section.visible = true
+	
 	# Clear existing merge slots
 	for child: Node in merge_slots.get_children():
 		child.queue_free()
@@ -420,10 +446,13 @@ func _check_merges() -> void:
 	var available_merges: Array[Dictionary] = MergeManager.check_for_merges()
 	
 	if available_merges.size() == 0:
-		merge_section.visible = false
+		# Show helpful message explaining merge system
+		var info_label: Label = Label.new()
+		info_label.text = "Collect 2 copies of the same weapon card to merge → upgrade!"
+		info_label.add_theme_font_size_override("font_size", 13)
+		info_label.add_theme_color_override("font_color", Color(0.5, 0.6, 0.5))
+		merge_slots.add_child(info_label)
 		return
-	
-	merge_section.visible = true
 	
 	# Create merge option for each available merge
 	for merge_data: Dictionary in available_merges:

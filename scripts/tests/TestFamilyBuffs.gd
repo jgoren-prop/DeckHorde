@@ -201,3 +201,5 @@ func _test_remove_card() -> void:
 	_assert(FamilyBuffManager.get_buff_tier("Kinetic") == 0, "2 cards = Tier 0")
 	_assert(RunManager.player_stats.kinetic == 0, "Buff removed: 0 Kinetic")
 
+
+

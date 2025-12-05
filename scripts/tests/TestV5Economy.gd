@@ -91,17 +91,17 @@ func test_interest_cap() -> void:
 func test_card_pricing_by_rarity() -> void:
 	start_test("Card pricing by rarity")
 	
-	# Common base price = 15
+	# Common base price = 10 (Brotato economy: cheaper for accessibility)
 	var common_price: int = ShopGenerator.RARITY_BASE_PRICES.get(0, 0)
-	assert_equal(common_price, 15, "Common base price should be 15")
+	assert_equal(common_price, 10, "Common base price should be 10")
 	
-	# Uncommon base price = 38
+	# Uncommon base price = 25 (Brotato economy: cheaper for accessibility)
 	var uncommon_price: int = ShopGenerator.RARITY_BASE_PRICES.get(1, 0)
-	assert_equal(uncommon_price, 38, "Uncommon base price should be 38")
+	assert_equal(uncommon_price, 25, "Uncommon base price should be 25")
 	
-	# Rare base price = 75
+	# Rare base price = 50 (Brotato economy: cheaper for accessibility)
 	var rare_price: int = ShopGenerator.RARITY_BASE_PRICES.get(2, 0)
-	assert_equal(rare_price, 75, "Rare base price should be 75")
+	assert_equal(rare_price, 50, "Rare base price should be 50")
 	
 	end_test()
 
@@ -204,10 +204,10 @@ func test_stat_upgrade_pricing() -> void:
 	assert_equal(kinetic.base_price, 12, "Kinetic base price should be 12")
 	assert_equal(kinetic.price_increment, 4, "Kinetic increment should be 4")
 	
-	# Draw: base 45, +20 per buy
+	# Draw: base 25, +15 per buy (Brotato economy: cheaper critical stats)
 	var draw: Dictionary = ShopGenerator.V5_STAT_UPGRADES.get("draw_up", {})
-	assert_equal(draw.base_price, 45, "Draw base price should be 45")
-	assert_equal(draw.price_increment, 20, "Draw increment should be 20")
+	assert_equal(draw.base_price, 25, "Draw base price should be 25")
+	assert_equal(draw.price_increment, 15, "Draw increment should be 15")
 	
 	end_test()
 
@@ -286,4 +286,6 @@ func assert_true(condition: bool, message: String) -> void:
 	else:
 		tests_failed += 1
 		print("  ✗ ", current_test, ": ", message)
+
+
 

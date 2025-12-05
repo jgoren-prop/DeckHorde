@@ -82,6 +82,14 @@ size_flags_horizontal = 4
 theme_override_font_sizes/font_size = 18
 text = "📜 Card Collection"
 
+[node name="DevToolsButton" type="Button" parent="VBoxContainer"]
+custom_minimum_size = Vector2(250, 50)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_colors/font_color = Color(0.6, 0.8, 1, 1)
+theme_override_font_sizes/font_size = 18
+text = "🔧 Dev Tools"
+
 [node name="QuitButton" type="Button" parent="VBoxContainer"]
 custom_minimum_size = Vector2(250, 50)
 layout_mode = 2
@@ -106,6 +114,7 @@ text = "v0.1.0 - Early Development"
 [connection signal="pressed" from="VBoxContainer/MetaButton" to="." method="_on_meta_pressed"]
 [connection signal="pressed" from="VBoxContainer/SettingsButton" to="." method="_on_settings_pressed"]
 [connection signal="pressed" from="VBoxContainer/CardCollectionButton" to="." method="_on_card_collection_pressed"]
+[connection signal="pressed" from="VBoxContainer/DevToolsButton" to="." method="_on_dev_tools_pressed"]
 [connection signal="pressed" from="VBoxContainer/QuitButton" to="." method="_on_quit_pressed"]
 
 

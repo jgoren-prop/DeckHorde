@@ -108,3 +108,5 @@ static func populate_glossary_content(content_container: VBoxContainer) -> void:
 		content_container.add_child(entry_container)
 
 
+
+

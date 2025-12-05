@@ -1,0 +1,373 @@
+[gd_scene load_steps=3 format=3 uid="uid://d2q8x7y6mhnqp"]
+
+[ext_resource type="Script" path="res://scripts/devtools/EncounterDesigner.gd" id="1_encounter"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
+bg_color = Color(0.08, 0.09, 0.12, 1)
+
+[node name="EncounterDesigner" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_encounter")
+
+[node name="Background" type="Panel" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
+
+[node name="MainContainer" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 20
+
+[node name="VBox" type="VBoxContainer" parent="MainContainer"]
+layout_mode = 2
+theme_override_constants/separation = 15
+
+[node name="HeaderRow" type="HBoxContainer" parent="MainContainer/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="BackBtn" type="Button" parent="MainContainer/VBox/HeaderRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "← Back"
+
+[node name="Title" type="Label" parent="MainContainer/VBox/HeaderRow"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.75, 0.3, 1)
+theme_override_font_sizes/font_size = 28
+text = "⚔️ ENCOUNTER DESIGNER"
+
+[node name="Spacer" type="Control" parent="MainContainer/VBox/HeaderRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="NewBtn" type="Button" parent="MainContainer/VBox/HeaderRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "📄 New"
+
+[node name="LoadWaveDropdown" type="OptionButton" parent="MainContainer/VBox/HeaderRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(140, 0)
+layout_mode = 2
+
+[node name="LoadBtn" type="Button" parent="MainContainer/VBox/HeaderRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "📂 Load"
+
+[node name="SaveBtn" type="Button" parent="MainContainer/VBox/HeaderRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "💾 Save"
+
+[node name="ExportJSONBtn" type="Button" parent="MainContainer/VBox/HeaderRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "📋 Export JSON"
+
+[node name="TestBtn" type="Button" parent="MainContainer/VBox/HeaderRow"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.3, 0.9, 0.4, 1)
+text = "▶️ TEST"
+
+[node name="MainSplit" type="HSplitContainer" parent="MainContainer/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+split_offset = 450
+
+[node name="LeftPanel" type="VBoxContainer" parent="MainContainer/VBox/MainSplit"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 12
+
+[node name="WaveSettingsPanel" type="PanelContainer" parent="MainContainer/VBox/MainSplit/LeftPanel"]
+layout_mode = 2
+
+[node name="WaveSettingsVBox" type="VBoxContainer" parent="MainContainer/VBox/MainSplit/LeftPanel/WaveSettingsPanel"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="WaveSettingsHeader" type="Label" parent="MainContainer/VBox/MainSplit/LeftPanel/WaveSettingsPanel/WaveSettingsVBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.85, 1, 1)
+theme_override_font_sizes/font_size = 16
+text = "📋 Wave Settings"
+
+[node name="HSeparator" type="HSeparator" parent="MainContainer/VBox/MainSplit/LeftPanel/WaveSettingsPanel/WaveSettingsVBox"]
+layout_mode = 2
+
+[node name="Row1" type="HBoxContainer" parent="MainContainer/VBox/MainSplit/LeftPanel/WaveSettingsPanel/WaveSettingsVBox"]
+layout_mode = 2
+theme_override_constants/separation = 15
+
+[node name="WaveNumLabel" type="Label" parent="MainContainer/VBox/MainSplit/LeftPanel/WaveSettingsPanel/WaveSettingsVBox/Row1"]
+layout_mode = 2
+text = "Wave #:"
+
+[node name="WaveNumberSpin" type="SpinBox" parent="MainContainer/VBox/MainSplit/LeftPanel/WaveSettingsPanel/WaveSettingsVBox/Row1"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(70, 0)
+layout_mode = 2
+
+[node name="NameLabel" type="Label" parent="MainContainer/VBox/MainSplit/LeftPanel/WaveSettingsPanel/WaveSettingsVBox/Row1"]
+layout_mode = 2
+text = "Name:"
+
+[node name="WaveNameEdit" type="LineEdit" parent="MainContainer/VBox/MainSplit/LeftPanel/WaveSettingsPanel/WaveSettingsVBox/Row1"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "Enter wave name..."
+
+[node name="Row2" type="HBoxContainer" parent="MainContainer/VBox/MainSplit/LeftPanel/WaveSettingsPanel/WaveSettingsVBox"]
+layout_mode = 2
+theme_override_constants/separation = 15
+
+[node name="TurnLimitLabel" type="Label" parent="MainContainer/VBox/MainSplit/LeftPanel/WaveSettingsPanel/WaveSettingsVBox/Row2"]
+layout_mode = 2
+text = "Turn Limit:"
+
+[node name="TurnLimitSpin" type="SpinBox" parent="MainContainer/VBox/MainSplit/LeftPanel/WaveSettingsPanel/WaveSettingsVBox/Row2"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(70, 0)
+layout_mode = 2
+
+[node name="HPMultLabel" type="Label" parent="MainContainer/VBox/MainSplit/LeftPanel/WaveSettingsPanel/WaveSettingsVBox/Row2"]
+layout_mode = 2
+text = "HP Mult:"
+
+[node name="HPMultSpin" type="SpinBox" parent="MainContainer/VBox/MainSplit/LeftPanel/WaveSettingsPanel/WaveSettingsVBox/Row2"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+
+[node name="DmgMultLabel" type="Label" parent="MainContainer/VBox/MainSplit/LeftPanel/WaveSettingsPanel/WaveSettingsVBox/Row2"]
+layout_mode = 2
+text = "Dmg Mult:"
+
+[node name="DmgMultSpin" type="SpinBox" parent="MainContainer/VBox/MainSplit/LeftPanel/WaveSettingsPanel/WaveSettingsVBox/Row2"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+
+[node name="ScrapLabel" type="Label" parent="MainContainer/VBox/MainSplit/LeftPanel/WaveSettingsPanel/WaveSettingsVBox/Row2"]
+layout_mode = 2
+text = "Scrap Bonus:"
+
+[node name="ScrapBonusSpin" type="SpinBox" parent="MainContainer/VBox/MainSplit/LeftPanel/WaveSettingsPanel/WaveSettingsVBox/Row2"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(70, 0)
+layout_mode = 2
+
+[node name="Row3" type="HBoxContainer" parent="MainContainer/VBox/MainSplit/LeftPanel/WaveSettingsPanel/WaveSettingsVBox"]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="EliteCheck" type="CheckBox" parent="MainContainer/VBox/MainSplit/LeftPanel/WaveSettingsPanel/WaveSettingsVBox/Row3"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Elite Wave"
+
+[node name="BossCheck" type="CheckBox" parent="MainContainer/VBox/MainSplit/LeftPanel/WaveSettingsPanel/WaveSettingsVBox/Row3"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Boss Wave"
+
+[node name="HordeCheck" type="CheckBox" parent="MainContainer/VBox/MainSplit/LeftPanel/WaveSettingsPanel/WaveSettingsVBox/Row3"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Horde Wave"
+
+[node name="DescLabel" type="Label" parent="MainContainer/VBox/MainSplit/LeftPanel/WaveSettingsPanel/WaveSettingsVBox"]
+layout_mode = 2
+text = "Description:"
+
+[node name="WaveDescEdit" type="TextEdit" parent="MainContainer/VBox/MainSplit/LeftPanel/WaveSettingsPanel/WaveSettingsVBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 60)
+layout_mode = 2
+placeholder_text = "Enter wave description..."
+
+[node name="SpawnListPanel" type="PanelContainer" parent="MainContainer/VBox/MainSplit/LeftPanel"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="SpawnListVBox" type="VBoxContainer" parent="MainContainer/VBox/MainSplit/LeftPanel/SpawnListPanel"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="SpawnHeader" type="HBoxContainer" parent="MainContainer/VBox/MainSplit/LeftPanel/SpawnListPanel/SpawnListVBox"]
+layout_mode = 2
+
+[node name="SpawnHeaderLabel" type="Label" parent="MainContainer/VBox/MainSplit/LeftPanel/SpawnListPanel/SpawnListVBox/SpawnHeader"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.85, 1, 1)
+theme_override_font_sizes/font_size = 16
+text = "👾 Spawn Groups"
+
+[node name="Spacer" type="Control" parent="MainContainer/VBox/MainSplit/LeftPanel/SpawnListPanel/SpawnListVBox/SpawnHeader"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="AddSpawnBtn" type="Button" parent="MainContainer/VBox/MainSplit/LeftPanel/SpawnListPanel/SpawnListVBox/SpawnHeader"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.4, 0.9, 0.5, 1)
+text = "+ Add Spawn"
+
+[node name="HSeparator" type="HSeparator" parent="MainContainer/VBox/MainSplit/LeftPanel/SpawnListPanel/SpawnListVBox"]
+layout_mode = 2
+
+[node name="ScrollContainer" type="ScrollContainer" parent="MainContainer/VBox/MainSplit/LeftPanel/SpawnListPanel/SpawnListVBox"]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="SpawnListContainer" type="VBoxContainer" parent="MainContainer/VBox/MainSplit/LeftPanel/SpawnListPanel/SpawnListVBox/ScrollContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 6
+
+[node name="RightPanel" type="VBoxContainer" parent="MainContainer/VBox/MainSplit"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 12
+
+[node name="PreviewPanel" type="PanelContainer" parent="MainContainer/VBox/MainSplit/RightPanel"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="PreviewVBox" type="VBoxContainer" parent="MainContainer/VBox/MainSplit/RightPanel/PreviewPanel"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="PreviewHeader" type="HBoxContainer" parent="MainContainer/VBox/MainSplit/RightPanel/PreviewPanel/PreviewVBox"]
+layout_mode = 2
+
+[node name="PreviewLabel" type="Label" parent="MainContainer/VBox/MainSplit/RightPanel/PreviewPanel/PreviewVBox/PreviewHeader"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.85, 1, 1)
+theme_override_font_sizes/font_size = 16
+text = "🎯 Battlefield Preview"
+
+[node name="Spacer" type="Control" parent="MainContainer/VBox/MainSplit/RightPanel/PreviewPanel/PreviewVBox/PreviewHeader"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="TotalEnemiesLabel" type="Label" parent="MainContainer/VBox/MainSplit/RightPanel/PreviewPanel/PreviewVBox/PreviewHeader"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.9, 0.7, 0.4, 1)
+text = "Total: 0 enemies"
+
+[node name="HSeparator" type="HSeparator" parent="MainContainer/VBox/MainSplit/RightPanel/PreviewPanel/PreviewVBox"]
+layout_mode = 2
+
+[node name="TurnControl" type="HBoxContainer" parent="MainContainer/VBox/MainSplit/RightPanel/PreviewPanel/PreviewVBox"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="TurnLabel" type="Label" parent="MainContainer/VBox/MainSplit/RightPanel/PreviewPanel/PreviewVBox/TurnControl"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+text = "Turn: 1"
+
+[node name="TurnSlider" type="HSlider" parent="MainContainer/VBox/MainSplit/RightPanel/PreviewPanel/PreviewVBox/TurnControl"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 1.0
+max_value = 6.0
+value = 1.0
+
+[node name="PreviewContainer" type="Control" parent="MainContainer/VBox/MainSplit/RightPanel/PreviewPanel/PreviewVBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="PreviewRingFar" type="Panel" parent="MainContainer/VBox/MainSplit/RightPanel/PreviewPanel/PreviewVBox/PreviewContainer"]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_bottom = -225.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="PreviewRingMid" type="Panel" parent="MainContainer/VBox/MainSplit/RightPanel/PreviewPanel/PreviewVBox/PreviewContainer"]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = 75.0
+offset_bottom = -150.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="PreviewRingClose" type="Panel" parent="MainContainer/VBox/MainSplit/RightPanel/PreviewPanel/PreviewVBox/PreviewContainer"]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = 150.0
+offset_bottom = -75.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="PreviewRingMelee" type="Panel" parent="MainContainer/VBox/MainSplit/RightPanel/PreviewPanel/PreviewVBox/PreviewContainer"]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = 225.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="TimelinePanel" type="PanelContainer" parent="MainContainer/VBox/MainSplit/RightPanel"]
+custom_minimum_size = Vector2(0, 120)
+layout_mode = 2
+
+[node name="TimelineVBox" type="VBoxContainer" parent="MainContainer/VBox/MainSplit/RightPanel/TimelinePanel"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="TimelineHeader" type="Label" parent="MainContainer/VBox/MainSplit/RightPanel/TimelinePanel/TimelineVBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.85, 1, 1)
+theme_override_font_sizes/font_size = 14
+text = "📅 Spawn Timeline (click to preview turn)"
+
+[node name="HSeparator" type="HSeparator" parent="MainContainer/VBox/MainSplit/RightPanel/TimelinePanel/TimelineVBox"]
+layout_mode = 2
+
+[node name="TimelineContainer" type="HBoxContainer" parent="MainContainer/VBox/MainSplit/RightPanel/TimelinePanel/TimelineVBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 4
+
