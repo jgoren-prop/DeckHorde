@@ -104,7 +104,8 @@ func _connect_combat_signals() -> void:
 func _recalculate_layout() -> void:
 	"""Recalculate battlefield layout based on size.
 	V2: Horizontal lane layout - computes lane rectangles for child nodes."""
-	const PADDING: float = 10.0
+	const VERTICAL_PADDING: float = 10.0
+	const HORIZONTAL_PADDING: float = 80.0  # Larger horizontal margin to reign in group spread
 	const WARDEN_HEIGHT: float = 45.0
 	
 	# For horizontal layout, center is at the middle-bottom (warden area)
@@ -112,16 +113,16 @@ func _recalculate_layout() -> void:
 	max_radius = size.y / 2  # Kept for compatibility
 	
 	# Calculate lane rectangles [MELEE, CLOSE, MID, FAR]
-	var drawable_width: float = size.x - PADDING * 2
-	var drawable_height: float = size.y - PADDING * 2
+	var drawable_width: float = size.x - HORIZONTAL_PADDING * 2
+	var drawable_height: float = size.y - VERTICAL_PADDING * 2
 	var lanes_height: float = drawable_height - WARDEN_HEIGHT
 	var lane_height: float = lanes_height / 4.0
 	
 	var lane_rects: Array[Rect2] = []
 	for ring: int in range(4):
 		# Ring 3 (FAR) at top, Ring 0 (MELEE) at bottom
-		var y_pos: float = PADDING + (3 - ring) * lane_height
-		lane_rects.append(Rect2(Vector2(PADDING, y_pos), Vector2(drawable_width, lane_height)))
+		var y_pos: float = VERTICAL_PADDING + (3 - ring) * lane_height
+		lane_rects.append(Rect2(Vector2(HORIZONTAL_PADDING, y_pos), Vector2(drawable_width, lane_height)))
 	
 	# Update child nodes
 	if rings:
@@ -132,13 +133,13 @@ func _recalculate_layout() -> void:
 	if enemy_manager:
 		enemy_manager.arena_center = center
 		enemy_manager.arena_max_radius = max_radius
-		enemy_manager.arena_padding = PADDING
+		enemy_manager.arena_padding = HORIZONTAL_PADDING
 		enemy_manager.lane_rects = lane_rects
 	
 	if stack_system:
 		stack_system.arena_center = center
 		stack_system.arena_max_radius = max_radius
-		stack_system.arena_padding = PADDING
+		stack_system.arena_padding = HORIZONTAL_PADDING
 		stack_system.lane_rects = lane_rects
 	
 	if effects_node:
@@ -169,15 +170,31 @@ func get_enemy_visual(enemy) -> Panel:
 
 
 func get_enemy_center_position(enemy) -> Vector2:
-	"""Get the center position of an enemy's visual."""
+	"""Get the GLOBAL center position of an enemy's visual.
+	For stacked enemies, returns mini-panel position if expanded, otherwise stack center."""
+	print("[TARGET DEBUG] get_enemy_center_position called for instance_id=", enemy.instance_id)
+	
+	# Check individual enemy visual first (not in a stack)
 	if enemy_manager and enemy_manager.has_enemy_visual(enemy.instance_id):
-		return enemy_manager.get_enemy_center_position(enemy.instance_id)
+		var pos: Vector2 = enemy_manager.get_enemy_center_position(enemy.instance_id)
+		print("[TARGET DEBUG] -> Using individual enemy visual at: ", pos)
+		return pos
 	
 	if stack_system:
 		var stack_key: String = stack_system.get_stack_key_for_enemy(enemy)
+		print("[TARGET DEBUG] -> Enemy is in stack: '", stack_key, "'")
 		if not stack_key.is_empty():
-			return stack_system.get_stack_center_position(stack_key)
+			# If stack is expanded, get the specific mini-panel position for this enemy
+			var mini_pos: Vector2 = stack_system.get_enemy_mini_panel_position(enemy)
+			print("[TARGET DEBUG] -> Mini-panel position: ", mini_pos)
+			if mini_pos != Vector2.ZERO:
+				return mini_pos
+			# Fall back to stack center if not expanded or mini-panel not found
+			var stack_center: Vector2 = stack_system.get_stack_center_position(stack_key)
+			print("[TARGET DEBUG] -> FALLBACK to stack center: ", stack_center)
+			return stack_center
 	
+	print("[TARGET DEBUG] -> FALLBACK to arena center: ", center)
 	return center
 
 
@@ -213,9 +230,11 @@ func show_damage_on_enemy(enemy, amount: int, is_hex: bool = false, offset: Vect
 	offset: Optional offset to stagger multiple simultaneous damage numbers."""
 	# Add random spread so multiple damage numbers (from splash) don't overlap
 	var random_spread: Vector2 = Vector2(randf_range(-20, 20), randf_range(-15, 15))
-	var pos: Vector2 = get_enemy_center_position(enemy) - Vector2(15, 30) + offset + random_spread
+	var global_pos: Vector2 = get_enemy_center_position(enemy) - Vector2(15, 30) + offset + random_spread
 	if effects_node:
-		effects_node.show_damage_number(pos, amount, is_hex)
+		# Convert global position to local position for effects_node
+		var local_pos: Vector2 = global_pos - effects_node.global_position
+		effects_node.show_damage_number(local_pos, amount, is_hex)
 
 
 func show_bomber_warning(enemy) -> void:
@@ -300,11 +319,14 @@ func _update_stack_enemies(stack_key: String, group_data: Dictionary) -> void:
 
 func _find_or_create_group(ring: int, enemy_id: String, enemy) -> String:
 	"""Find an existing group or create a new one for an enemy.
-	All enemies of the same type in the same ring are merged into one group."""
-	# Look for existing group with same enemy type in same ring
+	Groups are based on spawn_batch_id - enemies spawned together stay together.
+	Groups NEVER merge, even when same enemy type ends up in the same ring."""
+	var batch_id: int = enemy.spawn_batch_id
+	
+	# Look for existing group with same spawn_batch_id
 	for group_id: String in enemy_groups.keys():
 		var group: Dictionary = enemy_groups[group_id]
-		if group.ring == ring and group.enemy_id == enemy_id:
+		if group.get("spawn_batch_id", -1) == batch_id and batch_id > 0:
 			# Add to existing group if not already present
 			var found: bool = false
 			for e in group.enemies:
@@ -313,6 +335,8 @@ func _find_or_create_group(ring: int, enemy_id: String, enemy) -> String:
 					break
 			if not found:
 				group.enemies.append(enemy)
+				# Update ring if the group has moved (shouldn't happen but safety)
+				group.ring = ring
 			# Set the group_id on the enemy so it can be tracked
 			enemy.group_id = group_id
 			return group_id
@@ -334,7 +358,8 @@ func _find_or_create_group(ring: int, enemy_id: String, enemy) -> String:
 		"enemy_id": enemy_id,
 		"enemies": [enemy],
 		"angular_position": angular_pos,
-		"lane": assigned_lane
+		"lane": assigned_lane,
+		"spawn_batch_id": batch_id  # Track batch ID for group matching
 	}
 	
 	# Set the group_id on the enemy so it can be tracked
@@ -519,12 +544,16 @@ func _on_enemy_died(enemy) -> void:
 	_enemies_with_pending_projectile.erase(enemy.instance_id)
 	_pending_damage_visuals.erase(enemy.instance_id)
 	
-	# Remove from groups
+	# Remove from groups and track if any groups became empty
+	var empty_group_ids: Array[String] = []
 	for group_id: String in enemy_groups.keys():
 		var group: Dictionary = enemy_groups[group_id]
 		for i: int in range(group.enemies.size() - 1, -1, -1):
 			if group.enemies[i].instance_id == enemy.instance_id:
 				group.enemies.remove_at(i)
+				# Track if group is now empty for cleanup
+				if group.enemies.is_empty():
+					empty_group_ids.append(group_id)
 				break
 	
 	# Play death animation for individual enemy
@@ -536,6 +565,13 @@ func _on_enemy_died(enemy) -> void:
 		var stack_key: String = stack_system.get_stack_key_for_enemy(enemy)
 		if not stack_key.is_empty():
 			_remove_enemy_from_stack_visual(enemy, stack_key)
+	
+	# Clean up empty groups so new enemies don't merge into "ghost" groups
+	for empty_id: String in empty_group_ids:
+		var ring: int = enemy_groups[empty_id].ring
+		if stack_system:
+			stack_system.release_lane(empty_id, ring)
+		enemy_groups.erase(empty_id)
 	
 	_update_threat_levels()
 
@@ -628,7 +664,7 @@ func _on_enemy_death_finished(_enemy) -> void:
 
 func _on_enemy_moved(enemy, from_ring: int, to_ring: int) -> void:
 	"""Handle enemy movement. Lane is preserved across ring transitions.
-	Groups merge when moving to a ring that already has the same enemy type."""
+	Groups NEVER merge - each spawn batch stays as its own group permanently."""
 	# Find the group for this enemy
 	var moving_group_id: String = ""
 	var moving_group: Dictionary = {}
@@ -646,18 +682,6 @@ func _on_enemy_moved(enemy, from_ring: int, to_ring: int) -> void:
 		_update_threat_levels()
 		return
 	
-	# Check if there's already a group of the same enemy type in the destination ring
-	var existing_group_id: String = ""
-	var existing_group: Dictionary = {}
-	for group_id: String in enemy_groups.keys():
-		if group_id == moving_group_id:
-			continue  # Skip the moving group itself
-		var group: Dictionary = enemy_groups[group_id]
-		if group.ring == to_ring and group.enemy_id == moving_group.enemy_id:
-			existing_group_id = group_id
-			existing_group = group
-			break
-	
 	# Update the moving group's ring
 	moving_group.ring = to_ring
 	
@@ -669,25 +693,23 @@ func _on_enemy_moved(enemy, from_ring: int, to_ring: int) -> void:
 		var lane: int = stack_system.get_group_lane(moving_group_id)
 		stack_system.set_group_lane(moving_group_id, lane, to_ring)
 	
-	# If there's an existing group, merge into it
-	if not existing_group_id.is_empty():
-		_merge_groups(existing_group_id, moving_group_id, existing_group, moving_group)
-	else:
-		# No merge needed - just update visual positions
-		if enemy_manager and enemy_manager.has_enemy_visual(enemy.instance_id):
-			enemy_manager.update_enemy_position(enemy, true)
-		
-		if stack_system:
-			var stack_key: String = stack_system.get_stack_key_for_enemy(enemy)
-			if not stack_key.is_empty():
-				stack_system.update_stack_ring(stack_key, to_ring, true)
+	# Update visual positions (no merging - groups stay separate)
+	if enemy_manager and enemy_manager.has_enemy_visual(enemy.instance_id):
+		enemy_manager.update_enemy_position(enemy, true)
+	
+	if stack_system:
+		var stack_key: String = stack_system.get_stack_key_for_enemy(enemy)
+		if not stack_key.is_empty():
+			stack_system.update_stack_ring(stack_key, to_ring, true)
 	
 	_update_threat_levels()
 
 
-func _merge_groups(target_group_id: String, source_group_id: String, target_group: Dictionary, source_group: Dictionary) -> void:
-	"""Merge source_group into target_group. Called when groups of same enemy type end up in same ring."""
-	print("[BattlefieldArena] Merging groups: ", source_group_id, " -> ", target_group_id)
+func _merge_groups(target_group_id: String, source_group_id: String, target_group: Dictionary, source_group: Dictionary, source_original_ring: int = -1) -> void:
+	"""Merge source_group into target_group. Called when groups of same enemy type end up in same ring.
+	source_original_ring: The ring the source group was in BEFORE the move (needed for correct stack key lookup)."""
+	# Use the original ring for stack key lookup if provided, otherwise fall back to current ring
+	var stack_ring: int = source_original_ring if source_original_ring >= 0 else source_group.ring
 	
 	# Move all enemies from source to target
 	for enemy in source_group.enemies:
@@ -702,13 +724,20 @@ func _merge_groups(target_group_id: String, source_group_id: String, target_grou
 			enemy.group_id = target_group_id
 	
 	# Remove the source group's stack visual if it exists
+	# IMPORTANT: Use the ORIGINAL ring for the stack key, not the updated ring
 	if stack_system:
-		var source_stack_key: String = str(source_group.ring) + "_" + source_group.enemy_id + "_" + source_group_id
+		var source_stack_key: String = str(stack_ring) + "_" + source_group.enemy_id + "_" + source_group_id
 		if stack_system.has_stack(source_stack_key):
 			stack_system.remove_stack(source_stack_key)
 		
-		# Release the source group's lane
-		stack_system.release_lane(source_group_id, source_group.ring)
+		# Release the source group's lane (use original ring)
+		stack_system.release_lane(source_group_id, stack_ring)
+	
+	# Also remove any individual enemy visuals from the source group
+	if enemy_manager:
+		for enemy in source_group.enemies:
+			if enemy_manager.has_enemy_visual(enemy.instance_id):
+				enemy_manager.hide_enemy_visual(enemy.instance_id)
 	
 	# Remove the source group from tracking
 	enemy_groups.erase(source_group_id)
@@ -844,10 +873,12 @@ func _on_enemy_hexed(enemy, hex_amount: int) -> void:
 	flash_enemy(enemy, hex_color, 0.2)
 	
 	# Show floating hex stack indicator (+☠X)
-	var pos: Vector2 = get_enemy_center_position(enemy) - Vector2(15, 40)
+	var global_pos: Vector2 = get_enemy_center_position(enemy)
 	if effects_node:
-		effects_node.show_hex_stack_number(pos, hex_amount)
-		effects_node.spawn_hex_particles(get_enemy_center_position(enemy))
+		# Convert global position to local position for effects_node
+		var local_pos: Vector2 = global_pos - effects_node.global_position
+		effects_node.show_hex_stack_number(local_pos - Vector2(15, 40), hex_amount)
+		effects_node.spawn_hex_particles(local_pos)
 	
 	# Update the enemy panel's hex display
 	_update_enemy_hex_display(enemy)
@@ -1030,18 +1061,19 @@ func _on_barrier_triggered(enemy, ring: int, damage: int) -> void:
 	# Sync the barrier visual with the actual state (updates remaining uses display)
 	_sync_barrier_visual(ring)
 	
-	# Get enemy position for effects
-	var enemy_pos: Vector2 = get_enemy_center_position(enemy) if enemy else center
+	# Get enemy position for effects (global, then convert to local for effects_node)
+	var global_enemy_pos: Vector2 = get_enemy_center_position(enemy) if enemy else (center + global_position)
+	var local_enemy_pos: Vector2 = global_enemy_pos - effects_node.global_position if effects_node else center
 	
 	# Visual feedback: sparks from barrier to enemy, and barrier hit effect
 	if effects_node and rings:
 		var barrier_radius: float = rings.get_ring_radius(ring)
-		# Calculate position along the ring where the enemy crossed
-		var angle: float = (enemy_pos - center).angle()
+		# Calculate position along the ring where the enemy crossed (using local coords)
+		var angle: float = (local_enemy_pos - center).angle()
 		var barrier_pos: Vector2 = center + Vector2(cos(angle), sin(angle)) * barrier_radius
 		
-		# Fire sparks from barrier to enemy
-		effects_node.fire_barrier_sparks(barrier_pos, enemy_pos)
+		# Fire sparks from barrier to enemy (both in local coords)
+		effects_node.fire_barrier_sparks(barrier_pos, local_enemy_pos)
 		
 		# Create barrier hit effect at the barrier position
 		effects_node.create_barrier_hit_effect(barrier_pos, damage)
@@ -1081,23 +1113,32 @@ func _sync_barrier_visual(ring: int) -> void:
 
 func _on_enemy_targeted(enemy) -> void:
 	"""Handle visual feedback when an enemy is targeted by a projectile.
-	NEW FLOW: Expand stack -> Highlight target -> Fire from muzzle -> Impact effects"""
+	NEW FLOW: Expand stack -> Wait for layout -> Highlight target -> Fire from muzzle -> Impact effects"""
 	if enemy == null:
 		return
+	
+	print("[TARGET DEBUG] ===========================================")
+	print("[TARGET DEBUG] _on_enemy_targeted: enemy=", enemy.enemy_id, " instance_id=", enemy.instance_id)
 	
 	# STEP 1: Expand the enemy stack FIRST (if applicable)
 	var stack_key: String = ""
 	if stack_system:
 		stack_key = stack_system.get_stack_key_for_enemy(enemy)
+		print("[TARGET DEBUG] Stack key: '", stack_key, "'")
 		if not stack_key.is_empty():
 			# Expand stack immediately to show all units
 			stack_system.hold_stack_open(stack_key)
+			# Wait for layout to complete (global_position needs a frame to update)
+			await get_tree().process_frame
+			await get_tree().process_frame
+			print("[TARGET DEBUG] Stack expanded: ", stack_system.is_stack_expanded(stack_key))
 	
-	# STEP 2: Highlight the target enemy with a targeting reticle
-	_highlight_target_enemy(enemy, stack_key)
-	
-	# Get target position AFTER expansion (position may change)
+	# STEP 2: Get target position AFTER expansion and layout (mini-panel position now available)
 	var target_pos: Vector2 = get_enemy_center_position(enemy)
+	print("[TARGET DEBUG] Target position: ", target_pos)
+	
+	# STEP 3: Highlight the target enemy with a targeting reticle
+	_highlight_target_enemy(enemy, stack_key)
 	
 	# Track this enemy as having a projectile in flight
 	_enemies_with_pending_projectile[enemy.instance_id] = true
@@ -1105,7 +1146,7 @@ func _on_enemy_targeted(enemy) -> void:
 	if not effects_node:
 		return
 	
-	# STEP 3: Fire weapon from muzzle with VFX
+	# STEP 4: Fire weapon from muzzle with VFX
 	var lane_index: int = CombatManager.current_executing_lane_index
 	
 	if lane_index >= 0 and combat_lane and combat_lane.has_method("set_weapon_target"):
@@ -1170,18 +1211,15 @@ func _pulse_target(visual: Control, color: Color, intensity: float = 1.0) -> voi
 
 func _create_muzzle_flash(pos: Vector2) -> void:
 	"""Create a muzzle flash VFX at the weapon's muzzle position."""
-	if not effects_node:
-		return
+	# Add to root viewport so muzzle flash appears at correct position regardless of UI hierarchy
+	var root_canvas: Node = get_tree().root
 	
-	# Convert to local position
-	var local_pos: Vector2 = pos - effects_node.global_position
-	
-	# Create bright flash
+	# Create bright flash using global position
 	var flash: Panel = Panel.new()
 	flash.custom_minimum_size = Vector2(24, 24)
 	flash.size = Vector2(24, 24)
-	flash.position = local_pos - Vector2(12, 12)
-	flash.z_index = 60
+	flash.position = pos - Vector2(12, 12)  # Use global position directly
+	flash.z_index = 100  # High z-index to render above everything
 	flash.pivot_offset = flash.size / 2
 	
 	var style: StyleBoxFlat = StyleBoxFlat.new()
@@ -1189,7 +1227,7 @@ func _create_muzzle_flash(pos: Vector2) -> void:
 	style.set_corner_radius_all(12)
 	flash.add_theme_stylebox_override("panel", style)
 	
-	effects_node.add_child(flash)
+	root_canvas.add_child(flash)
 	
 	# Quick flash animation
 	var tween: Tween = flash.create_tween()
@@ -1204,13 +1242,13 @@ func _create_muzzle_flash(pos: Vector2) -> void:
 		var spark: ColorRect = ColorRect.new()
 		spark.size = Vector2(4, 4)
 		spark.color = Color(1.0, 0.8, 0.3, 1.0)
-		spark.position = local_pos - Vector2(2, 2)
-		spark.z_index = 59
-		effects_node.add_child(spark)
+		spark.position = pos - Vector2(2, 2)  # Use global position
+		spark.z_index = 99
+		root_canvas.add_child(spark)
 		
 		var angle: float = randf_range(-PI/4, PI/4)  # Forward cone
 		var spark_dist: float = randf_range(15, 35)
-		var spark_target: Vector2 = local_pos + Vector2(cos(angle), sin(angle)) * spark_dist
+		var spark_target: Vector2 = pos + Vector2(cos(angle), sin(angle)) * spark_dist
 		
 		var spark_tween: Tween = spark.create_tween()
 		spark_tween.set_parallel(true)
@@ -1224,31 +1262,30 @@ func _fire_fast_projectile(from_pos: Vector2, to_pos: Vector2, enemy, color: Col
 	if not effects_node:
 		return
 	
-	# Convert to local coordinates
-	var local_from: Vector2 = from_pos - effects_node.global_position
-	var local_to: Vector2 = to_pos - effects_node.global_position
+	# Add projectile to root viewport so it can travel across UI boundaries (e.g., from CombatLane to BattlefieldArena)
+	var root_canvas: Node = get_tree().root
 	
 	var projectile: ColorRect = ColorRect.new()
 	projectile.size = Vector2(14, 5)
 	projectile.color = color
-	projectile.position = local_from - projectile.size / 2
-	projectile.z_index = 48
+	projectile.position = from_pos - projectile.size / 2  # Use global position directly
+	projectile.z_index = 100  # High z-index to render above everything
 	
 	# Rotate to face target
-	var angle: float = local_from.angle_to_point(local_to)
+	var angle: float = from_pos.angle_to_point(to_pos)
 	projectile.pivot_offset = projectile.size / 2
 	projectile.rotation = angle
 	
-	effects_node.add_child(projectile)
+	root_canvas.add_child(projectile)
 	
 	# FAST travel - much snappier
-	var distance: float = local_from.distance_to(local_to)
+	var distance: float = from_pos.distance_to(to_pos)
 	var travel_time: float = distance / 1800.0  # Very fast: 1800 px/s
 	travel_time = maxf(travel_time, 0.05)  # Minimum 50ms
-	travel_time = minf(travel_time, 0.15)  # Maximum 150ms
+	travel_time = minf(travel_time, 0.20)  # Maximum 200ms (slightly longer for visibility)
 	
 	var tween: Tween = projectile.create_tween()
-	tween.tween_property(projectile, "position", local_to - projectile.size / 2, travel_time).set_ease(Tween.EASE_OUT)
+	tween.tween_property(projectile, "position", to_pos - projectile.size / 2, travel_time).set_ease(Tween.EASE_OUT)
 	tween.tween_callback(projectile.queue_free)
 	
 	# Schedule impact when projectile arrives
@@ -1256,13 +1293,16 @@ func _fire_fast_projectile(from_pos: Vector2, to_pos: Vector2, enemy, color: Col
 	var captured_stack_key: String = enemy_stack_key
 	var captured_stack_system = stack_system
 	var captured_effects_node = effects_node
+	var captured_to_pos: Vector2 = to_pos
 	var impact_timer: SceneTreeTimer = get_tree().create_timer(travel_time)
 	impact_timer.timeout.connect(func():
 		if captured_effects_node and is_instance_valid(captured_effects_node):
-			captured_effects_node.create_impact_flash(local_to, color)
+			# Convert global to_pos to local for effects_node
+			var local_impact: Vector2 = captured_to_pos - captured_effects_node.global_position
+			captured_effects_node.create_impact_flash(local_impact, color)
 		# Emit signal to show damage numbers
 		if captured_enemy and captured_effects_node:
-			captured_effects_node.projectile_hit_enemy.emit(captured_enemy, to_pos)
+			captured_effects_node.projectile_hit_enemy.emit(captured_enemy, captured_to_pos)
 		# Release stack hold after impact
 		if captured_stack_system and not captured_stack_key.is_empty():
 			# Small delay before collapsing to let player see the damage
@@ -1284,34 +1324,36 @@ func _fire_projectile_from_to(from_pos: Vector2, to_pos: Vector2, color: Color) 
 	if not effects_node:
 		return
 	
-	# Convert to local coordinates relative to effects_node
-	var local_from: Vector2 = from_pos - effects_node.global_position
-	var local_to: Vector2 = to_pos - effects_node.global_position
+	# Add projectile to root viewport so it can travel across UI boundaries
+	var root_canvas: Node = get_tree().root
 	
 	var projectile: ColorRect = ColorRect.new()
 	projectile.size = Vector2(12, 4)
 	projectile.color = color
-	projectile.position = local_from - projectile.size / 2
-	projectile.z_index = 45
+	projectile.position = from_pos - projectile.size / 2  # Use global position
+	projectile.z_index = 100  # High z-index to render above everything
 	
-	var angle: float = local_from.angle_to_point(local_to)
+	var angle: float = from_pos.angle_to_point(to_pos)
 	projectile.pivot_offset = projectile.size / 2
 	projectile.rotation = angle
 	
-	effects_node.add_child(projectile)
+	root_canvas.add_child(projectile)
 	
-	var distance: float = local_from.distance_to(local_to)
+	var distance: float = from_pos.distance_to(to_pos)
 	var travel_time: float = distance / 600.0
 	
-	var tween: Tween = effects_node.create_tween()
-	tween.tween_property(projectile, "position", local_to - projectile.size / 2, travel_time).set_ease(Tween.EASE_OUT)
+	var tween: Tween = projectile.create_tween()
+	tween.tween_property(projectile, "position", to_pos - projectile.size / 2, travel_time).set_ease(Tween.EASE_OUT)
 	tween.tween_callback(projectile.queue_free)
 	
 	# Impact flash
+	var captured_effects_node = effects_node
+	var captured_to_pos: Vector2 = to_pos
 	var impact_timer: SceneTreeTimer = get_tree().create_timer(travel_time)
 	impact_timer.timeout.connect(func():
-		if effects_node and is_instance_valid(effects_node):
-			effects_node.create_impact_flash(local_to, color)
+		if captured_effects_node and is_instance_valid(captured_effects_node):
+			var local_impact: Vector2 = captured_to_pos - captured_effects_node.global_position
+			captured_effects_node.create_impact_flash(local_impact, color)
 	)
 
 

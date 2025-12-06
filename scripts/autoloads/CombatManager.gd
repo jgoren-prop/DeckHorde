@@ -900,7 +900,15 @@ func _check_wave_end() -> void:
 	current_phase = CombatPhase.WAVE_CHECK
 	phase_changed.emit(current_phase)
 	
-	if battlefield.get_total_enemy_count() == 0:
+	# DEBUG: Log enemy counts per ring
+	var total: int = battlefield.get_total_enemy_count()
+	print("[CombatManager DEBUG] _check_wave_end called - Total enemies: ", total)
+	for ring_idx: int in range(4):
+		var ring_count: int = battlefield.get_enemy_count_in_ring(ring_idx)
+		if ring_count > 0:
+			print("[CombatManager DEBUG]   Ring ", ring_idx, ": ", ring_count, " enemies")
+	
+	if total == 0:
 		print("[CombatManager] Wave cleared!")
 		AudioManager.play_wave_complete()
 		wave_ended.emit(true)
@@ -912,6 +920,7 @@ func _check_wave_end() -> void:
 		wave_ended.emit(false)
 		return
 	
+	print("[CombatManager DEBUG] Starting next player turn...")
 	start_player_turn()
 
 
@@ -1015,7 +1024,10 @@ func _check_instant_wave_clear() -> void:
 	if current_phase != CombatPhase.PLAYER_PHASE and current_phase != CombatPhase.EXECUTION_PHASE:
 		return
 	
-	if battlefield.get_total_enemy_count() == 0:
+	var total: int = battlefield.get_total_enemy_count()
+	print("[CombatManager DEBUG] _check_instant_wave_clear - Phase: ", current_phase, ", Enemies: ", total)
+	
+	if total == 0:
 		print("[CombatManager] All enemies defeated! Wave cleared instantly!")
 		current_phase = CombatPhase.WAVE_CHECK
 		phase_changed.emit(current_phase)

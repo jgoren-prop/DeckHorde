@@ -264,7 +264,7 @@ func _apply_existing_buffs_to_card(card_ui: Control, card_def) -> void:
 		if is_affected and card_ui.has_method("apply_buff"):
 			# Apply the buff silently (no animation since it's initial state)
 			card_ui.applied_buffs[buff_key] = buff_data.duplicate()
-			card_ui._update_stats_row()
+			card_ui._update_display()
 			print("[CombatLane] Applied existing buff to new card: ", buff_data.type, " +", buff_data.value)
 
 
@@ -483,7 +483,7 @@ func _sync_with_combat_manager() -> void:
 				var card_ui: Control = staged.card_ui
 				if is_instance_valid(card_ui):
 					card_ui.applied_buffs = staged.applied_buffs.duplicate()
-					card_ui._update_stats_row()
+					card_ui._update_display()
 				new_order.append(staged)
 				break
 	staged_cards = new_order

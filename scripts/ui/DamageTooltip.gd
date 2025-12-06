@@ -202,7 +202,7 @@ func _update_effects() -> void:
 	var hex_stacks: int = card_def.hex_damage
 	var burn_stacks: int = card_def.burn_damage
 	
- 	# Barrier is determined by effect_type
+	# Barrier is determined by effect_type
 	var is_barrier_card: bool = card_def.effect_type == "ring_barrier"
 	
 	if hex_stacks > 0 or burn_stacks > 0 or is_barrier_card:

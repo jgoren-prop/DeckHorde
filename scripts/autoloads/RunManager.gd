@@ -14,7 +14,9 @@ signal wave_changed(wave: int)
 signal stats_changed()  # V2: Emitted when player stats change
 signal xp_changed(current: int, required: int, level: int)  # XP system
 signal level_up(new_level: int, hp_gained: int)  # Level up notification
+signal level_up_queued(new_level: int)  # Flash notification when level-up is queued (mid-combat)
 signal levelup_choices_available(options: Array)  # Brotato-style stat pick UI trigger
+signal all_levelups_resolved()  # Emitted when all pending level-up choices are made
 
 # Constants (Brotato Economy: 20 waves for full economy experience)
 const MAX_WAVES: int = 20
@@ -549,15 +551,16 @@ func _check_level_up() -> void:
 
 
 func _queue_level_up() -> void:
-	"""Queue a level-up for stat selection instead of auto-applying."""
+	"""Queue a level-up for stat selection instead of auto-applying.
+	Does NOT show picker immediately - waits until wave ends."""
 	player_stats.current_level += 1
 	levels_gained_this_wave += 1
 	pending_levelups += 1
 	
 	print("[RunManager] LEVEL UP queued! Now level %d. Pending choices: %d" % [player_stats.current_level, pending_levelups])
 	
-	# Trigger the stat selection UI
-	_offer_levelup_choices()
+	# Emit flash notification signal (UI will show "LEVEL UP!" banner)
+	level_up_queued.emit(player_stats.current_level)
 
 
 func _offer_levelup_choices() -> void:
@@ -613,6 +616,9 @@ func apply_levelup_choice(choice_id: String) -> void:
 	# Check if more level-ups pending
 	if pending_levelups > 0:
 		_offer_levelup_choices()
+	else:
+		# All level-ups resolved - signal that we can proceed to shop
+		all_levelups_resolved.emit()
 
 
 func has_pending_levelups() -> bool:
@@ -623,6 +629,17 @@ func has_pending_levelups() -> bool:
 func get_pending_levelup_count() -> int:
 	"""Get the number of pending level-up choices."""
 	return pending_levelups
+
+
+func trigger_pending_levelups() -> void:
+	"""Trigger the level-up picker if there are pending choices.
+	Called after wave ends to let player choose their stats."""
+	if pending_levelups > 0:
+		print("[RunManager] Triggering %d pending level-up choices" % pending_levelups)
+		_offer_levelup_choices()
+	else:
+		# No pending level-ups, immediately signal completion
+		all_levelups_resolved.emit()
 
 
 func get_xp_info() -> Dictionary:

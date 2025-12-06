@@ -5,3 +5,5 @@
 [node name="TestBattlefieldUI" type="Node"]
 script = ExtResource("1_script")
 
+
+

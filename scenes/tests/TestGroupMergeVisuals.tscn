@@ -1,0 +1,10 @@
+[gd_scene load_steps=3 format=3 uid="uid://dryts5m2j1mft"]
+
+[ext_resource type="PackedScene" uid="uid://dq1xrk8nv2p4f" path="res://scenes/Combat.tscn" id="1_combat"]
+[ext_resource type="Script" path="res://scripts/tests/TestGroupMergeVisuals.gd" id="2_test"]
+
+[node name="TestGroupMergeVisuals" type="Node"]
+script = ExtResource("2_test")
+
+[node name="CombatScreen" parent="." instance=ExtResource("1_combat")]
+

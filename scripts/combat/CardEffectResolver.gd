@@ -429,7 +429,8 @@ static func _resolve_v5_aoe(card_def, _tier: int, target_ring: int, combat: Node
 
 
 static func _resolve_v5_ring_damage(card_def, _tier: int, target_ring: int, combat: Node) -> void:
-	"""V5 ring damage: Hit entire ring, used for thermal AOE."""
+	"""V5 lane damage: Hit entire lane, used for thermal AOE.
+	If no target_ring provided (-1), auto-targets closest lane with enemies."""
 	var damage_result: Dictionary = calculate_v5_damage(card_def, true)
 	var damage: int = damage_result.damage
 	var is_crit: bool = damage_result.is_crit
@@ -441,12 +442,35 @@ static func _resolve_v5_ring_damage(card_def, _tier: int, target_ring: int, comb
 		if self_dmg > 0:
 			RunManager.take_damage(self_dmg)
 	
-	_deal_v5_damage_to_ring(target_ring, damage, is_crit, combat)
+	# Auto-target closest lane if no target provided (weapons auto-target)
+	var actual_ring: int = target_ring
+	if actual_ring < 0:
+		actual_ring = _get_closest_lane_with_enemies(combat)
+		print("[CardEffectResolver] Auto-targeting lane: ", actual_ring)
+	
+	if actual_ring < 0:
+		print("[CardEffectResolver] No enemies to target!")
+		return
+	
+	_deal_v5_damage_to_ring(actual_ring, damage, is_crit, combat)
+	
+	# Apply burn to enemies in the lane if card has burn_damage
+	if card_def.burn_damage > 0:
+		var burn_amount: int = card_def.burn_damage
+		# Apply burn potency from stats
+		var potency_mult: float = RunManager.player_stats.get_burn_potency_multiplier()
+		burn_amount = int(float(burn_amount) * potency_mult)
+		
+		var enemies: Array = combat.battlefield.get_enemies_in_ring(actual_ring)
+		for enemy in enemies:
+			if enemy.current_hp > 0:
+				enemy.apply_status("burn", burn_amount, -1)
+				print("[CardEffectResolver] Applied ", burn_amount, " Burn to ", enemy.enemy_id)
 	
 	# Apply splash damage to adjacent groups if present
 	if card_def.splash_damage > 0:
 		var splash: int = int(float(card_def.splash_damage) * damage_result.type_mult * damage_result.global_mult)
-		var enemies: Array = combat.battlefield.get_enemies_in_ring(target_ring)
+		var enemies: Array = combat.battlefield.get_enemies_in_ring(actual_ring)
 		for enemy in enemies:
 			if enemy.current_hp > 0:
 				_deal_damage_to_enemy(enemy, splash, false, combat)
@@ -695,6 +719,17 @@ static func _resolve_apply_burn_multi(card_def, tier: int, combat: Node) -> void
 # =============================================================================
 # V5 HELPER FUNCTIONS
 # =============================================================================
+
+static func _get_closest_lane_with_enemies(combat: Node) -> int:
+	"""Find the closest lane (MELEE=0 > CLOSE=1 > MID=2 > FAR=3) that has enemies.
+	Used for auto-targeting lane-based weapons.
+	Returns -1 if no enemies exist."""
+	for lane: int in range(4):  # 0=MELEE, 1=CLOSE, 2=MID, 3=FAR
+		var enemies: Array = combat.battlefield.get_enemies_in_ring(lane)
+		if enemies.size() > 0:
+			return lane
+	return -1
+
 
 static func _build_ring_mask(target_rings: Array) -> int:
 	"""Build a ring bitmask from target_rings array."""

@@ -5,3 +5,5 @@
 [node name="TestMiniEnemyPanel" type="Node"]
 script = ExtResource("1_script")
 
+
+

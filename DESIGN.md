@@ -45,7 +45,7 @@ Since we're turn-based, **hit count** replaces attack speed:
 - Hits 1-4: Remove all armor
 - Hits 5-8: Deal 4 damage
 
-### Ring Battlefield
+### Lane Battlefield
 
 Enemies spawn in FAR and advance toward the player:
 
@@ -55,7 +55,8 @@ Enemies spawn in FAR and advance toward the player:
 ```
 
 - Enemies in **MELEE** deal damage to the player
-- Cards can target specific rings or random enemies
+- **Weapons** (combat cards) auto-target the closest lane with enemies
+- **Instants** can require manual lane/target selection
 
 ### Status Effects
 
@@ -75,95 +76,101 @@ Enemies spawn in FAR and advance toward the player:
 
 ## Card Pool (50 Cards)
 
-### Weapon Categories (35 Weapons)
+### Synergy System (Brotato-Style)
 
-| Category | Cards | Specialty |
-|----------|-------|-----------|
-| **Kinetic** | 10 | Raw multi-hit damage, armor shredding |
-| **Thermal** | 7 | Burn, AOE, ring damage |
-| **Arcane** | 8 | Hex, execute, lifesteal |
-| **Volatile** | 5 | High risk/reward, self-damage |
-| **Utility** | 5 | Draw, energy, support |
+Cards have **1-2 categories** that determine synergy eligibility:
+- **Pure Archetypes** (1 category): Quintessential expression of a playstyle, may have stronger base stats
+- **Hybrids** (2 categories): Enable build crossover, benefit from multiple stat investments
+
+| Category | Pure | Hybrid | Total | Specialty |
+|----------|------|--------|-------|-----------|
+| **Kinetic** | 5 | 15 | 20 | Raw multi-hit damage, armor shredding |
+| **Thermal** | 3 | 8 | 11 | Burn, AOE, lane damage |
+| **Arcane** | 4 | 14 | 18 | Hex, execute, lifesteal |
+| **Volatile** | 1 | 14 | 15 | High risk/reward, self-damage |
+| **Utility** | 6 | 11 | 17 | Draw, energy, support, precision |
+
+### Weapon Categories (35 Weapons)
 
 ### Kinetic Weapons (10)
 
-| Weapon | Cost | Base | Hits | Special |
-|--------|------|------|------|---------|
-| Pistol | 1 | 2 | 2 | Starter weapon |
-| SMG | 1 | 1 | 4 | Can repeat target |
-| Assault Rifle | 2 | 2 | 3 | Reliable |
-| Minigun | 3 | 1 | 8 | Armor shredder |
-| Shotgun | 2 | 2 | 3 | +2 splash |
-| Sniper Rifle | 2 | 6 | 1 | High crit |
-| Burst Fire | 1 | 2 | 3 | Cheap |
-| Heavy Rifle | 2 | 4 | 2 | High damage |
-| Railgun | 3 | 10 | 1 | Ignores armor |
-| Machine Pistol | 1 | 1 | 5 | Budget multi-hit |
+| Weapon | Cost | Base | Hits | Categories | Special |
+|--------|------|------|------|------------|---------|
+| Pistol | 1 | 2 | 2 | Kinetic | Pure starter |
+| SMG | 1 | 1 | 4 | Kinetic, Utility | Repeat target |
+| Assault Rifle | 2 | 2 | 3 | Kinetic | Pure reliable |
+| Minigun | 3 | 1 | 8 | Kinetic, Utility | Armor shredder |
+| Shotgun | 2 | 2 | 3 | Kinetic, Volatile | +2 splash |
+| Sniper Rifle | 2 | 6 | 1 | Kinetic, Utility | High crit |
+| Burst Fire | 1 | 2 | 3 | Kinetic | Pure burst |
+| Heavy Rifle | 2 | 4 | 2 | Kinetic, Volatile | High damage |
+| Railgun | 3 | 10 | 1 | Kinetic, Arcane | Ignores armor |
+| Machine Pistol | 1 | 1 | 5 | Kinetic, Utility | Budget multi-hit |
 
 ### Thermal Weapons (7)
 
-| Weapon | Cost | Base | Hits | Special |
-|--------|------|------|------|---------|
-| Flamethrower | 2 | 2 | 3 | Apply 2 Burn |
-| Firebomb | 2 | 3 | 1 | Ring + 3 Burn |
-| Rocket Launcher | 3 | 5 | 1 | +4 splash |
-| Napalm Strike | 3 | 2 | 1 | ALL enemies + 2 Burn |
-| Incendiary Rounds | 2 | 2 | 2 | Apply 4 Burn |
-| Molotov | 1 | 2 | 1 | Ring + 2 Burn |
-| Inferno | 3 | 4 | 1 | ALL enemies |
+| Weapon | Cost | Base | Hits | Categories | Special |
+|--------|------|------|------|------------|---------|
+| Flamethrower | 2 | 2 | 3 | Thermal, Kinetic | Apply 2 Burn |
+| Firebomb | 2 | 3 | 1 | Thermal | Pure fire AOE |
+| Rocket Launcher | 3 | 5 | 1 | Thermal, Volatile | +4 splash |
+| Napalm Strike | 3 | 2 | 1 | Thermal, Arcane | ALL + 2 Burn |
+| Incendiary Rounds | 2 | 2 | 2 | Thermal, Kinetic | Apply 4 Burn |
+| Molotov | 1 | 2 | 1 | Thermal | Pure cheap fire |
+| Inferno | 3 | 4 | 1 | Thermal, Arcane | ALL enemies |
 
 ### Arcane Weapons (8)
 
-| Weapon | Cost | Base | Hits | Special |
-|--------|------|------|------|---------|
-| Hex Bolt | 1 | 2 | 2 | Apply 3 Hex |
-| Curse | 2 | 2 | 3 | Apply 4 Hex |
-| Soul Drain | 2 | 3 | 2 | Heal 3 |
-| Void Strike | 2 | 4 | 1 | Execute 4 HP |
-| Mind Shatter | 2 | 2 | 4 | Pure damage |
-| Arcane Barrage | 3 | 2 | 5 | Multi-hit |
-| Death Mark | 2 | 2 | 3 | Execute 3 HP each |
-| Life Siphon | 1 | 2 | 2 | Heal 2 |
+| Weapon | Cost | Base | Hits | Categories | Special |
+|--------|------|------|------|------------|---------|
+| Hex Bolt | 1 | 2 | 2 | Arcane | Pure hex |
+| Curse | 2 | 2 | 3 | Arcane, Volatile | Apply 4 Hex |
+| Soul Drain | 2 | 3 | 2 | Arcane, Volatile | Heal 3 |
+| Void Strike | 2 | 4 | 1 | Arcane | Pure execute |
+| Mind Shatter | 2 | 2 | 4 | Arcane, Kinetic | Psychic bullets |
+| Arcane Barrage | 3 | 2 | 5 | Arcane, Kinetic | Magic spray |
+| Death Mark | 2 | 2 | 3 | Arcane, Volatile | Execute 3 HP each |
+| Life Siphon | 1 | 2 | 2 | Arcane | Pure lifesteal |
 
 ### Volatile Weapons (5)
 
-| Weapon | Cost | Base | Hits | Special |
-|--------|------|------|------|---------|
-| Blood Cannon | 2 | 3 | 4 | Take 3 damage |
-| Pain Spike | 2 | 4 | 3 | High damage |
-| Chaos Bolt | 2 | 2 | 6 | Random targets |
-| Berserker Strike | 2 | 3 | 3 | +1 per 5 missing HP |
-| Overcharge | 1 | 2 | 5 | Take 4 damage |
+| Weapon | Cost | Base | Hits | Categories | Special |
+|--------|------|------|------|------------|---------|
+| Blood Cannon | 2 | 3 | 4 | Volatile, Thermal | Take 3 damage |
+| Pain Spike | 2 | 4 | 3 | Volatile, Kinetic | High damage |
+| Chaos Bolt | 2 | 2 | 6 | Volatile, Arcane | Random targets |
+| Berserker Strike | 2 | 3 | 3 | Volatile | Pure rage |
+| Overcharge | 1 | 2 | 5 | Volatile, Thermal | Take 4 damage |
 
 ### Utility Weapons (5)
 
-| Weapon | Cost | Base | Hits | Special |
-|--------|------|------|------|---------|
-| Quick Shot | 0 | 1 | 2 | Draw 1 |
-| Scanner | 1 | 2 | 2 | Next weapon +2 |
-| Rapid Fire | 1 | 1 | 4 | Cheap multi-hit |
-| Precision Strike | 2 | 4 | 1 | Always crits |
-| Energy Siphon | 1 | 2 | 2 | +1 Energy |
+| Weapon | Cost | Base | Hits | Categories | Special |
+|--------|------|------|------|------------|---------|
+| Quick Shot | 0 | 1 | 2 | Utility | Pure cantrip |
+| Scanner | 1 | 2 | 2 | Utility, Arcane | Next +2 damage |
+| Rapid Fire | 1 | 1 | 4 | Utility, Kinetic | Cheap multi-hit |
+| Precision Strike | 2 | 4 | 1 | Utility | Pure precision |
+| Energy Siphon | 1 | 2 | 2 | Utility, Arcane | +1 Energy |
 
 ### Instant Cards (15)
 
-| Card | Cost | Effect |
-|------|------|--------|
-| Amplify | 1 | +3 damage to all weapons this turn |
-| Focus Fire | 1 | Next weapon +3 hits |
-| Execute Order | 2 | Apply Execute 5 HP to 3 enemies |
-| Ripple Charge | 1 | Next kill: 3 damage to group |
-| Shred Armor | 1 | All enemies -3 armor |
-| Barrier | 2 | Place barrier (3 dmg, 2 uses) |
-| Armor Up | 1 | Gain 5 armor |
-| Heal | 1 | Restore 8 HP |
-| Shield Wall | 2 | Gain 3 armor, Draw 1 |
-| Reload | 1 | Draw 3 |
-| Surge | 0 | +2 Energy this turn |
-| Scavenge | 1 | Gain 8 scrap |
-| Mass Hex | 2 | Apply 3 Hex to ALL enemies |
-| Ignite | 1 | Apply 4 Burn to ring |
-| Weaken | 1 | Enemies in ring take +2 damage |
+| Card | Cost | Categories | Effect |
+|------|------|------------|--------|
+| Amplify | 1 | Kinetic, Utility | +3 damage to all weapons this turn |
+| Focus Fire | 1 | Kinetic | Next weapon +3 hits |
+| Execute Order | 2 | Arcane, Volatile | Apply Execute 5 HP to 3 enemies |
+| Ripple Charge | 1 | Volatile, Thermal | Next kill: 3 damage to group |
+| Shred Armor | 1 | Kinetic | All enemies -3 armor |
+| Barrier | 2 | Utility | Place barrier (3 dmg, 2 uses) |
+| Armor Up | 1 | Utility | Gain 5 armor |
+| Heal | 1 | Arcane, Utility | Restore 8 HP |
+| Shield Wall | 2 | Utility, Kinetic | Gain 3 armor, Draw 1 |
+| Reload | 1 | Utility | Draw 3 |
+| Surge | 0 | Utility, Volatile | +2 Energy this turn |
+| Scavenge | 1 | Utility | Gain 8 scrap |
+| Mass Hex | 2 | Arcane | Apply 3 Hex to ALL enemies |
+| Ignite | 1 | Thermal | Apply 4 Burn to lane |
+| Weaken | 1 | Arcane, Volatile | Enemies in lane take +2 damage |
 
 ---
 
@@ -247,7 +254,7 @@ Enemies spawn in FAR and advance toward the player:
 | Drone | 3 | 2 | 0 | 🦟 Fast fodder |
 | Shell Titan | 14 | 5 | 4 | 🛡️ Tank, needs multi-hit |
 | Bomber | 6 | 5 | 0 | 💣 Explodes on death |
-| Torchbearer | 7 | 2 | 0 | 🔥 Buffs same ring +2 |
+| Torchbearer | 7 | 2 | 0 | 🔥 Buffs same lane +2 |
 | Channeler | 8 | 2 | 0 | 🧙 Spawns 2 Mites/turn |
 | Stalker | 6 | 4 | 0 | 👁️ Spawns in Close |
 | Armor Reaver | 7 | 3 | 0 | 🪓 Shreds YOUR armor |
@@ -260,41 +267,87 @@ Enemies spawn in FAR and advance toward the player:
 
 ---
 
-## Wave Structure (20 Waves)
+## Wave Structure (20 Waves) - V8 Encounter Design
 
-### Waves 1-3: Onboarding
-- Small groups of fodder (Mites, Swarmlings, Weaklings)
-- Learn basic mechanics
-- ~5-15 enemies per wave
+### Philosophy: Kill Satisfaction First
+Early waves use **small groups (1s and 2s)** so players feel like they're killing LOTS of enemies individually. Later waves use larger groups when screen real estate matters.
 
-### Waves 4-6: Build Check
-- Mix fodder with grunts (Husks, Cultists)
-- First Spinecrawlers appear
-- ~20-30 enemies per wave
+Each wave has **3 preset variations** that pick randomly for encounter variety without affecting difficulty.
 
-### Waves 7-9: Stress Test
-- Elite enemies introduced
-- Higher volumes
-- ~35-50 enemies per wave
+### Waves 1-3: Onboarding (Individual Enemies)
+- **Mostly groups of 1** with some pairs
+- Spread across MID and FAR rings for depth
+- Players experience killing many individual targets
+- ~8-12 enemies per wave
 
-### Waves 10-12: Build Online
-- Heavy elite presence
-- Mixed enemy types
-- ~50-65 enemies per wave
+**Wave 1 Example Variation A:**
+- Turn 1: 2× Weakling (MID) + 3× Weakling (FAR) = 5 individual groups
+- Turn 2: 3× Weakling (FAR) = 3 more individual groups
 
-### Waves 13-16: Horde Mode
-- Massive enemy counts
-- All enemy types
-- ~70-85 enemies per wave
+### Waves 4-6: Build Check (Small Groups)
+- Mix of individuals and pairs
+- Introduce Husks, Spinecrawlers, Spitters
+- Groups of 1-2 per spawn entry
+- ~12-16 enemies per wave
+
+### Waves 7-12: Mid Game (Growing Groups)
+- Mix of small and medium groups (2-4 per entry)
+- Full enemy variety: elites, bombers, support
+- ~20-40 enemies per wave
+
+### Waves 13-16: Horde Mode (Large Groups)
+- Larger groups (4-8 per entry) for screen management
+- Multiple elite types simultaneously
+- ~50-80 enemies per wave
 
 ### Waves 17-19: Endgame
-- Peak difficulty
-- Multi-elite waves
-- ~85-100 enemies per wave
+- Peak difficulty, massive hordes
+- Multi-elite combinations
+- ~80-100 enemies per wave
 
 ### Wave 20: Boss
 - Ember Saint + constant reinforcements
 - Ultimate test of your build
+
+---
+
+## Enemy Group System
+
+### Spawn Batches (V8)
+Each wave spawn entry creates a **distinct group** of enemies. Groups are permanent - they **never merge** even when same enemy types end up in the same ring.
+
+**Example Wave 1 Variation:**
+```gdscript
+# Each entry = separate group, even with count: 1
+var variations: Array = [
+    [
+        {"turn": 1, "enemy_id": "weakling", "count": 1, "ring": MID},   # Individual 1
+        {"turn": 1, "enemy_id": "weakling", "count": 1, "ring": MID},   # Individual 2
+        {"turn": 1, "enemy_id": "weakling", "count": 1, "ring": FAR},   # Individual 3
+        {"turn": 1, "enemy_id": "weakling", "count": 1, "ring": FAR},   # Individual 4
+        {"turn": 1, "enemy_id": "weakling", "count": 1, "ring": FAR},   # Individual 5
+    ],
+]
+```
+
+This creates **5 individual enemies** spread across the battlefield - player kills them one by one for satisfying early-game feel.
+
+### Early vs Late Wave Groups
+| Wave Band | Typical Group Size | Purpose |
+|-----------|-------------------|---------|
+| 1-3 | 1-2 | Maximum kill satisfaction |
+| 4-6 | 1-3 | Still feels like many targets |
+| 7-12 | 2-4 | Groups forming, moderate density |
+| 13+ | 4-8 | Screen management, horde feel |
+
+### Variation Pools
+Early waves use `_pick_and_apply_variation()` to randomly select from 3 preset encounter compositions. All variations have **similar total enemy count** but different group distributions.
+
+### Visual Behavior
+- Groups of 1 = individual enemy panel
+- Groups ≥2 = stack panel with count indicator
+- Groups maintain their assigned lane position across ring transitions
+- Hover to expand and see individual enemies within a group
 
 ---
 
@@ -405,11 +458,14 @@ DeckHorde/
 │       └── CardUI.tscn
 ├── scripts/
 │   ├── autoloads/
-│   │   ├── CardDatabase.gd
+│   │   ├── CardDatabase.gd      # Loads from CardData.gd
 │   │   ├── EnemyDatabase.gd
-│   │   ├── ArtifactManager.gd
+│   │   ├── ArtifactManager.gd   # Loads from ArtifactData.gd
 │   │   ├── CombatManager.gd
 │   │   └── RunManager.gd
+│   ├── data/                    # MODULAR DATA FILES
+│   │   ├── CardData.gd          # All card definitions (edit here!)
+│   │   └── ArtifactData.gd      # All artifact definitions (edit here!)
 │   ├── resources/
 │   │   ├── CardDefinition.gd
 │   │   ├── EnemyDefinition.gd
@@ -420,6 +476,15 @@ DeckHorde/
 ├── AGENTS.md
 └── DESIGN.md
 ```
+
+### Modular Data System
+
+Card and artifact definitions are stored in dedicated data files for easy redesign:
+
+- **`scripts/data/CardData.gd`** - All weapon and instant card definitions
+- **`scripts/data/ArtifactData.gd`** - All artifact definitions
+
+To redesign cards or artifacts, edit the data files directly. The autoload scripts (`CardDatabase.gd`, `ArtifactManager.gd`) will automatically load from these files.
 
 ---
 

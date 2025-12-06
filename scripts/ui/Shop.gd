@@ -30,8 +30,11 @@ var deck_viewer_close_btn: Button = null
 # Stats panel (always visible in workshop)
 var stats_panel: PanelContainer = null
 
-# Tag tracker panel
+# Tag tracker panel (now shows synergies)
 var tag_tracker_panel: PanelContainer = null
+
+# Synergy info panel (detailed guide, toggled with button)
+var synergy_info_panel: PanelContainer = null
 
 # Owned artifacts panel (shows all artifacts player owns)
 var owned_artifacts_panel: PanelContainer = null
@@ -83,6 +86,24 @@ func _ready() -> void:
 	MergeManager.merge_completed.connect(_on_merge_completed)
 
 
+func _unhandled_input(event: InputEvent) -> void:
+	# S key toggles synergy guide
+	if event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_S:
+			_toggle_synergy_guide()
+			get_viewport().set_input_as_handled()
+
+
+func _toggle_synergy_guide() -> void:
+	"""Toggle the synergy guide panel visibility."""
+	if synergy_info_panel:
+		if synergy_info_panel.visible:
+			synergy_info_panel.visible = false
+		else:
+			_update_synergy_info()
+			synergy_info_panel.visible = true
+
+
 func _setup_deck_viewer_overlay() -> void:
 	"""Create deck viewer overlay using ShopPanelBuilder."""
 	var result: Dictionary = ShopPanelBuilder.create_deck_viewer_overlay(self)
@@ -124,6 +145,18 @@ func _setup_tag_tracker_panel() -> void:
 	"""Create tag tracker panel using ShopPanelBuilder."""
 	tag_tracker_panel = ShopPanelBuilder.create_tag_tracker_panel(self)
 	_update_tag_tracker()
+	
+	# Create synergy info panel
+	synergy_info_panel = ShopPanelBuilder.create_synergy_info_panel(self)
+	_update_synergy_info()
+	
+	# Connect close button
+	var close_btn: Button = synergy_info_panel.find_child("CloseButton", true, false) as Button
+	if close_btn:
+		close_btn.pressed.connect(_on_synergy_info_close)
+	
+	# Add "?" button to tag tracker to open synergy guide
+	_add_synergy_help_button()
 
 
 func _setup_owned_artifacts_panel() -> void:
@@ -869,7 +902,7 @@ func _update_stats_panel() -> void:
 # === Tag Tracker Panel Functions ===
 
 func _update_tag_tracker() -> void:
-	"""Update the tag tracker panel with current deck tag counts using ShopStatsFormatter."""
+	"""Update the tag tracker panel with current deck synergies using ShopStatsFormatter."""
 	if not tag_tracker_panel:
 		return
 	
@@ -878,6 +911,39 @@ func _update_tag_tracker() -> void:
 		return
 	
 	tag_label.text = ShopStatsFormatter.format_tag_counts(RunManager.deck)
+
+
+func _add_synergy_help_button() -> void:
+	"""Connect the synergy guide button that's built into the panel."""
+	if not tag_tracker_panel:
+		return
+	
+	# Find and connect the button (it's now created in ShopPanelBuilder)
+	var help_btn: Button = tag_tracker_panel.find_child("SynergyGuideButton", true, false) as Button
+	if help_btn:
+		help_btn.pressed.connect(_on_synergy_help_pressed)
+
+
+func _update_synergy_info() -> void:
+	"""Update the synergy info panel content."""
+	if not synergy_info_panel:
+		return
+	
+	var content_label: RichTextLabel = synergy_info_panel.find_child("ContentLabel", true, false) as RichTextLabel
+	if not content_label:
+		return
+	
+	content_label.text = ShopStatsFormatter.format_synergy_info()
+
+
+func _on_synergy_help_pressed() -> void:
+	"""Toggle the synergy info panel."""
+	_toggle_synergy_guide()
+
+
+func _on_synergy_info_close() -> void:
+	"""Hide the synergy info panel."""
+	_toggle_synergy_guide()
 
 
 # === Owned Artifacts Panel Functions ===

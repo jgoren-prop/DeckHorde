@@ -50,3 +50,5 @@ func _test_mini_enemy_panel_setup() -> bool:
 	
 	return icon_matches and badge_exists
 
+
+

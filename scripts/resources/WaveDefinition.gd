@@ -96,92 +96,296 @@ func get_total_enemy_count() -> int:
 
 
 # =============================================================================
-# V5 WAVE DEFINITIONS - Per DESIGN_V5.md
+# V8 WAVE DEFINITIONS - Small groups for satisfying kills
+# Early waves use mostly groups of 1-2 so players feel like killing lots
+# Later waves use larger groups when screen real estate matters
 # =============================================================================
 
+static func _pick_and_apply_variation(wave: WaveDefinition, variations: Array) -> void:
+	"""Helper to pick a random variation and apply it to wave.turn_spawns."""
+	var chosen: Array = variations[randi() % variations.size()]
+	for spawn: Dictionary in chosen:
+		wave.turn_spawns.append(spawn)
+
+
 static func _generate_wave_1(wave: WaveDefinition) -> void:
-	"""Wave 1 - Tutorial: Simple first battle"""
+	"""Wave 1 - Tutorial: Simple first battle with many individual enemies"""
 	wave.wave_name = "Wave 1 - Tutorial"
 	wave.description = "Your first battle. Learn the basics!"
-	# V7: Simplified to always spawn in FAR so enemies stay as one group
-	wave.turn_spawns = [
-		{"turn": 1, "enemy_id": "weakling", "count": 6, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 2, "enemy_id": "weakling", "count": 4, "ring": BattlefieldStateScript.Ring.FAR}
+	
+	# Pick a random variation (all ~8-10 total enemies)
+	var variations: Array = [
+		# Variation A: 2 in MID, 3 in FAR, then 3 more in FAR
+		[
+			{"turn": 1, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.MID},
+			{"turn": 1, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.MID},
+			{"turn": 1, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 1, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 1, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 2, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 2, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 2, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+		],
+		# Variation B: Mix of 1s and 2s
+		[
+			{"turn": 1, "enemy_id": "weakling", "count": 2, "ring": BattlefieldStateScript.Ring.MID},
+			{"turn": 1, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 1, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 1, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 2, "enemy_id": "weakling", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 2, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+		],
+		# Variation C: One group of 3 with individuals
+		[
+			{"turn": 1, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.MID},
+			{"turn": 1, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.MID},
+			{"turn": 1, "enemy_id": "weakling", "count": 3, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 2, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 2, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 2, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+		],
 	]
+	
+	_pick_and_apply_variation(wave, variations)
 
 
 static func _generate_wave_2(wave: WaveDefinition) -> void:
-	"""Wave 2 - Introduction: Weaklings + Cultists (V6: 3x more enemies)"""
-	wave.wave_name = "Wave 2 - Introduction"
+	"""Wave 2 - More Pressure: Weaklings from multiple angles"""
+	wave.wave_name = "Wave 2 - More Pressure"
 	wave.description = "Enemies attack from multiple angles."
-	wave.turn_spawns = [
-		{"turn": 1, "enemy_id": "weakling", "count": 4, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 1, "enemy_id": "weakling", "count": 4, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 2, "enemy_id": "weakling", "count": 3, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 2, "enemy_id": "cultist", "count": 3, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 3, "enemy_id": "cultist", "count": 2, "ring": BattlefieldStateScript.Ring.FAR}
+	
+	# Pick a random variation (~10-12 total enemies)
+	var variations: Array = [
+		# Variation A: All individuals spread out
+		[
+			{"turn": 1, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.CLOSE},
+			{"turn": 1, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.MID},
+			{"turn": 1, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.MID},
+			{"turn": 1, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 1, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 2, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.MID},
+			{"turn": 2, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 2, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 2, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 3, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 3, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+		],
+		# Variation B: Pairs and singles
+		[
+			{"turn": 1, "enemy_id": "weakling", "count": 2, "ring": BattlefieldStateScript.Ring.MID},
+			{"turn": 1, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 1, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 2, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.CLOSE},
+			{"turn": 2, "enemy_id": "weakling", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 2, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 3, "enemy_id": "weakling", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
+		],
+		# Variation C: One small horde in back, individuals up front
+		[
+			{"turn": 1, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.CLOSE},
+			{"turn": 1, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.MID},
+			{"turn": 1, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.MID},
+			{"turn": 1, "enemy_id": "weakling", "count": 3, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 2, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.MID},
+			{"turn": 2, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 2, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 3, "enemy_id": "weakling", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
+		],
 	]
+	
+	_pick_and_apply_variation(wave, variations)
 
 
 static func _generate_wave_3(wave: WaveDefinition) -> void:
-	"""Wave 3 - First Real Wave: Husks arrive (V6: 3x more enemies)"""
+	"""Wave 3 - First Real Wave: Husks arrive mixed with weaklings"""
 	wave.wave_name = "Wave 3 - First Real Wave"
 	wave.description = "Husks are tougher. Stay focused!"
-	wave.turn_spawns = [
-		{"turn": 1, "enemy_id": "husk", "count": 3, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 1, "enemy_id": "husk", "count": 3, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 1, "enemy_id": "weakling", "count": 4, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 2, "enemy_id": "husk", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 2, "enemy_id": "weakling", "count": 3, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 3, "enemy_id": "cultist", "count": 4, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 3, "enemy_id": "cultist", "count": 4, "ring": BattlefieldStateScript.Ring.FAR}
+	
+	# Pick a random variation (~12-14 total enemies, introducing husks)
+	var variations: Array = [
+		# Variation A: Husks as individuals, weaklings spread
+		[
+			{"turn": 1, "enemy_id": "husk", "count": 1, "ring": BattlefieldStateScript.Ring.MID},
+			{"turn": 1, "enemy_id": "husk", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 1, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.CLOSE},
+			{"turn": 1, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.MID},
+			{"turn": 1, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 2, "enemy_id": "husk", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 2, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.MID},
+			{"turn": 2, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 2, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 3, "enemy_id": "husk", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 3, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 3, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+		],
+		# Variation B: Pair of husks with weakling swarm
+		[
+			{"turn": 1, "enemy_id": "husk", "count": 2, "ring": BattlefieldStateScript.Ring.MID},
+			{"turn": 1, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 1, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 1, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 2, "enemy_id": "husk", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 2, "enemy_id": "husk", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 2, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.MID},
+			{"turn": 2, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 3, "enemy_id": "weakling", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 3, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+		],
+		# Variation C: Husks in back, weaklings rushing
+		[
+			{"turn": 1, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.CLOSE},
+			{"turn": 1, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.CLOSE},
+			{"turn": 1, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.MID},
+			{"turn": 1, "enemy_id": "husk", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 1, "enemy_id": "husk", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 1, "enemy_id": "husk", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 2, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.MID},
+			{"turn": 2, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 2, "enemy_id": "husk", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 3, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 3, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+		],
 	]
+	
+	_pick_and_apply_variation(wave, variations)
 
 
 static func _generate_wave_4(wave: WaveDefinition) -> void:
-	"""Wave 4 - Speed Pressure: Spinecrawlers introduced (V6: 3x more enemies)"""
+	"""Wave 4 - Speed Pressure: Spinecrawlers introduced"""
 	wave.wave_name = "Wave 4 - Speed Pressure"
 	wave.description = "Spinecrawlers move fast! Kill them quick!"
-	wave.turn_spawns = [
-		{"turn": 1, "enemy_id": "husk", "count": 4, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 1, "enemy_id": "husk", "count": 4, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 1, "enemy_id": "weakling", "count": 5, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 2, "enemy_id": "spinecrawler", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 2, "enemy_id": "spinecrawler", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 3, "enemy_id": "weakling", "count": 4, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 4, "enemy_id": "husk", "count": 3, "ring": BattlefieldStateScript.Ring.FAR}
+	
+	# Pick a random variation (~14-16 enemies, spinecrawlers as individuals)
+	var variations: Array = [
+		# Variation A: Spinecrawlers scattered, husks as pairs
+		[
+			{"turn": 1, "enemy_id": "husk", "count": 2, "ring": BattlefieldStateScript.Ring.MID},
+			{"turn": 1, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.CLOSE},
+			{"turn": 1, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 1, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 2, "enemy_id": "spinecrawler", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 2, "enemy_id": "spinecrawler", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 2, "enemy_id": "husk", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 2, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.MID},
+			{"turn": 3, "enemy_id": "spinecrawler", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 3, "enemy_id": "weakling", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 3, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 4, "enemy_id": "husk", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 4, "enemy_id": "husk", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+		],
+		# Variation B: Spinecrawler pair, lots of fodder
+		[
+			{"turn": 1, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.CLOSE},
+			{"turn": 1, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.MID},
+			{"turn": 1, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.MID},
+			{"turn": 1, "enemy_id": "husk", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 1, "enemy_id": "husk", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 2, "enemy_id": "spinecrawler", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 2, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 2, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 3, "enemy_id": "husk", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 3, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.MID},
+			{"turn": 4, "enemy_id": "spinecrawler", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 4, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+		],
+		# Variation C: Fast assault - spinecrawlers lead
+		[
+			{"turn": 1, "enemy_id": "spinecrawler", "count": 1, "ring": BattlefieldStateScript.Ring.MID},
+			{"turn": 1, "enemy_id": "spinecrawler", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 1, "enemy_id": "husk", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 1, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 1, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 2, "enemy_id": "husk", "count": 1, "ring": BattlefieldStateScript.Ring.MID},
+			{"turn": 2, "enemy_id": "husk", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 2, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 2, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 3, "enemy_id": "spinecrawler", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 3, "enemy_id": "spinecrawler", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 3, "enemy_id": "weakling", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
+		],
 	]
+	
+	_pick_and_apply_variation(wave, variations)
 
 
 static func _generate_wave_5(wave: WaveDefinition) -> void:
-	"""Wave 5 - Ranged Introduction: Spitters stay at distance (V6: 3x more enemies)"""
+	"""Wave 5 - Ranged Introduction: Spitters stay at distance"""
 	wave.wave_name = "Wave 5 - Ranged Introduction"
 	wave.description = "Spitters attack from Mid ring. Close the gap!"
-	wave.turn_spawns = [
-		{"turn": 1, "enemy_id": "spitter", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 1, "enemy_id": "spitter", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 1, "enemy_id": "weakling", "count": 6, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 2, "enemy_id": "husk", "count": 4, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 2, "enemy_id": "husk", "count": 4, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 3, "enemy_id": "cultist", "count": 5, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 4, "enemy_id": "cultist", "count": 4, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 4, "enemy_id": "weakling", "count": 4, "ring": BattlefieldStateScript.Ring.FAR}
+	
+	# Pick a random variation (~14-16 enemies, spitters as individuals/pairs)
+	var variations: Array = [
+		# Variation A: Spitters scattered, melee fodder rushes
+		[
+			{"turn": 1, "enemy_id": "spitter", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 1, "enemy_id": "spitter", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 1, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.CLOSE},
+			{"turn": 1, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.MID},
+			{"turn": 1, "enemy_id": "husk", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 2, "enemy_id": "husk", "count": 1, "ring": BattlefieldStateScript.Ring.MID},
+			{"turn": 2, "enemy_id": "husk", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 2, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 2, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 3, "enemy_id": "spitter", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 3, "enemy_id": "husk", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 4, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 4, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+		],
+		# Variation B: Spitter pair in back, husk wall
+		[
+			{"turn": 1, "enemy_id": "husk", "count": 1, "ring": BattlefieldStateScript.Ring.MID},
+			{"turn": 1, "enemy_id": "husk", "count": 1, "ring": BattlefieldStateScript.Ring.MID},
+			{"turn": 1, "enemy_id": "spitter", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 1, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 2, "enemy_id": "husk", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 2, "enemy_id": "husk", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 2, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.MID},
+			{"turn": 2, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 3, "enemy_id": "spitter", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 3, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 3, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 4, "enemy_id": "husk", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
+		],
+		# Variation C: Mixed ranged/melee threat
+		[
+			{"turn": 1, "enemy_id": "spitter", "count": 1, "ring": BattlefieldStateScript.Ring.MID},
+			{"turn": 1, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.CLOSE},
+			{"turn": 1, "enemy_id": "husk", "count": 1, "ring": BattlefieldStateScript.Ring.MID},
+			{"turn": 1, "enemy_id": "husk", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 1, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 2, "enemy_id": "spitter", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 2, "enemy_id": "spitter", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 2, "enemy_id": "husk", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 2, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.MID},
+			{"turn": 3, "enemy_id": "husk", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 3, "enemy_id": "husk", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+			{"turn": 3, "enemy_id": "weakling", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
+		],
 	]
+	
+	_pick_and_apply_variation(wave, variations)
 
 
 static func _generate_wave_6(wave: WaveDefinition) -> void:
-	"""Wave 6 - Pincer: Enemies from all sides (V6: 4x more enemies)"""
+	"""Wave 6 - Pincer: Enemies from all sides (start using some larger groups)"""
 	wave.wave_name = "Wave 6 - Pincer"
 	wave.description = "Surrounded! Manage multiple threats."
 	wave.turn_spawns = [
-		{"turn": 1, "enemy_id": "husk", "count": 5, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 1, "enemy_id": "husk", "count": 5, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 1, "enemy_id": "weakling", "count": 6, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 2, "enemy_id": "spinecrawler", "count": 3, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 2, "enemy_id": "weakling", "count": 5, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 3, "enemy_id": "cultist", "count": 6, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 4, "enemy_id": "spitter", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
-		{"turn": 4, "enemy_id": "spitter", "count": 2, "ring": BattlefieldStateScript.Ring.FAR}
+		{"turn": 1, "enemy_id": "husk", "count": 2, "ring": BattlefieldStateScript.Ring.MID},
+		{"turn": 1, "enemy_id": "husk", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 1, "enemy_id": "husk", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 1, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.CLOSE},
+		{"turn": 1, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.MID},
+		{"turn": 1, "enemy_id": "weakling", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 2, "enemy_id": "spinecrawler", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 2, "enemy_id": "spinecrawler", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 2, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.MID},
+		{"turn": 2, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 2, "enemy_id": "weakling", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 3, "enemy_id": "husk", "count": 2, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 3, "enemy_id": "husk", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 4, "enemy_id": "spitter", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
+		{"turn": 4, "enemy_id": "spitter", "count": 1, "ring": BattlefieldStateScript.Ring.FAR},
 	]
 
 

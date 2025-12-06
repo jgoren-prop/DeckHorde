@@ -228,11 +228,35 @@ func get_stack_key_for_enemy(enemy) -> String:
 
 
 func get_stack_center_position(stack_key: String) -> Vector2:
-	"""Get the center position of a stack's visual."""
+	"""Get the GLOBAL center position of a stack's visual."""
 	if stack_visuals.has(stack_key):
 		var panel: Panel = stack_visuals[stack_key].panel
 		if is_instance_valid(panel):
-			return panel.position + panel.size / 2
+			return panel.global_position + panel.size / 2
+	return Vector2.ZERO
+
+
+func get_enemy_mini_panel_position(enemy) -> Vector2:
+	"""Get the GLOBAL center position of an enemy's mini-panel if stack is expanded.
+	Returns Vector2.ZERO if no mini-panel exists (stack not expanded or enemy not found)."""
+	var stack_key: String = get_stack_key_for_enemy(enemy)
+	if stack_key.is_empty() or not stack_visuals.has(stack_key):
+		return Vector2.ZERO
+	
+	var stack_data: Dictionary = stack_visuals[stack_key]
+	
+	# Only return mini-panel position if stack is expanded
+	if not stack_data.get("expanded", false):
+		return Vector2.ZERO
+	
+	var mini_panels: Array = stack_data.get("mini_panels", [])
+	
+	for mini_panel in mini_panels:
+		if is_instance_valid(mini_panel):
+			var panel_enemy = mini_panel.get_meta("enemy_instance", null)
+			if panel_enemy and panel_enemy.instance_id == enemy.instance_id:
+				return mini_panel.global_position + mini_panel.size / 2
+	
 	return Vector2.ZERO
 
 
@@ -267,7 +291,9 @@ func expand_stack(stack_key: String) -> void:
 		var color: Color = get_enemy_color(enemy.enemy_id)
 		
 		var mini_panel: Panel = MiniEnemyPanelScene.instantiate()
+		# Setup FIRST - metadata is set synchronously before await
 		mini_panel.setup(enemy, mini_size, color, stack_key)
+		
 		mini_panel.position = Vector2(start_x + i * spacing, base_y)
 		mini_panel.modulate.a = 0.0
 		mini_panel.scale = Vector2(0.5, 0.5)

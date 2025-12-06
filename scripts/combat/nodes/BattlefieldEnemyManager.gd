@@ -178,14 +178,14 @@ func get_enemy_visual(instance_id: int) -> Panel:
 
 
 func get_enemy_center_position(instance_id: int) -> Vector2:
-	"""Get the center position of an enemy's visual via its instance_id."""
+	"""Get the GLOBAL center position of an enemy's visual via its instance_id."""
 	if enemy_visuals.has(instance_id):
 		var visual: Panel = enemy_visuals[instance_id]
-		return visual.position + visual.size / 2
+		return visual.global_position + visual.size / 2
 	
 	if destroyed_visuals.has(instance_id):
 		var destroyed_visual: Panel = destroyed_visuals[instance_id]
-		return destroyed_visual.position + destroyed_visual.size / 2
+		return destroyed_visual.global_position + destroyed_visual.size / 2
 	
 	return Vector2.ZERO
 

@@ -38,19 +38,19 @@ func _ready() -> void:
 
 func setup(enemy, panel_size: Vector2, color: Color, key: String = "") -> void:
 	"""Initialize the mini panel with enemy data."""
-	if not is_node_ready():
-		await ready
-	
+	# Store metadata IMMEDIATELY so it's available even before node is in tree
+	# This is critical for targeting lookups that happen right after expand_stack
 	enemy_instance = enemy
 	enemy_id = enemy.enemy_id
 	instance_id = enemy.instance_id
 	stack_key = key
 	enemy_color = color
-	
-	# Store metadata for external lookups
 	set_meta("enemy_instance", enemy)
 	set_meta("enemy_id", enemy_id)
 	set_meta("instance_id", instance_id)
+	
+	if not is_node_ready():
+		await ready
 	
 	# Set panel size
 	custom_minimum_size = panel_size

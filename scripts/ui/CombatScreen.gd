@@ -500,6 +500,7 @@ func _connect_signals() -> void:
 	RunManager.health_changed.connect(_on_health_changed)
 	RunManager.armor_changed.connect(_on_armor_changed)
 	RunManager.scrap_changed.connect(_on_scrap_changed)
+	RunManager.level_up_queued.connect(_on_level_up_queued)
 	
 	# Create debug overlay for card tracking
 	_setup_card_debug_overlay()
@@ -952,6 +953,71 @@ func _on_scrap_changed(amount: int) -> void:
 	scrap_label.text = str(amount)
 
 
+func _on_level_up_queued(new_level: int) -> void:
+	"""Flash a level-up notification banner when level-up is queued during combat."""
+	print("[CombatScreen] Level up queued! New level: ", new_level)
+	_show_levelup_flash_banner(new_level)
+
+
+func _show_levelup_flash_banner(new_level: int) -> void:
+	"""Show a brief flash banner for level-up notification."""
+	var banner: PanelContainer = PanelContainer.new()
+	banner.name = "LevelUpFlashBanner"
+	
+	# Style the banner
+	var style: StyleBoxFlat = StyleBoxFlat.new()
+	style.bg_color = Color(0.15, 0.1, 0.25, 0.95)
+	style.border_color = Color(1.0, 0.85, 0.3, 1.0)  # Gold border
+	style.set_border_width_all(3)
+	style.set_corner_radius_all(8)
+	style.set_content_margin_all(15)
+	banner.add_theme_stylebox_override("panel", style)
+	
+	# Position at top-center
+	banner.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	banner.offset_top = 80
+	banner.offset_bottom = 140
+	banner.offset_left = -150
+	banner.offset_right = 150
+	
+	# Content
+	var vbox: VBoxContainer = VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 4)
+	banner.add_child(vbox)
+	
+	var title: Label = Label.new()
+	title.text = "⭐ LEVEL UP!"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 28)
+	title.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))  # Gold
+	title.add_theme_color_override("font_outline_color", Color(0, 0, 0))
+	title.add_theme_constant_override("outline_size", 3)
+	vbox.add_child(title)
+	
+	var level_lbl: Label = Label.new()
+	level_lbl.text = "Level %d" % new_level
+	level_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	level_lbl.add_theme_font_size_override("font_size", 16)
+	level_lbl.add_theme_color_override("font_color", Color(0.8, 0.8, 0.9))
+	vbox.add_child(level_lbl)
+	
+	add_child(banner)
+	move_child(banner, get_child_count() - 1)
+	
+	# Animation: fade in, pulse scale, hold, then fade out
+	banner.modulate.a = 0.0
+	banner.scale = Vector2(0.8, 0.8)
+	banner.pivot_offset = banner.size / 2
+	
+	var tween: Tween = create_tween()
+	tween.tween_property(banner, "modulate:a", 1.0, 0.15)
+	tween.parallel().tween_property(banner, "scale", Vector2(1.1, 1.1), 0.15).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
+	tween.tween_property(banner, "scale", Vector2(1.0, 1.0), 0.1)
+	tween.tween_interval(1.5)  # Hold for 1.5 seconds
+	tween.tween_property(banner, "modulate:a", 0.0, 0.3)
+	tween.tween_callback(banner.queue_free)
+
+
 func _on_card_played(_card, _tier: int) -> void:
 	# V3: Card played just updates the hand display
 	_update_hand()
@@ -1096,18 +1162,47 @@ func _on_wave_ended(success: bool) -> void:
 	if success and RunManager.current_wave < RunManager.MAX_WAVES:
 		# Restore HP to full after each successful wave
 		RunManager.restore_hp_to_full()
-		# Go directly to shop (skip reward screen)
 		await get_tree().create_timer(1.0).timeout
-		GameManager.go_to_shop()
+		
+		# Check for pending level-ups before going to shop
+		if RunManager.has_pending_levelups():
+			print("[CombatScreen] Has pending level-ups, showing picker before shop")
+			# Connect to all_levelups_resolved to know when to proceed
+			if not RunManager.all_levelups_resolved.is_connected(_on_levelups_resolved_go_to_shop):
+				RunManager.all_levelups_resolved.connect(_on_levelups_resolved_go_to_shop, CONNECT_ONE_SHOT)
+			# Trigger the level-up picker
+			RunManager.trigger_pending_levelups()
+		else:
+			# No pending level-ups, go directly to shop
+			GameManager.go_to_shop()
 	elif success:
 		# Run victory!
 		RunManager.restore_hp_to_full()
 		await get_tree().create_timer(1.0).timeout
-		GameManager.end_run(true)
+		
+		# Check for pending level-ups before ending run
+		if RunManager.has_pending_levelups():
+			if not RunManager.all_levelups_resolved.is_connected(_on_levelups_resolved_end_run_victory):
+				RunManager.all_levelups_resolved.connect(_on_levelups_resolved_end_run_victory, CONNECT_ONE_SHOT)
+			RunManager.trigger_pending_levelups()
+		else:
+			GameManager.end_run(true)
 	else:
-		# Player died
+		# Player died - no level-up choices when you die
 		await get_tree().create_timer(1.0).timeout
 		GameManager.end_run(false)
+
+
+func _on_levelups_resolved_go_to_shop() -> void:
+	"""Called when all level-up choices are made - proceed to shop."""
+	print("[CombatScreen] All level-ups resolved, going to shop")
+	GameManager.go_to_shop()
+
+
+func _on_levelups_resolved_end_run_victory() -> void:
+	"""Called when all level-up choices are made on final wave - end run."""
+	print("[CombatScreen] All level-ups resolved, ending run with victory")
+	GameManager.end_run(true)
 
 
 func _on_end_turn_pressed() -> void:

@@ -45,6 +45,8 @@ func spawn_enemy(enemy_id: String, ring: int):  # -> EnemyInstance
 	enemy.max_hp = enemy.current_hp
 	
 	rings[ring].append(enemy)
+	print("[BattlefieldState DEBUG] spawn_enemy - ID: ", enemy_id, ", Ring: ", ring, ", HP: ", enemy.current_hp)
+	print("[BattlefieldState DEBUG]   Total enemies now: ", get_total_enemy_count())
 	enemy_added.emit(enemy, ring)
 	
 	return enemy
@@ -52,8 +54,20 @@ func spawn_enemy(enemy_id: String, ring: int):  # -> EnemyInstance
 
 func remove_enemy(enemy) -> void:  # enemy: EnemyInstance
 	"""Remove an enemy from the battlefield."""
+	print("[BattlefieldState DEBUG] remove_enemy called - ID: ", enemy.enemy_id, ", Ring: ", enemy.ring)
 	if enemy.ring >= 0 and enemy.ring < rings.size():
+		var was_in_ring: bool = enemy in rings[enemy.ring]
 		rings[enemy.ring].erase(enemy)
+		print("[BattlefieldState DEBUG]   Was in ring array: ", was_in_ring, ", Remaining in ring: ", rings[enemy.ring].size())
+	else:
+		print("[BattlefieldState DEBUG]   WARNING: Enemy ring out of bounds!")
+	
+	# Log total counts after removal
+	var total: int = 0
+	for ring_idx: int in range(rings.size()):
+		total += rings[ring_idx].size()
+	print("[BattlefieldState DEBUG]   Total enemies after removal: ", total)
+	
 	enemy_removed.emit(enemy)
 
 

@@ -47,9 +47,10 @@ func _setup_enemy_visual() -> void:
 
 func _verify_center_position() -> void:
 	var visual: Panel = enemy_manager.get_enemy_visual(test_enemy.instance_id)
-	var expected_center: Vector2 = visual.position + visual.size / 2 if visual else Vector2.ZERO
+	# Now returns global position, so compare with global_position
+	var expected_center: Vector2 = visual.global_position + visual.size / 2 if visual else Vector2.ZERO
 	var distance: float = center_position.distance_to(expected_center)
-	print("[TEST] Expected center: ", expected_center)
+	print("[TEST] Expected center (global): ", expected_center)
 	print("[TEST] Distance between expected and actual: ", distance)
 	
 	test_passed = distance < 0.01 and center_position != Vector2.ZERO
@@ -59,4 +60,5 @@ func _verify_center_position() -> void:
 func _report_and_exit() -> void:
 	await get_tree().create_timer(0.5).timeout
 	get_tree().quit(0 if test_passed else 1)
+
 

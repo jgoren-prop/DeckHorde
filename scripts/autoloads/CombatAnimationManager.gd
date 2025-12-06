@@ -7,7 +7,7 @@ signal animation_completed(animation_type: String)
 signal all_animations_completed()
 
 # Animation timing constants (similar to Slay the Spire)
-const CARD_PLAY_DELAY: float = 0.15       # Brief pause before card effect
+const CARD_PLAY_DELAY: float = 0.5        # Pause between card effects
 const TARGET_HIGHLIGHT_DURATION: float = 0.25  # Time target is highlighted before hit
 const DAMAGE_FLASH_DURATION: float = 0.12  # Flash duration when taking damage
 const SHAKE_DURATION: float = 0.25        # How long enemies shake when hit
